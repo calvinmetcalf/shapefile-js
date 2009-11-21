@@ -1,0 +1,87 @@
+<html>
+<head>
+<title>Binary AJAX</title>
+<script type="text/javascript" src="binary.js"></script>
+<script type="text/javascript" src="shapefile.js"></script>
+<script type="text/javascript">
+
+var file = "world_borders.shp";
+
+var b = new BinaryAjax(file, 
+                       function(oHTTP) {
+                         var binFile = oHTTP.binaryResponse;
+                         //alert(binFile.getLength() + ' byte file'); 
+                         var binState = { offset: 0, bigEndian: true };
+			 var shp = new ShapeHeader(binFile, binState);
+			 if (shp.shapeType != ShpType.SHAPE_POLYGON && shp.shapeType != ShpType.SHAPE_POLYLINE) {
+			   alert("Shapefile does not contain Polygon records (found type: "+shp.shapeType+")");
+                         }
+                         var records = ShpTools.readRecords(binFile, binState);
+ 			 if (window.console && window.console.log) console.log(records);
+			 render(records);
+                       },
+                       function() {
+                         alert('failed to load ' + file);
+                       });
+
+function render(records) {
+
+  if (window.console && window.console.log) console.log('creating canvas and rendering');
+
+  var canvas = document.createElement('canvas');
+  canvas.width = 800;
+  canvas.height = 400;
+  document.body.appendChild(canvas); 
+ 
+  var box;
+  for (var i = 0; i < records.length; i++) {
+    var record = records[i];
+    if (record.shapeType == ShpType.SHAPE_POLYGON || record.shapeType == ShpType.SHAPE_POLYLINE) {
+      var shp = record.shape
+      if (!box) {
+        box = new Rectangle(shp.box.x, shp.box.y, shp.box.w, shp.box.h);
+      }
+      else {
+        var l = Math.min(box.x, shp.box.x);
+        var t = Math.min(box.y, shp.box.y);
+        var r = Math.max(box.x+box.w, shp.box.x+shp.box.w);
+        var b = Math.max(box.y+box.h, shp.box.y+shp.box.h);
+        box.x = l;
+        box.y = t;
+        box.w = r-l;
+        box.h = b-t;
+      }
+    }
+  }
+
+  var ctx = canvas.getContext('2d');
+  
+  var sc = Math.min(800 / box.w, 400 / box.h);
+
+  ctx.lineWidth = 0.5;
+  ctx.strokeStyle = '#303060'; 
+  ctx.beginPath();
+  for (var i = 0; i < records.length; i++) {
+    var record = records[i];
+    if (record.shapeType == ShpType.SHAPE_POLYGON || record.shapeType == ShpType.SHAPE_POLYLINE) {
+      var shp = record.shape
+      for (var j = 0; j < shp.rings.length; j++) {
+        var ring = shp.rings[j];
+        if (ring.length < 1) continue;
+        ctx.moveTo((ring[0].x - box.x) * sc, 400 - (ring[0].y - box.y) * sc);
+        for (var k = 1; k < ring.length; k++) {
+          ctx.lineTo((ring[k].x - box.x) * sc, 400 - (ring[k].y - box.y) * sc);
+        }
+      }
+    }
+  }
+  ctx.stroke();
+}
+
+</script>
+</head>
+<body>
+<h1>Binary Ajax?</h1>
+<p>Loading shapefile... uninformative errors may appear in the dark crevices of your browser.</p>
+</body>
+<html>
