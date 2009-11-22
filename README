@@ -17,5 +17,6 @@ so that binaryajax.js could be extended to support parsing doubles
 
 shapefile.js is such a close port of the vanrijkom-libs code that it must be GPL v2 as well
 
+sfzipcodes.shp is from http://datasf.org/story.php?title=sf-zip-codes- (not sure about license) 
 world_borders.shp is from http://thematicmapping.org/downloads/world_borders.php licensed CC-BY-SA 3.0
 

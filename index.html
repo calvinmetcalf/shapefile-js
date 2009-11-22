@@ -5,7 +5,7 @@
 <script type="text/javascript" src="shapefile.js"></script>
 <script type="text/javascript">
 
-var file = "world_borders.shp";
+var file = "sfzipcodes.shp";
 
 var b = new BinaryAjax(file, 
                        function(oHTTP) {
@@ -38,18 +38,23 @@ function render(records) {
     var record = records[i];
     if (record.shapeType == ShpType.SHAPE_POLYGON || record.shapeType == ShpType.SHAPE_POLYLINE) {
       var shp = record.shape
-      if (!box) {
-        box = new Rectangle(shp.box.x, shp.box.y, shp.box.w, shp.box.h);
-      }
-      else {
-        var l = Math.min(box.x, shp.box.x);
-        var t = Math.min(box.y, shp.box.y);
-        var r = Math.max(box.x+box.w, shp.box.x+shp.box.w);
-        var b = Math.max(box.y+box.h, shp.box.y+shp.box.h);
-        box.x = l;
-        box.y = t;
-        box.w = r-l;
-        box.h = b-t;
+      for (var j = 0; j < shp.rings.length; j++) {
+        var ring = shp.rings[j];
+        for (var k = 0; k < ring.length; k++) {
+          if (!box) {
+            box = new Rectangle(ring[k].x, ring[k].y, 0, 0);
+          }
+          else {
+            var l = Math.min(box.x, ring[k].x);
+            var t = Math.min(box.y, ring[k].y);
+            var r = Math.max(box.x+box.w, ring[k].x);
+            var b = Math.max(box.y+box.h, ring[k].y);
+            box.x = l;
+            box.y = t;
+            box.w = r-l;
+            box.h = b-t;
+          }
+        }
       }
     }
   }
