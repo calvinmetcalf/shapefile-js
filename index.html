@@ -28,10 +28,7 @@ function render(records) {
 
   if (window.console && window.console.log) console.log('creating canvas and rendering');
 
-  var canvas = document.createElement('canvas');
-  canvas.width = 800;
-  canvas.height = 400;
-  document.body.appendChild(canvas); 
+  var canvas = document.getElementById('map');
  
   var box;
   for (var i = 0; i < records.length; i++) {
@@ -88,5 +85,7 @@ function render(records) {
 <body>
 <h1>Binary Ajax?</h1>
 <p>Loading shapefile... uninformative errors may appear in the dark crevices of your browser.</p>
+<canvas id="map" width="800" height="400"></canvas>
+<p>See <a href="http://github.com/RandomEtc/shapefile-js">http://github.com/RandomEtc/shapefile-js</a> for more details.</p>
 </body>
 <html>
