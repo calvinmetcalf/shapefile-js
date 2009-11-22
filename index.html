@@ -7,6 +7,7 @@
 <script type="text/javascript">
 
 var file = "sfzipcodes.shp";
+//var file = "world_borders.shp";
 
 var b = new BinaryAjax(file, 
                        function(oHTTP) {
@@ -31,8 +32,9 @@ function render(records) {
 
   var canvas = document.getElementById('map');
 
-  if (window.G_vmlCanvasManager)
+  if (window.G_vmlCanvasManager) {
     G_vmlCanvasManager.initElement(canvas); 
+  }
 
   var box;
   for (var i = 0; i < records.length; i++) {
@@ -70,7 +72,7 @@ function render(records) {
   for (var i = 0; i < records.length; i++) {
     var record = records[i];
     if (record.shapeType == ShpType.SHAPE_POLYGON || record.shapeType == ShpType.SHAPE_POLYLINE) {
-      var shp = record.shape
+      var shp = record.shape;
       for (var j = 0; j < shp.rings.length; j++) {
         var ring = shp.rings[j];
         if (ring.length < 1) continue;
