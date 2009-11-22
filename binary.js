@@ -84,6 +84,7 @@ var BinaryFile = function(strData, iDataOffset, iDataLength) {
 	    // hugs stackoverflow
 	    // http://stackoverflow.com/questions/1597709/convert-a-string-with-a-hex-representation-of-an-ieee-754-double-into-javascript
 	    // not sure about endianness here, but it's working for little endian shapefile bits
+	    // TODO: handle infinity and nan
         var a = this.getLongAt(iOffset + bBigEndian ? 0 : 4, bBigEndian);
         var b = this.getLongAt(iOffset + bBigEndian ? 4 : 0, bBigEndian);
         var e = (a >> 52 - 32 & 0x7ff) - 1023;
