@@ -1,8 +1,7 @@
 A binary shapefile loader and canvas-based renderer, for javascript. Many caveats:
 
-Only really works in Safari (needs excanvas and testing for IE).
-Times out in Firefox 3.5 with large files. 
-Throws annoying errors (needs a custom error class). 
+Seems best in Safari... times out in IE and in Firefox 3.5 with large files. 
+Error checking is strange (needs testing with more known-good files). 
 Smushes two binaray js libs together. 
 Manually increments byte array offsets instead of being smart.
 Implies that it's a good idea to load large binary files over the network. 
@@ -11,11 +10,14 @@ Doesn't do anything apart from proof of concept.
 http://www.nihilogic.dk/labs/binaryajax/binaryajax.js is used for loading binary data via XMLHttpRequest
 http://jsfromhell.com/classes/binary-parser is used for converting from bytes to doubles
 http://code.google.com/p/vanrijkom-flashlibs/ was ported to js from actionscript
+http://code.google.com/p/explorercanvas/ is used for IE support
 
 binaryajax.js (under MPL) and binary-parser.js (under liberal jsfromhell.com terms) are smushed together in binary.js
 so that binaryajax.js could be extended to support parsing doubles
 
 shapefile.js is such a close port of the vanrijkom-libs code that it must be GPL v2 as well
+
+excanvas.js is under Apache License 2.0
 
 sfzipcodes.shp is from http://datasf.org/story.php?title=sf-zip-codes- (not sure about license) 
 world_borders.shp is from http://thematicmapping.org/downloads/world_borders.php licensed CC-BY-SA 3.0

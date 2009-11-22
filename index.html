@@ -3,6 +3,7 @@
 <title>Binary AJAX</title>
 <script type="text/javascript" src="binary.js"></script>
 <script type="text/javascript" src="shapefile.js"></script>
+<!--[if IE]><script src="excanvas.js"></script><![endif]-->
 <script type="text/javascript">
 
 var file = "sfzipcodes.shp";
@@ -29,7 +30,10 @@ function render(records) {
   if (window.console && window.console.log) console.log('creating canvas and rendering');
 
   var canvas = document.getElementById('map');
- 
+
+  if (window.G_vmlCanvasManager)
+    G_vmlCanvasManager.initElement(canvas); 
+
   var box;
   for (var i = 0; i < records.length; i++) {
     var record = records[i];
@@ -81,9 +85,21 @@ function render(records) {
 }
 
 </script>
+<style type="text/css">
+body {
+  background-color: #eee;
+  color: #000;
+  font: 12px sans-serif;
+  margin: 20px;
+}
+canvas {
+  background-color: #fff;
+  padding: 10px;
+}
+</style>
 </head>
 <body>
-<h1>Binary Ajax?</h1>
+<h1>Binary Ajax Shapefile Loader</h1>
 <p>Loading shapefile... uninformative errors may appear in the dark crevices of your browser.</p>
 <canvas id="map" width="800" height="400"></canvas>
 <p>See <a href="http://github.com/RandomEtc/shapefile-js">http://github.com/RandomEtc/shapefile-js</a> for more details.</p>

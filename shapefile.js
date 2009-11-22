@@ -157,10 +157,10 @@ function ShpRecord(src, binState) {
     var availableBytes = src.getLength() - binState.offset;
     
     if (availableBytes == 0) 
-            throw(new Error("No Data"));
+            throw(new ShpError("No Data", ShpError.ERROR_NODATA));
             
     if (availableBytes < 8)
-            throw(new Error("Not a valid record header (too small)"));
+            throw(new ShpError("Not a valid record header (too small)"));
     
     binState.bigEndian = true;
     
@@ -196,10 +196,10 @@ function ShpRecord(src, binState) {
             case ShpType.SHAPE_POLYGONZ:
             case ShpType.SHAPE_POLYLINEZ:
             case ShpType.SHAPE_POLYLINEM:
-                    throw(new Error(this.shapeType+" Shape type is currently unsupported by this library"));
+                    throw(new ShpError(this.shapeType+" Shape type is currently unsupported by this library"));
                     break;  
             default:        
-                    throw(new Error("Encountered unknown shape type ("+this.shapeType+")"));
+                    throw(new ShpError("Encountered unknown shape type ("+this.shapeType+")"));
                     break;
     }
 }
@@ -208,7 +208,7 @@ function ShpPoint(src, size, binState) {
     this.type = ShpType.SHAPE_POINT;
     if (src) {                      
         if (src.getLength() - binState.offset < size)
-            throw(new Error("Not a Point record (to small)"));
+            throw(new ShpError("Not a Point record (too small)"));
         this.x = (size > 0)  ? src.getDoubleAt(binState.offset, binState.bigEndian) : NaN;
         binState.offset += 8;
         this.y = (size > 0)  ? src.getDoubleAt(binState.offset, binState.bigEndian) : NaN;
@@ -219,7 +219,7 @@ function ShpPointZ(src, size, binState) {
     this.type = ShpType.SHAPE_POINTZ;
     if (src) {
         if (src.getLength() - binState.offset < size)
-            throw(new Error("Not a Point record (to small)"));
+            throw(new ShpError("Not a Point record (too small)"));
         this.x = (size > 0)  ? src.getDoubleAt(binState.offset, binState.bigEndian) : NaN;
         binState.offset += 8;
         this.y = (size > 0)  ? src.getDoubleAt(binState.offset, binState.bigEndian) : NaN;
@@ -235,7 +235,7 @@ function ShpPolygon(src, size, binState) {
     this.rings = [];             
     if (src) {                      
             if (src.getLength() - binState.offset < size)
-                    throw(new Error("Not a Polygon record (to small)"));
+                    throw(new ShpError("Not a Polygon record (too small)"));
             
             binState.bigEndian = false;
             
@@ -284,7 +284,7 @@ function ShpPolyline(src, size, binState) {
     this.rings = [];             
     if (src) {                      
             if (src.getLength() - binState.offset < size)
-                    throw(new Error("Not a Polygon record (to small)"));
+                    throw(new ShpError("Not a Polygon record (too small)"));
             
             binState.bigEndian = false;
             
@@ -329,6 +329,30 @@ function ShpPolyline(src, size, binState) {
     }
 }
 
+/**
+ * Constructor.
+ * @param msg
+ * @param id
+ * @return 
+ * 
+ */     
+function ShpError(msg, id) {
+	this.msg = msg;
+	this.id = id;
+	this.toString = function() {
+		return this.msg;
+	};
+}
+/**
+ * Defines the identifier value of an undefined error.  
+ */     
+ShpError.ERROR_UNDEFINED = 0;
+/**
+ * Defines the identifier value of a 'no data' error, which is thrown
+ * when a ByteArray runs out of data.
+ */     
+ShpError.ERROR_NODATA = 1;
+
 var ShpTools = {
     readRecords: function(src, binState) {
         var records = [];
@@ -337,7 +361,9 @@ var ShpTools = {
                 records.push(new ShpRecord(src, binState));
             }
             catch (e) {
-                alert(e);
+		if (e.id !== ShpError.ERROR_NODATA) {
+                	alert(e);
+		}
                 break;
             }
         }
