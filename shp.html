@@ -3,61 +3,35 @@
 <title>Binary AJAX</title>
 <script type="text/javascript" src="binary.js"></script>
 <script type="text/javascript" src="shapefile.js"></script>
-<script type="text/javascript" src="dbf.js"></script>
 <!--[if IE]><script src="excanvas.js"></script><![endif]-->
 <script type="text/javascript">
 
-var shpURL = "thematicmapping/TM_WORLD_BORDERS_SIMPL-0.3.shp";
-var dbfURL = "thematicmapping/TM_WORLD_BORDERS_SIMPL-0.3.dbf";
-
-var shpFile;
-var dbfFile;
+var file = "thematicmapping/TM_WORLD_BORDERS_SIMPL-0.3.shp";
 
 window.onload = function() {
-  var shpLoader = new BinaryAjax(shpURL, onShpComplete, onShpFail);
-  var dbfLoader = new BinaryAjax(dbfURL, onDbfComplete, onDbfFail);
+  var b = new BinaryAjax(file, onBinaryAjaxComplete, onBinaryAjaxFail);
 }
 
-function onShpFail() { 
-  alert('failed to load ' + shpURL);
-}
-function onDbfFail() { 
-  alert('failed to load ' + dbfURL);
+function onBinaryAjaxFail() { 
+  alert('failed to load ' + file);
 }
 
-function onShpComplete(oHTTP) {
+function onBinaryAjaxComplete(oHTTP) {
   var binFile = oHTTP.binaryResponse;
 
   if (window.console && window.console.log) console.log('got data, parsing shapefile');
 
-  shpFile = new ShpFile(binFile);
+  var shpFile = new ShpFile(binFile);
 
   if (shpFile.header.shapeType != ShpType.SHAPE_POLYGON && shpFile.header.shapeType != ShpType.SHAPE_POLYLINE) {
     alert("Shapefile does not contain Polygon records (found type: "+shp.shapeType+")");
   }  
   
   //if (window.console && window.console.log) console.log(records);
-  if (dbfFile) {
-    render(shpFile.records, dbfFile.records);
-  }
+  render(shpFile.records);
 }
 
-function onDbfComplete(oHTTP) {
-  var binFile = oHTTP.binaryResponse;
-
-  if (window.console && window.console.log) console.log('got data, parsing dbf file');
-
-  dbfFile = new DbfFile(binFile);
-
-  //if (window.console && window.console.log) console.log(dbfFile.records);
-
-  if (shpFile) {
-    render(shpFile.records, dbfFile.records);
-  }
-}
-
-
-function render(records, data) {
+function render(records) {
 
   if (window.console && window.console.log) console.log('creating canvas and rendering');
 
@@ -110,7 +84,9 @@ function render(records, data) {
   ctx.fillRect(0,0,800,400);
 
   ctx.lineWidth = 0.5;
-  ctx.strokeStyle = '#ffffff'; 
+  ctx.strokeStyle = '#888888'; 
+  ctx.fillStyle = '#fff8f0'; 
+  ctx.beginPath();
   for (var i = 0; i < records.length; i++) {
     var record = records[i];
     if (record.shapeType == ShpType.SHAPE_POLYGON || record.shapeType == ShpType.SHAPE_POLYLINE) {
@@ -118,32 +94,17 @@ function render(records, data) {
       for (var j = 0; j < shp.rings.length; j++) {
         var ring = shp.rings[j];
         if (ring.length < 1) continue;
-        ctx.fillStyle = getFillRecord(data[i]);
-        ctx.beginPath();
         ctx.moveTo((ring[0].x - box.x) * sc, 400 - (ring[0].y - box.y) * sc);
         for (var k = 1; k < ring.length; k++) {
           ctx.lineTo((ring[k].x - box.x) * sc, 400 - (ring[k].y - box.y) * sc);
         }
-        ctx.fill();
-        ctx.stroke();
       }
     }
   }
+  ctx.fill();
+  ctx.stroke();
   t2 = new Date().getTime();
   if (window.console && window.console.log) console.log('done rendering in ' + (t2 - t1) + ' ms');
-}
-
-function getFillRecord(record) {
-  var colors = ["#F1EEF6", "#D4B9DA", "#C994C7", "#DF65B0", "#DD1C77", "#980043"]
-  var popn = parseInt(record.values['POP2005']);
-  if (!isNaN(popn)) {
-    popn = Math.max(0, Math.min(100000000, popn));
-    var colorIndex = parseInt((colors.length-1) * popn / 100000000);
-    var color = colors[colorIndex];
-    //if (window.console && window.console.log) console.log('popn: ' + popn + ' color: ' + color);  
-    return color;
-  }
-  return '#000000';
 }
 
 </script>

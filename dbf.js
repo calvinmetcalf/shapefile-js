@@ -1,8 +1,27 @@
 // ported from http://code.google.com/p/vanrijkom-flashlibs/ under LGPL v2.1
 
-function DbfHeader(src) {
-
+function DbfFile(src) {
   var t1 = new Date().getTime();  
+
+  this.header = new DbfHeader(src);
+
+  var t2 = new Date().getTime();
+  if (window.console && window.console.log) console.log('parsed dbf header in ' + (t2-t1) + ' ms');  
+
+  t1 = new Date().getTime();  
+  
+  this.records = [];
+  for (var i = 0; i < this.header.recordCount; i++) {
+    var record = getRecord(src, this.header, i);
+    this.records.push(record);
+  }  
+
+  t2 = new Date().getTime();
+  if (window.console && window.console.log) console.log('parsed dbf records in ' + (t2-t1) + ' ms');  
+  
+}
+
+function DbfHeader(src) {
 
   var binState = { offset: 0, bigEndian: true };
   
@@ -50,9 +69,6 @@ function DbfHeader(src) {
   }
 
   this.recordsOffset = this.headerSize+1;                                  
-
-  var t2 = new Date().getTime();
-  if (window.console && window.console.log) console.log('parsed dbf in ' + (t2-t1) + ' ms');  
   
 }
 
