@@ -6,24 +6,33 @@
 <!--[if IE]><script src="excanvas.js"></script><![endif]-->
 <script type="text/javascript">
 
-var file = "thematicmapping/TM_WORLD_BORDERS_SIMPL-0.3.shp";
+window.onload = function() {
+  var file = "thematicmapping/TM_WORLD_BORDERS_SIMPL-0.3.shp";
+  var b = new BinaryAjax(file, onBinaryAjaxComplete, onBinaryAjaxFail);
+}
 
-var b = new BinaryAjax(file, 
-                       function(oHTTP) {
-                         var binFile = oHTTP.binaryResponse;
-                         //alert(binFile.getLength() + ' byte file'); 
-                         var binState = { offset: 0, bigEndian: true };
-			 var shp = new ShapeHeader(binFile, binState);
-			 if (shp.shapeType != ShpType.SHAPE_POLYGON && shp.shapeType != ShpType.SHAPE_POLYLINE) {
-			   alert("Shapefile does not contain Polygon records (found type: "+shp.shapeType+")");
-                         }
-                         var records = ShpTools.readRecords(binFile, binState);
- 			 if (window.console && window.console.log) console.log(records);
-			 render(records);
-                       },
-                       function() {
-                         alert('failed to load ' + file);
-                       });
+function onBinaryAjaxFail() { 
+  alert('failed to load ' + file);
+}
+
+function onBinaryAjaxComplete(oHTTP) {
+  var binFile = oHTTP.binaryResponse;
+
+  if (window.console && window.console.log) console.log('got data, parsing shapefile');
+  
+  var binState = { offset: 0, bigEndian: true };
+  var shp = new ShapeHeader(binFile, binState);
+  
+  if (shp.shapeType != ShpType.SHAPE_POLYGON && shp.shapeType != ShpType.SHAPE_POLYLINE) {
+    alert("Shapefile does not contain Polygon records (found type: "+shp.shapeType+")");
+  }
+  
+  if (window.console && window.console.log) console.log('got header, parsing records');
+
+  var records = ShpTools.readRecords(binFile, binState);
+  //if (window.console && window.console.log) console.log(records);
+  render(records);
+}
 
 function render(records) {
 
@@ -34,6 +43,9 @@ function render(records) {
   if (window.G_vmlCanvasManager) {
     G_vmlCanvasManager.initElement(canvas); 
   }
+
+  var t1 = new Date().getTime();
+  if (window.console && window.console.log) console.log('calculating bbox...');
 
   var box;
   for (var i = 0; i < records.length; i++) {
@@ -61,12 +73,22 @@ function render(records) {
     }
   }
 
+  var t2 = new Date().getTime();
+  if (window.console && window.console.log) console.log('found bbox in ' + (t2 - t1) + ' ms');
+
+  t1 = new Date().getTime();
+  if (window.console && window.console.log) console.log('starting rendering...');
+
   var ctx = canvas.getContext('2d');
   
   var sc = Math.min(800 / box.w, 400 / box.h);
 
+  ctx.fillStyle = '#ccccff';
+  ctx.fillRect(0,0,800,400);
+
   ctx.lineWidth = 0.5;
-  ctx.strokeStyle = '#303060'; 
+  ctx.strokeStyle = '#888888'; 
+  ctx.fillStyle = '#fff8f0'; 
   ctx.beginPath();
   for (var i = 0; i < records.length; i++) {
     var record = records[i];
@@ -82,7 +104,10 @@ function render(records) {
       }
     }
   }
+  ctx.fill();
   ctx.stroke();
+  t2 = new Date().getTime();
+  if (window.console && window.console.log) console.log('done rendering in ' + (t2 - t1) + ' ms');
 }
 
 </script>
