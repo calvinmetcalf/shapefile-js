@@ -6,8 +6,9 @@
 <!--[if IE]><script src="excanvas.js"></script><![endif]-->
 <script type="text/javascript">
 
+var file = "thematicmapping/TM_WORLD_BORDERS_SIMPL-0.3.shp";
+
 window.onload = function() {
-  var file = "thematicmapping/TM_WORLD_BORDERS_SIMPL-0.3.shp";
   var b = new BinaryAjax(file, onBinaryAjaxComplete, onBinaryAjaxFail);
 }
 
@@ -19,19 +20,15 @@ function onBinaryAjaxComplete(oHTTP) {
   var binFile = oHTTP.binaryResponse;
 
   if (window.console && window.console.log) console.log('got data, parsing shapefile');
-  
-  var binState = { offset: 0, bigEndian: true };
-  var shp = new ShapeHeader(binFile, binState);
-  
-  if (shp.shapeType != ShpType.SHAPE_POLYGON && shp.shapeType != ShpType.SHAPE_POLYLINE) {
-    alert("Shapefile does not contain Polygon records (found type: "+shp.shapeType+")");
-  }
-  
-  if (window.console && window.console.log) console.log('got header, parsing records');
 
-  var records = ShpTools.readRecords(binFile, binState);
+  var shpFile = new ShpFile(binFile);
+
+  if (shpFile.header.shapeType != ShpType.SHAPE_POLYGON && shpFile.header.shapeType != ShpType.SHAPE_POLYLINE) {
+    alert("Shapefile does not contain Polygon records (found type: "+shp.shapeType+")");
+  }  
+  
   //if (window.console && window.console.log) console.log(records);
-  render(records);
+  render(shpFile.records);
 }
 
 function render(records) {

@@ -12,7 +12,7 @@ http://code.google.com/p/explorercanvas/ is used for IE support
 
 binaryajax.js is under MPL and  was extended to support parsing doubles
 
-shapefile.js is such a close port of the vanrijkom-libs code that it must be GPL v2 as well
+shapefile.js is such a close port of the vanrijkom-libs code that it must be LGPL v2 as well
 
 excanvas.js is under Apache License 2.0
 

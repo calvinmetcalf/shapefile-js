@@ -1,3 +1,35 @@
+// ported from http://code.google.com/p/vanrijkom-flashlibs/ under LGPL v2.1
+
+function ShpFile(binFile) {
+
+  var binState = { offset: 0, bigEndian: true };
+
+  var t1 = new Date().getTime();  
+  this.header = new ShpHeader(binFile, binState);
+
+  var t2 = new Date().getTime();
+  if (window.console && window.console.log) console.log('parsed header in ' + (t2-t1) + ' ms');  
+    
+  if (window.console && window.console.log) console.log('got header, parsing records');
+
+  t1 = new Date().getTime();
+  this.records = [];
+  while (true) {                  
+    try {           
+        this.records.push(new ShpRecord(binFile, binState));
+    }
+    catch (e) {
+      if (e.id !== ShpError.ERROR_NODATA) {
+        alert(e);
+      }
+      break;
+    }
+  }
+
+  t2 = new Date().getTime();
+  if (window.console && window.console.log) console.log('parsed records in ' + (t2-t1) + ' ms');  
+
+}
 
 /**
  * The ShpType class is a place holder for the ESRI Shapefile defined
@@ -98,7 +130,7 @@ function Rectangle(x,y,w,h) {
  * @throws ShpError Not a valid signature
  * 
  */                     
-function ShapeHeader(src, binState)
+function ShpHeader(src, binState)
 {
     if (src.getLength() < 100)
         alert("Not a valid shape file header (too small)");
@@ -352,21 +384,3 @@ ShpError.ERROR_UNDEFINED = 0;
  * when a ByteArray runs out of data.
  */     
 ShpError.ERROR_NODATA = 1;
-
-var ShpTools = {
-    readRecords: function(src, binState) {
-        var records = [];
-        while (true) {                  
-            try {           
-                records.push(new ShpRecord(src, binState));
-            }
-            catch (e) {
-		if (e.id !== ShpError.ERROR_NODATA) {
-                	alert(e);
-		}
-                break;
-            }
-        }
-        return records;
-    }
-};
