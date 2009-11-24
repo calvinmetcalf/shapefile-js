@@ -231,41 +231,9 @@ function ShpPointZ(src, size) {
     }
 }
 function ShpPolygon(src, size) {
+    // for want of a super()
+    ShpPolyline.apply(this, [src, size]);
     this.type = ShpType.SHAPE_POLYGON;
-    this.rings = [];             
-    if (src) {                      
-            if (src.getLength() - src.position < size)
-                    throw(new ShpError("Not a Polygon record (too small)"));
-            
-            src.bigEndian = false;
-            
-            this.box = new Rectangle(src.getDouble(),src.getDouble(),src.getDouble(),src.getDouble());
-                    
-            var rc = src.getSLong();
-            var pc = src.getSLong();
-            
-            var ringOffsets = [];
-            while(rc--) {
-                var ringOffset = src.getSLong();
-                ringOffsets.push(ringOffset);
-            }
-            
-            var points = [];                 
-            while(pc--) {
-                points.push(new ShpPoint(src,16));
-            }
-            
-            // convert points, and ringOffsets arrays to an array of rings:
-            var removed = 0;
-            var split;
-            ringOffsets.shift();                    
-            while(ringOffsets.length) {
-                    split = ringOffsets.shift();
-                    this.rings.push(points.splice(0,split-removed));
-                    removed = split;
-            }       
-            this.rings.push(points);                                     
-    }
 }
 function ShpPolyline(src, size) {
     this.type = ShpType.SHAPE_POLYLINE;
