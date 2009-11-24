@@ -1,18 +1,22 @@
 // ported from http://code.google.com/p/vanrijkom-flashlibs/ under LGPL v2.1
 
-function DbfFile(src) {
+function DbfFile(binFile) {
+
+  this.src = new BinaryFileWrapper(binFile);
+
   var t1 = new Date().getTime();  
 
-  this.header = new DbfHeader(src);
+  this.header = new DbfHeader(this.src);
 
   var t2 = new Date().getTime();
   if (window.console && window.console.log) console.log('parsed dbf header in ' + (t2-t1) + ' ms');  
 
   t1 = new Date().getTime();  
   
+  // TODO: could maybe be smarter about this and only parse these on demand
   this.records = [];
   for (var i = 0; i < this.header.recordCount; i++) {
-    var record = getRecord(src, this.header, i);
+    var record = this.getRecord(i);
     this.records.push(record);
   }  
 
@@ -20,121 +24,98 @@ function DbfFile(src) {
   if (window.console && window.console.log) console.log('parsed dbf records in ' + (t2-t1) + ' ms');  
   
 }
+DbfFile.prototype.getRecord = function(index) {
+  if (index > this.header.recordCount) 
+    throw(new DbfError("",DbfError.ERROR_OUTOFBOUNDS));
+
+  this.src.position = this.header.recordsOffset + index * this.header.recordSize;
+  this.src.bigEndian = false;
+
+  return new DbfRecord(this.src, this.header);
+}
+
 
 function DbfHeader(src) {
-
-  var binState = { offset: 0, bigEndian: true };
   
   // endian:
-  binState.bigEndian = false;
+  src.bigEndian = false;
 
-  this.version = src.getSByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
-  this.updateYear = 1900+src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
-  this.updateMonth = src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
-  this.updateDay = src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
-  this.recordCount = src.getLongAt(binState.offset, binState.bigEndian);
-  binState.offset += 4;
-  this.headerSize = src.getShortAt(binState.offset, binState.bigEndian);
-  binState.offset += 2;  
-  this.recordSize = src.getShortAt(binState.offset, binState.bigEndian);
-  binState.offset += 2;
+  this.version = src.getSByte();
+  this.updateYear = 1900+src.getByte();
+  this.updateMonth = src.getByte();
+  this.updateDay = src.getByte();
+  this.recordCount = src.getLong();
+  this.headerSize = src.getShort();
+  this.recordSize = src.getShort();
 
   //skip 2:
-  binState.offset += 2;
+  src.position += 2;
 
-  this.incompleteTransaction = src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
-  this.encrypted = src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
+  this.incompleteTransaction = src.getByte();
+  this.encrypted = src.getByte();
 
   // skip 12:
-  binState.offset += 12;
+  src.position += 12;
 
-  this.mdx = src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
-  this.language = src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
+  this.mdx = src.getByte();
+  this.language = src.getByte();
 
   // skip 2;
-  binState.offset += 2;
+  src.position += 2;
 
   // iterate field descriptors:
   this.fields = [];
-  while (src.getSByteAt(binState.offset, binState.bigEndian) != 0x0D){
-    this.fields.push(new DbfField(src, binState));
+  while (src.getSByte() != 0x0D){
+    src.position -= 1;
+    this.fields.push(new DbfField(src));
   }
 
   this.recordsOffset = this.headerSize+1;                                  
   
-}
+}        
 
-function readZeroTermANSIString(src, binState) {
-  var r = "";
-  var b;
-  while (b = src.getByteAt(binState.offset, binState.bigEndian)) {
-    binState.offset += 1;
-    r+= String.fromCharCode(b);
-  }
-  binState.offset += 1;
-  return r;
-}
-        
+function DbfField(src) {
 
-function DbfField(src, binState) {
-
-  this.name = readZeroTermANSIString(src, binState);
+  this.name = this.readZeroTermANSIString(src);
 
   // fixed length: 10, so:
-  binState.offset += (10-this.name.length);
+  src.position += (10-this.name.length);
 
-  this.type = src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
-  this.address = src.getLongAt(binState.offset, binState.bigEndian);
-  binState.offset += 4;
-  this.length = src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
-  this.decimals = src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
+  this.type = src.getByte();
+  this.address = src.getLong();
+  this.length = src.getByte();
+  this.decimals = src.getByte();
 
   // skip 2:
-  binState.offset += 2;
+  src.position += 2;
 
-  this.id = src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
+  this.id = src.getByte();
 
   // skip 2:
-  binState.offset += 2;
+  src.position += 2;
 
-  this.setFlag = src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;
+  this.setFlag = src.getByte();
 
   // skip 7:
-  binState.offset += 7;
+  src.position += 7;
 
-  this.indexFlag = src.getByteAt(binState.offset, binState.bigEndian);
-  binState.offset += 1;  
+  this.indexFlag = src.getByte();
+}
+DbfField.prototype.readZeroTermANSIString = function(src) {
+  var r = "";
+  var b;
+  while (b = src.getByte()) {
+    r+= String.fromCharCode(b);
+  }
+  return r;
 }
 
-function getRecord(src, header, index) {
-    if (index > header.recordCount) 
-            throw(new DbfError("",DbfError.ERROR_OUTOFBOUNDS));
-
-    var binState = { bigEndian: false, 
-                     offset: header.recordsOffset + index * header.recordSize };
-    return new DbfRecord(src, header, binState);
-}
-
-function DbfRecord(src, header, binState) {
-  this.offset = binState.offset;
+function DbfRecord(src, header) {
+  this.offset = src.position;
   this.values = {}
   for (var i = 0; i < header.fields.length; i++) {
     var field = header.fields[i];
-    this.values[field.name] = src.getStringAt(binState.offset, field.length);
-    binState.offset += field.length;
+    this.values[field.name] = src.getString(field.length);
   }               
 }
 

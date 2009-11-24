@@ -2,10 +2,10 @@
 
 function ShpFile(binFile) {
 
-  var binState = { offset: 0, bigEndian: true };
+  var src = new BinaryFileWrapper(binFile);
 
   var t1 = new Date().getTime();  
-  this.header = new ShpHeader(binFile, binState);
+  this.header = new ShpHeader(src);
 
   var t2 = new Date().getTime();
   if (window.console && window.console.log) console.log('parsed header in ' + (t2-t1) + ' ms');  
@@ -16,7 +16,7 @@ function ShpFile(binFile) {
   this.records = [];
   while (true) {                  
     try {           
-        this.records.push(new ShpRecord(binFile, binState));
+        this.records.push(new ShpRecord(src));
     }
     catch (e) {
       if (e.id !== ShpError.ERROR_NODATA) {
@@ -130,63 +130,40 @@ function Rectangle(x,y,w,h) {
  * @throws ShpError Not a valid signature
  * 
  */                     
-function ShpHeader(src, binState)
+function ShpHeader(src)
 {
     if (src.getLength() < 100)
         alert("Not a valid shape file header (too small)");
 
-    if (src.getSLongAt(binState.offset, binState.bigEndian) != 9994)
+    if (src.getSLong() != 9994)
         alert("Not a valid signature. Expected 9994");
-    binState.offset += 4; 
  
     // skip 5 integers;
-    binState.offset += 5*4;
+    src.position += 5*4;
     
     // read file-length:
-    this.fileLength = src.getSLongAt(binState.offset, binState.bigEndian);
-    binState.offset += 4;
+    this.fileLength = src.getSLong();
  
     // switch endian:
-    binState.bigEndian = false;
+    src.bigEndian = false;
     
     // read version:
-    this.version = src.getSLongAt(binState.offset, binState.bigEndian);
-    binState.offset += 4;
+    this.version = src.getSLong();
 
     // read shape-type:
-    this.shapeType = src.getSLongAt(binState.offset, binState.bigEndian);
-    binState.offset += 4;
+    this.shapeType = src.getSLong();
    
-    var x = src.getDoubleAt(binState.offset, binState.bigEndian);
-    binState.offset += 8;
-    var y = src.getDoubleAt(binState.offset, binState.bigEndian);
-    binState.offset += 8;
-    var w = src.getDoubleAt(binState.offset, binState.bigEndian);
-    binState.offset += 8;
-    var h = src.getDoubleAt(binState.offset, binState.bigEndian);
-    binState.offset += 8;
- 
     // read bounds:
-    this.boundsXY = new Rectangle(x,y,w,h);
+    this.boundsXY = new Rectangle(src.getDouble(),src.getDouble(),src.getDouble(),src.getDouble());
     
-    x = src.getDoubleAt(binState.offset, binState.bigEndian);
-    binState.offset += 8;
-    y = src.getDoubleAt(binState.offset, binState.bigEndian);
-    binState.offset += 8;
+    this.boundsZ = new Point(src.getDouble(),src.getDouble());
     
-    this.boundsZ = new Point(x,y);
-    
-    x = src.getDoubleAt(binState.offset, binState.bigEndian);
-    binState.offset += 8;
-    y = src.getDoubleAt(binState.offset, binState.bigEndian);
-    binState.offset += 8;
-
-    this.boundsM = new Point(x,y);
+    this.boundsM = new Point(src.getDouble(),src.getDouble());
 }
 
 
-function ShpRecord(src, binState) {
-    var availableBytes = src.getLength() - binState.offset;
+function ShpRecord(src) {
+    var availableBytes = src.getLength() - src.position;
     
     if (availableBytes == 0) 
             throw(new ShpError("No Data", ShpError.ERROR_NODATA));
@@ -194,30 +171,27 @@ function ShpRecord(src, binState) {
     if (availableBytes < 8)
             throw(new ShpError("Not a valid record header (too small)"));
     
-    binState.bigEndian = true;
+    src.bigEndian = true;
     
-    this.number = src.getSLongAt(binState.offset, binState.bigEndian);
-    binState.offset += 4;
-    this.contentLength = src.getSLongAt(binState.offset, binState.bigEndian);
-    binState.offset += 4;
+    this.number = src.getSLong();
+    this.contentLength = src.getSLong();
     this.contentLengthBytes = this.contentLength*2 - 4;                      
-    binState.bigEndian = false;
-    var shapeOffset = binState.offset;
-    this.shapeType = src.getSLongAt(binState.offset, binState.bigEndian);
-    binState.offset += 4;
+    src.bigEndian = false;
+    var shapeOffset = src.position;
+    this.shapeType = src.getSLong();
                     
     switch(this.shapeType) {
             case ShpType.SHAPE_POINT:
-                    this.shape = new ShpPoint(src, this.contentLengthBytes, binState);
+                    this.shape = new ShpPoint(src, this.contentLengthBytes);
                     break;
             case ShpType.SHAPE_POINTZ:
-                    this.shape = new ShpPointZ(src, this.contentLengthBytes, binState);
+                    this.shape = new ShpPointZ(src, this.contentLengthBytes);
                     break;
             case ShpType.SHAPE_POLYGON:
-                    this.shape = new ShpPolygon(src, this.contentLengthBytes, binState);
+                    this.shape = new ShpPolygon(src, this.contentLengthBytes);
                     break;
             case ShpType.SHAPE_POLYLINE:
-                    this.shape = new ShpPolyline(src, this.contentLengthBytes, binState);
+                    this.shape = new ShpPolyline(src, this.contentLengthBytes);
                     break;
             case ShpType.SHAPE_MULTIPATCH:
             case ShpType.SHAPE_MULTIPOINT:
@@ -236,67 +210,49 @@ function ShpRecord(src, binState) {
     }
 }
 
-function ShpPoint(src, size, binState) {
+function ShpPoint(src, size) {
     this.type = ShpType.SHAPE_POINT;
     if (src) {                      
-        if (src.getLength() - binState.offset < size)
+        if (src.getLength() - src.position < size)
             throw(new ShpError("Not a Point record (too small)"));
-        this.x = (size > 0)  ? src.getDoubleAt(binState.offset, binState.bigEndian) : NaN;
-        binState.offset += 8;
-        this.y = (size > 0)  ? src.getDoubleAt(binState.offset, binState.bigEndian) : NaN;
-        binState.offset += 8;
+        this.x = (size > 0)  ? src.getDouble() : NaN;
+        this.y = (size > 0)  ? src.getDouble() : NaN;
     }
 }
-function ShpPointZ(src, size, binState) {
+function ShpPointZ(src, size) {
     this.type = ShpType.SHAPE_POINTZ;
     if (src) {
-        if (src.getLength() - binState.offset < size)
+        if (src.getLength() - src.position < size)
             throw(new ShpError("Not a Point record (too small)"));
-        this.x = (size > 0)  ? src.getDoubleAt(binState.offset, binState.bigEndian) : NaN;
-        binState.offset += 8;
-        this.y = (size > 0)  ? src.getDoubleAt(binState.offset, binState.bigEndian) : NaN;
-        binState.offset += 8;
-	this.z = (size > 16) ? src.getDoubleAt(binState.offset, binState.bigEndian) : NaN;                       
-        binState.offset += 8;
-	this.m = (size > 24) ? src.getDoubleAt(binState.offset, binState.bigEndian) : NaN;
-        binState.offset += 8;
+        this.x = (size > 0)  ? src.getDouble() : NaN;
+        this.y = (size > 0)  ? src.getDouble() : NaN;
+	    this.z = (size > 16) ? src.getDouble() : NaN;                       
+    	this.m = (size > 24) ? src.getDouble() : NaN;
     }
 }
-function ShpPolygon(src, size, binState) {
+function ShpPolygon(src, size) {
     this.type = ShpType.SHAPE_POLYGON;
     this.rings = [];             
     if (src) {                      
-            if (src.getLength() - binState.offset < size)
+            if (src.getLength() - src.position < size)
                     throw(new ShpError("Not a Polygon record (too small)"));
             
-            binState.bigEndian = false;
+            src.bigEndian = false;
             
-            var x = src.getDoubleAt(binState.offset, binState.bigEndian);
-            binState.offset += 8;
-            var y = src.getDoubleAt(binState.offset, binState.bigEndian);
-            binState.offset += 8;
-            var w = src.getDoubleAt(binState.offset, binState.bigEndian);
-            binState.offset += 8;
-            var h = src.getDoubleAt(binState.offset, binState.bigEndian);
-            binState.offset += 8;
-            
-            this.box = new Rectangle(x,y,w,h);
+            this.box = new Rectangle(src.getDouble(),src.getDouble(),src.getDouble(),src.getDouble());
                     
-            var rc = src.getSLongAt(binState.offset, binState.bigEndian);
-            binState.offset += 4;
-            var pc = src.getSLongAt(binState.offset, binState.bigEndian);
-            binState.offset += 4;
+            var rc = src.getSLong();
+            var pc = src.getSLong();
             
             var ringOffsets = [];
             while(rc--) {
-                var ringOffset = src.getSLongAt(binState.offset, binState.bigEndian);
-                binState.offset += 4;
+                var ringOffset = src.getSLong();
                 ringOffsets.push(ringOffset);
             }
             
             var points = [];                 
             while(pc--) {
-                points.push(new ShpPoint(src,16,binState));
+                points.push(new ShpPoint(src,16));
             }
             
             // convert points, and ringOffsets arrays to an array of rings:
@@ -311,41 +267,29 @@ function ShpPolygon(src, size, binState) {
             this.rings.push(points);                                     
     }
 }
-function ShpPolyline(src, size, binState) {
+function ShpPolyline(src, size) {
     this.type = ShpType.SHAPE_POLYLINE;
     this.rings = [];             
     if (src) {                      
-            if (src.getLength() - binState.offset < size)
+            if (src.getLength() - src.position < size)
                     throw(new ShpError("Not a Polygon record (too small)"));
             
-            binState.bigEndian = false;
+            src.bigEndian = false;
             
-            var x = src.getDoubleAt(binState.offset, binState.bigEndian);
-            binState.offset += 8;
-            var y = src.getDoubleAt(binState.offset, binState.bigEndian);
-            binState.offset += 8;
-            var w = src.getDoubleAt(binState.offset, binState.bigEndian);
-            binState.offset += 8;
-            var h = src.getDoubleAt(binState.offset, binState.bigEndian);
-            binState.offset += 8;
-            
-            this.box = new Rectangle(x,y,w,h);
+            this.box = new Rectangle(src.getDouble(),src.getDouble(),src.getDouble(),src.getDouble());
                     
-            var rc = src.getSLongAt(binState.offset, binState.bigEndian);
-            binState.offset += 4;
-            var pc = src.getSLongAt(binState.offset, binState.bigEndian);
-            binState.offset += 4;
+            var rc = src.getSLong();
+            var pc = src.getSLong();
             
             var ringOffsets = [];
             while(rc--) {
-                var ringOffset = src.getSLongAt(binState.offset, binState.bigEndian);
-                binState.offset += 4;
+                var ringOffset = src.getSLong();
                 ringOffsets.push(ringOffset);
             }
             
             var points = [];                 
             while(pc--) {
-                points.push(new ShpPoint(src,16,binState));
+                points.push(new ShpPoint(src,16));
             }
             
             // convert points, and ringOffsets arrays to an array of rings:

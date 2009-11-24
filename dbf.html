@@ -1,7 +1,8 @@
 <html>
 <head>
 <title>Javascript DBF Loader</title>
-<script type="text/javascript" src="binary.js"></script>
+<script type="text/javascript" src="binaryajax.js"></script>
+<script type="text/javascript" src="binarywrapper.js"></script>
 <script type="text/javascript" src="dbf.js"></script>
 <script type="text/javascript">
 
@@ -20,12 +21,12 @@ function onBinaryAjaxComplete(oHTTP) {
 
   if (window.console && window.console.log) console.log('got data, parsing dbf');
 
-  var dbf = new DbfHeader(binFile);
+  var dbf = new DbfFile(binFile);
 
   if (window.console && window.console.log) console.log(dbf);
   
-  for (var i = 0; i < dbf.recordCount; i++) {
-    var record = getRecord(binFile, dbf, i);
+  for (var i = 0; i < dbf.header.recordCount; i++) {
+    var record = dbf.records[i];
     if (window.console && window.console.log) console.log(record);
   }
 }

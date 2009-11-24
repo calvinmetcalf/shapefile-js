@@ -1,9 +1,8 @@
 A binary shapefile loader and canvas-based renderer, for javascript. Many caveats:
 
 Seems best in Safari... times out in IE and in Firefox 3.5 with large files. 
-Does the dumbest thing possible and reads entire shp and dbf files in one go..
+Does the dumbest thing possible and reads entire shp and dbf files in one go.
 Error checking is strange (needs testing with more known-good files). 
-Manually increments byte array offsets instead of being smart.
 Implies that it's a good idea to load large binary files over the network. 
 Doesn't do anything much apart from proof of concept.
 
@@ -12,6 +11,8 @@ http://code.google.com/p/vanrijkom-flashlibs/ was ported to js from actionscript
 http://code.google.com/p/explorercanvas/ is used for IE support
 
 binaryajax.js is under MPL and  was extended to support parsing doubles
+
+binarywrapper.js is new, to keep track of binary offsets and endianness
 
 dbf.js and shapefile.js are close relatives of the vanrijkom-libs code and as such are LGPL v2 as well
 
