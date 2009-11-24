@@ -34,7 +34,7 @@ function onShpComplete(oHTTP) {
   shpFile = new ShpFile(binFile);
 
   if (shpFile.header.shapeType != ShpType.SHAPE_POLYGON && shpFile.header.shapeType != ShpType.SHAPE_POLYLINE) {
-    alert("Shapefile does not contain Polygon records (found type: "+shp.shapeType+")");
+    alert("Shapefile does not contain Polygon records (found type: "+shpFile.header.shapeType+")");
   }  
   
   //if (window.console && window.console.log) console.log(records);

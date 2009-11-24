@@ -62,6 +62,7 @@ var BinaryFile = function(strData, iDataOffset, iDataLength) {
 		var iLong = bBigEndian ? 
 			(((((iByte1 << 8) + iByte2) << 8) + iByte3) << 8) + iByte4
 			: (((((iByte4 << 8) + iByte3) << 8) + iByte2) << 8) + iByte1;
+
 		if (iLong < 0) iLong += 4294967296;
 		return iLong;
 	}
@@ -85,13 +86,8 @@ var BinaryFile = function(strData, iDataOffset, iDataLength) {
 		// http://stackoverflow.com/questions/1597709/convert-a-string-with-a-hex-representation-of-an-ieee-754-double-into-javascript
 		// TODO: check the endianness for something other than shapefiles
 		// TODO: what about NaNs and Infinity?
-		var a = this.getLongAt(iOffset, bBigEndian);
-		var b = this.getLongAt(iOffset+4, bBigEndian);
-		if (!bBigEndian) {
-			var tmp = a;
-			a = b;
-			b = tmp;
-		}
+		var a = this.getLongAt(iOffset + (bBigEndian ? 0 : 4), bBigEndian);
+		var b = this.getLongAt(iOffset + (bBigEndian ? 4 : 0), bBigEndian);
 		var s = a >> 31 ? -1 : 1;
 		var e = (a >> 52 - 32 & 0x7ff) - 1023;
 		return s * (a & 0xfffff | 0x100000) * 1.0 / Math.pow(2,52-32) * Math.pow(2, e) + b * 1.0 / Math.pow(2, 52) * Math.pow(2, e);
