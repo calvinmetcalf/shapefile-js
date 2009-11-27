@@ -80,17 +80,17 @@ function render(records, data) {
         var ring = shp.rings[j];
         for (var k = 0; k < ring.length; k++) {
           if (!box) {
-            box = new Rectangle(ring[k].x, ring[k].y, 0, 0);
+            box = { x: ring[k].x, y: ring[k].y, width: 0, height: 0 };
           }
           else {
             var l = Math.min(box.x, ring[k].x);
             var t = Math.min(box.y, ring[k].y);
-            var r = Math.max(box.x+box.w, ring[k].x);
-            var b = Math.max(box.y+box.h, ring[k].y);
+            var r = Math.max(box.x+box.width, ring[k].x);
+            var b = Math.max(box.y+box.height, ring[k].y);
             box.x = l;
             box.y = t;
-            box.w = r-l;
-            box.h = b-t;
+            box.width = r-l;
+            box.height = b-t;
           }
         }
       }
@@ -105,7 +105,7 @@ function render(records, data) {
 
   var ctx = canvas.getContext('2d');
   
-  var sc = Math.min(800 / box.w, 400 / box.h);
+  var sc = Math.min(800 / box.width, 400 / box.height);
 
   ctx.fillStyle = '#ccccff';
   ctx.fillRect(0,0,800,400);
