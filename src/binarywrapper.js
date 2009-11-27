@@ -56,8 +56,20 @@ function BinaryFileWrapper(binFile) {
         return s;
     }
 
-    this.getDouble = function() {
-        var d = binFile.getDoubleAt(this.position, this.bigEndian);
+	this.getDoubleAt = function(iOffset, bBigEndian) {
+		// hugs stackoverflow
+		// http://stackoverflow.com/questions/1597709/convert-a-string-with-a-hex-representation-of-an-ieee-754-double-into-javascript
+		// TODO: check the endianness for something other than shapefiles
+		// TODO: what about NaNs and Infinity?
+		var a = binFile.getLongAt(iOffset + (bBigEndian ? 0 : 4), bBigEndian);
+		var b = binFile.getLongAt(iOffset + (bBigEndian ? 4 : 0), bBigEndian);
+		var s = a >> 31 ? -1 : 1;
+		var e = (a >> 52 - 32 & 0x7ff) - 1023;
+		return s * (a & 0xfffff | 0x100000) * 1.0 / Math.pow(2,52-32) * Math.pow(2, e) + b * 1.0 / Math.pow(2, 52) * Math.pow(2, e);
+	}
+
+    this.getDouble = function() {    
+        var d = this.getDoubleAt(this.position, this.bigEndian);
         this.position += 8;
         return d;
     }
