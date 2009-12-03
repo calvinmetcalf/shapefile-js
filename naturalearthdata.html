@@ -1,0 +1,224 @@
+<html>
+<head>
+<title>Javascript Shapefile and DBF Loader</title>
+<script type="text/javascript" src="lib/binaryajax.js"></script>
+<script type="text/javascript" src="src/binarywrapper.js"></script>
+<script type="text/javascript" src="src/shapefile.js"></script>
+<script type="text/javascript" src="src/dbf.js"></script>
+<!--[if IE]><script src="lib/excanvas.js"></script><![endif]-->
+<script type="text/javascript">
+
+function Map(id, urls) {
+
+  var parent = document.getElementById(id);
+  if (!parent.style.position) parent.style.position = 'relative';
+  
+  var box = { x: -180, y: -90, width: 360, height: 180 }
+  
+  for (var i = 0; i < urls.length; i++) {
+    if (window.console && window.console.log) console.log('creating canvas...');
+
+    var canvas = document.createElement('canvas');
+    if (window.G_vmlCanvasManager) {
+      G_vmlCanvasManager.initElement(canvas); 
+    }  
+    canvas.width = 800;
+    canvas.height = 400;
+    canvas.style.position = 'absolute';
+    canvas.style.left = '0px';
+    canvas.style.top = '0px';
+    parent.appendChild(canvas);
+    
+    var layer = new Layer();
+    layer.onComplete = function(shpFile, dbfFile) {
+      if (shpFile.header.shapeType == ShpType.SHAPE_POLYGON || shpFile.header.shapeType == ShpType.SHAPE_POLYLINE) {
+        renderPolygons(canvas, shpFile.records, dbfFile.records, box);
+      }
+      else if (shpFile.header.shapeType == ShpType.SHAPE_POINT) {
+        renderPoints(canvas, shpFile.records, dbfFile.records, box);
+      }
+    }
+    layer.load(urls[i]+'.shp', urls[i]+'.dbf');
+  }
+  
+}
+
+function Layer() {
+  
+  var theLayer = this;
+  
+  var loadComplete = function() {
+    if (theLayer.dbfFile && theLayer.shpFile && theLayer.onComplete) {
+      theLayer.onComplete(theLayer.shpFile, theLayer.dbfFile);
+      // TODO: cleanup?
+    }
+  }
+  
+  var onShpFail = function() { 
+    alert('failed to load ' + theLayer.shpURL);
+  };
+  var onDbfFail = function() { 
+    alert('failed to load ' + theLayer.dbfURL);
+  }
+
+  var onShpComplete = function(oHTTP) {
+    var binFile = oHTTP.binaryResponse;
+    if (window.console && window.console.log) console.log('got data for ' + theLayer.shpURL + ', parsing shapefile');
+    theLayer.shpFile = new ShpFile(binFile);
+    loadComplete();
+  }
+
+  var onDbfComplete = function(oHTTP) {
+    var binFile = oHTTP.binaryResponse;
+    if (window.console && window.console.log) console.log('got data for ' + theLayer.dbfURL + ', parsing dbf file');
+    theLayer.dbfFile = new DbfFile(binFile);
+    loadComplete();
+  }  
+
+  this.load = function(shpURL, dbfURL) {
+    theLayer.shpURL = shpURL;
+    theLayer.dbfURL = dbfURL;
+    this.shpLoader = new BinaryAjax(shpURL, onShpComplete, onShpFail);
+    this.dbfLoader = new BinaryAjax(dbfURL, onDbfComplete, onDbfFail);
+  }
+}
+
+function renderPoints(canvas, records, data, box) {
+
+  if (window.console && window.console.log) console.log('rendering points');
+
+  var t1 = new Date().getTime();
+  if (window.console && window.console.log) console.log('starting rendering...');
+
+  var ctx = canvas.getContext('2d');
+  
+  var sc = Math.min(800 / box.width, 400 / box.height);
+
+  ctx.fillStyle = '#000000';
+  for (var i = 0; i < records.length; i++) {
+    var record = records[i];
+    if (record.shapeType == ShpType.SHAPE_POINT) {
+      var shp = record.shape;
+      ctx.fillRect((shp.x - box.x) * sc, 400 - (shp.y - box.y) * sc, 5, 5);
+    }
+  }
+  t2 = new Date().getTime();
+  if (window.console && window.console.log) console.log('done rendering in ' + (t2 - t1) + ' ms');
+}
+
+function renderPolygons(canvas, records, data, box) {
+
+  if (window.console && window.console.log) console.log('rendering polygons');
+
+  var t1 = new Date().getTime();
+  if (window.console && window.console.log) console.log('starting rendering...');
+
+  var ctx = canvas.getContext('2d');
+  
+  var sc = Math.min(canvas.width / box.width, canvas.height / box.height);
+
+  ctx.lineWidth = 0.5;
+  ctx.strokeStyle = '#000000'; 
+  for (var i = 0; i < records.length; i++) {
+    var record = records[i];
+    if (record.shapeType == ShpType.SHAPE_POLYGON || record.shapeType == ShpType.SHAPE_POLYLINE) {
+      var shp = record.shape;
+      if (record.shapeType == ShpType.SHAPE_POLYGON) {
+        ctx.fillStyle = getFillRecord(data[i]);
+      }
+      ctx.beginPath();
+      for (var j = 0; j < shp.rings.length; j++) {
+        var ring = shp.rings[j];
+        if (ring.length < 1) continue;
+        ctx.moveTo((ring[0].x - box.x) * sc, canvas.height - (ring[0].y - box.y) * sc);
+        for (var k = 1; k < ring.length; k++) {
+          ctx.lineTo((ring[k].x - box.x) * sc, canvas.height - (ring[k].y - box.y) * sc);
+        }
+      }
+      if (record.shapeType == ShpType.SHAPE_POLYGON) {
+        ctx.fill();
+      }
+      ctx.stroke();
+    }
+  }
+  t2 = new Date().getTime();
+  if (window.console && window.console.log) console.log('done rendering in ' + (t2 - t1) + ' ms');
+}
+
+function getFillRecord(record) {
+  /* var colors = ["#F1EEF6", "#D4B9DA", "#C994C7", "#DF65B0", "#DD1C77", "#980043"]
+  var popn = parseInt(record.values['POP2005']);
+  if (!isNaN(popn)) {
+    popn = Math.max(0, Math.min(100000000, popn));
+    var colorIndex = parseInt((colors.length-1) * popn / 100000000);
+    var color = colors[colorIndex];
+    //if (window.console && window.console.log) console.log('popn: ' + popn + ' color: ' + color);  
+    return color;
+  } */
+  return 'rgba(128, 128, 128, 0.25)';
+}
+
+window.onload = function() {
+  var map1 = new Map('physical', [
+    "naturalearthdata/physical/110m-coastline",
+    "naturalearthdata/physical/110m-geography-marine-polys",
+    "naturalearthdata/physical/110m-coastline",
+    "naturalearthdata/physical/110m-geography-marine-polys",
+    "naturalearthdata/physical/110m-geography-regions-points",
+    "naturalearthdata/physical/110m-geography-regions-polys",
+    "naturalearthdata/physical/110m-glaciated-areas",
+    "naturalearthdata/physical/110m-lakes",
+    "naturalearthdata/physical/110m-land",
+    "naturalearthdata/physical/110m-ocean",
+    "naturalearthdata/physical/110m-physical-geographic-lines",
+    "naturalearthdata/physical/110m-rivers-lake-centerlines"
+  ]);
+  
+  var map2 = new Map('cultural', [
+    'naturalearthdata/cultural/110m-admin-0-boundary-lines',
+    'naturalearthdata/cultural/110m-admin-1-states-provinces-lines-shp',
+    'naturalearthdata/cultural/110m-admin-0-countries',
+    'naturalearthdata/cultural/110m-admin-1-states-provinces-poly-shp',
+    'naturalearthdata/cultural/110m-admin-0-pacific-groupings',
+    'naturalearthdata/cultural/110m-populated-places',
+    'naturalearthdata/cultural/110m-admin-0-tiny-countries'
+  ]);
+  
+}
+
+</script>
+<style type="text/css">
+body {
+  background-color: #eee;
+  color: #000;
+  font: 12px sans-serif;
+  margin: 20px;
+}
+.map {
+  width: 800px;
+  height: 400px;
+  background-color: #fff;
+  margin: 0;
+  padding: 0;
+  border: 1px solid red;
+}
+canvas {
+  margin: 0;
+  padding: 0;
+}
+a img {
+  border: 0;
+}
+</style>
+</head>
+<body>
+<h1>Natural Earth</h1>
+<p>This is an experimental javascript shapefile viewer. For no reason in particular it doesn't really work in IE, sorry. Elsewhere, uninformative errors may appear in the dark crevices of your browser.</p>
+<p>See <a href="http://github.com/RandomEtc/shapefile-js">http://github.com/RandomEtc/shapefile-js</a> for more details.</p>
+<h2>110m Physical Vectors (12 layers)</h2>
+<div class="map" id="physical"></div>
+<h2>110m Cultural Vectors (7 layers)</h2>
+<div class="map" id="cultural"></div>
+<p><a href="http://www.naturalearthdata.com/"><img src="naturalearthdata/NEV-Logo-Black_sm.png"></a></p>
+</body>
+</html>
