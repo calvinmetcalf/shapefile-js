@@ -105,11 +105,9 @@ function renderPoints(canvas, records, data, box, style) {
   
   var sc = Math.min(canvas.width / box.width, canvas.height / box.height);
 
-  if (style) {
-    for (var p in style) {
-      ctx[p] = style[p];
-    }
-  }
+  if (style.fillStyle) ctx.fillStyle = style.fillStyle;
+  if (style.strokeStyle) ctx.strokeStyle = style.strokeStyle;
+  if (style.lineWidth) ctx.lineWidth = style.lineWidth;
 
   // TODO: style attributes for point type (circle, square) and size/radius
 
@@ -125,8 +123,41 @@ function renderPoints(canvas, records, data, box, style) {
       }
     }
   }
+  
+  if ((style.textFill || style.textStroke) && style.textProp) {
+    if (style.textFill) ctx.fillStyle = style.textFill;
+    if (style.textStroke) {
+      ctx.strokeStyle = style.textStroke;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.lineWidth = style.textHalo || 1;
+    }
+    for (var i = 0; i < records.length; i++) {
+      if (data[i] && data[i].values && data[i].values[style.textProp]) {
+        var record = records[i];
+        if (record.shapeType == ShpType.SHAPE_POINT) {
+          var shp = record.shape;
+          var text = trim(data[i].values[style.textProp]);
+          var tx = Math.round(2 + (shp.x - box.x) * sc);
+          var ty = Math.round(3 + canvas.height - (shp.y - box.y) * sc);
+          if (style.textStroke) ctx.strokeText(text, tx, ty);
+          if (style.textFill) ctx.fillText(text, tx, ty);
+        }
+      }
+    }
+  }
+  
   t2 = new Date().getTime();
   if (window.console && window.console.log) console.log('done rendering in ' + (t2 - t1) + ' ms');
+}
+
+// from http://blog.stevenlevithan.com/archives/faster-trim-javascript
+function trim(str) {
+  var str = str.replace(/^\s\s*/, ''),
+    ws = /\s/,
+    i = str.length;
+  while (ws.test(str.charAt(--i)));
+  return str.slice(0, i + 1);
 }
 
 function renderPolygons(canvas, records, data, box, style) {
@@ -185,10 +216,10 @@ window.onload = function() {
     new Layer("naturalearthdata/physical/110m-geography-regions-polys", { strokeStyle: 'rgba(100,100,100,0.5)', lineWidth: '0.5' }),
     new Layer("naturalearthdata/physical/110m-glaciated-areas", { fillStyle: 'rgb(40,40,70)' }),    
     new Layer("naturalearthdata/physical/110m-coastline", { strokeStyle: '#ffffff', lineWidth: '2.0' }),
-    new Layer("naturalearthdata/physical/110m-geography-regions-points", { fillStyle: 'red' }),
     new Layer("naturalearthdata/physical/110m-lakes", { fillStyle: '#9dc3e0', strokeStyle: 'white', lineWidth: '0.5' }),
     new Layer("naturalearthdata/physical/110m-physical-geographic-lines", { strokeStyle: 'white', lineWidth: '0.5' }),
-    new Layer("naturalearthdata/physical/110m-rivers-lake-centerlines", { strokeStyle: '#9dc3e0', lineWidth: '0.5' }) 
+    new Layer("naturalearthdata/physical/110m-rivers-lake-centerlines", { strokeStyle: '#9dc3e0', lineWidth: '0.5' }),
+    new Layer("naturalearthdata/physical/110m-geography-regions-points", { fillStyle: 'red', strokeStyle: 'white', lineWidth: '0.5', textStroke: 'black', textHalo: '3', textFill: 'white', textProp: 'Name' })
   ]);
   
   var map2 = new Map('cultural', [
