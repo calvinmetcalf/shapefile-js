@@ -8,48 +8,59 @@
 <!--[if IE]><script src="lib/excanvas.js"></script><![endif]-->
 <script type="text/javascript">
 
-function Map(id, urls) {
+function Map(id, layers) {
 
   var parent = document.getElementById(id);
   if (!parent.style.position) parent.style.position = 'relative';
   
-  var box = { x: -180, y: -90, width: 360, height: 180 }
-  
-  for (var i = 0; i < urls.length; i++) {
+  for (var i = 0; i < layers.length; i++) {
     if (window.console && window.console.log) console.log('creating canvas...');
 
+    var layer = layers[i];
+
     var canvas = document.createElement('canvas');
-    if (window.G_vmlCanvasManager) {
-      G_vmlCanvasManager.initElement(canvas); 
-    }  
-    canvas.width = 800;
-    canvas.height = 400;
     canvas.style.position = 'absolute';
     canvas.style.left = '0px';
     canvas.style.top = '0px';
+    // TODO get these from parent properties or in constructor:
+    canvas.style.width = '1024px';
+    canvas.style.height = '512px';
     parent.appendChild(canvas);
+    if (window.G_vmlCanvasManager) {
+      canvas = G_vmlCanvasManager.initElement(canvas); 
+    }  
+    canvas.width = parseInt(canvas.style.width.match(/\d+/));
+    canvas.height = parseInt(canvas.style.height.match(/\d+/));
+
+    layer.canvas = canvas;
+    layer.onComplete = onLayerComplete;
     
-    var layer = new Layer();
-    layer.onComplete = function(shpFile, dbfFile) {
-      if (shpFile.header.shapeType == ShpType.SHAPE_POLYGON || shpFile.header.shapeType == ShpType.SHAPE_POLYLINE) {
-        renderPolygons(canvas, shpFile.records, dbfFile.records, box);
-      }
-      else if (shpFile.header.shapeType == ShpType.SHAPE_POINT) {
-        renderPoints(canvas, shpFile.records, dbfFile.records, box);
-      }
-    }
-    layer.load(urls[i]+'.shp', urls[i]+'.dbf');
+    layer.load();
   }
   
 }
 
-function Layer() {
-  
+function onLayerComplete(shpFile, dbfFile) {
+  var box = { x: -180, y: -90, width: 360, height: 180 };
+  if (shpFile.header.shapeType == ShpType.SHAPE_POLYGON || shpFile.header.shapeType == ShpType.SHAPE_POLYLINE) {
+    renderPolygons(this.canvas, shpFile.records, dbfFile.records, box, this.style);
+  }
+  else if (shpFile.header.shapeType == ShpType.SHAPE_POINT) {
+    renderPoints(this.canvas, shpFile.records, dbfFile.records, box, this.style);
+  }
+}
+
+function Layer(url, style) {
+
+  var shpURL = url+'.shp';
+  var dbfURL = url+'.dbf';
+  this.style = style;
+
   var theLayer = this;
   
   var loadComplete = function() {
     if (theLayer.dbfFile && theLayer.shpFile && theLayer.onComplete) {
-      theLayer.onComplete(theLayer.shpFile, theLayer.dbfFile);
+      theLayer.onComplete.apply(theLayer, [ theLayer.shpFile, theLayer.dbfFile ]);
       // TODO: cleanup?
     }
   }
@@ -75,15 +86,15 @@ function Layer() {
     loadComplete();
   }  
 
-  this.load = function(shpURL, dbfURL) {
-    theLayer.shpURL = shpURL;
-    theLayer.dbfURL = dbfURL;
+  this.load = function() {
+    this.shpURL = shpURL;
+    this.dbfURL = dbfURL;
     this.shpLoader = new BinaryAjax(shpURL, onShpComplete, onShpFail);
     this.dbfLoader = new BinaryAjax(dbfURL, onDbfComplete, onDbfFail);
   }
 }
 
-function renderPoints(canvas, records, data, box) {
+function renderPoints(canvas, records, data, box, style) {
 
   if (window.console && window.console.log) console.log('rendering points');
 
@@ -92,21 +103,33 @@ function renderPoints(canvas, records, data, box) {
 
   var ctx = canvas.getContext('2d');
   
-  var sc = Math.min(800 / box.width, 400 / box.height);
+  var sc = Math.min(canvas.width / box.width, canvas.height / box.height);
 
-  ctx.fillStyle = '#000000';
+  if (style) {
+    for (var p in style) {
+      ctx[p] = style[p];
+    }
+  }
+
+  // TODO: style attributes for point type (circle, square) and size/radius
+
   for (var i = 0; i < records.length; i++) {
     var record = records[i];
     if (record.shapeType == ShpType.SHAPE_POINT) {
       var shp = record.shape;
-      ctx.fillRect((shp.x - box.x) * sc, 400 - (shp.y - box.y) * sc, 5, 5);
+      if (style.fillStyle) {
+        ctx.fillRect(-1.5 + (shp.x - box.x) * sc, -1.5 + canvas.height - (shp.y - box.y) * sc, 3, 3);
+      }
+      if (style.strokeStyle) {
+        ctx.strokeRect(-1.5 + (shp.x - box.x) * sc, -1.5 + canvas.height - (shp.y - box.y) * sc, 3, 3);
+      }
     }
   }
   t2 = new Date().getTime();
   if (window.console && window.console.log) console.log('done rendering in ' + (t2 - t1) + ' ms');
 }
 
-function renderPolygons(canvas, records, data, box) {
+function renderPolygons(canvas, records, data, box, style) {
 
   if (window.console && window.console.log) console.log('rendering polygons');
 
@@ -117,15 +140,15 @@ function renderPolygons(canvas, records, data, box) {
   
   var sc = Math.min(canvas.width / box.width, canvas.height / box.height);
 
-  ctx.lineWidth = 0.5;
-  ctx.strokeStyle = '#000000'; 
+  if (style) {
+    for (var p in style) {
+      ctx[p] = style[p];
+    }
+  }
   for (var i = 0; i < records.length; i++) {
     var record = records[i];
     if (record.shapeType == ShpType.SHAPE_POLYGON || record.shapeType == ShpType.SHAPE_POLYLINE) {
       var shp = record.shape;
-      if (record.shapeType == ShpType.SHAPE_POLYGON) {
-        ctx.fillStyle = getFillRecord(data[i]);
-      }
       ctx.beginPath();
       for (var j = 0; j < shp.rings.length; j++) {
         var ring = shp.rings[j];
@@ -135,53 +158,54 @@ function renderPolygons(canvas, records, data, box) {
           ctx.lineTo((ring[k].x - box.x) * sc, canvas.height - (ring[k].y - box.y) * sc);
         }
       }
-      if (record.shapeType == ShpType.SHAPE_POLYGON) {
+      if (style.fillStyle && record.shapeType == ShpType.SHAPE_POLYGON) {
         ctx.fill();
       }
-      ctx.stroke();
+      if (style.strokeStyle) {
+        ctx.stroke();
+      }
     }
   }
   t2 = new Date().getTime();
   if (window.console && window.console.log) console.log('done rendering in ' + (t2 - t1) + ' ms');
 }
 
-function getFillRecord(record) {
-  /* var colors = ["#F1EEF6", "#D4B9DA", "#C994C7", "#DF65B0", "#DD1C77", "#980043"]
-  var popn = parseInt(record.values['POP2005']);
-  if (!isNaN(popn)) {
-    popn = Math.max(0, Math.min(100000000, popn));
-    var colorIndex = parseInt((colors.length-1) * popn / 100000000);
-    var color = colors[colorIndex];
-    //if (window.console && window.console.log) console.log('popn: ' + popn + ' color: ' + color);  
-    return color;
-  } */
-  return 'rgba(128, 128, 128, 0.25)';
-}
-
 window.onload = function() {
+
+  // currently styling works like this:
+  // - if there's a fillStyle then it will be filled 
+  // - if there's a strokeStyle then it will be stroked
+  // - points are always 3px rectangles
+  // - polylines can't be filled
+
   var map1 = new Map('physical', [
-    "naturalearthdata/physical/110m-coastline",
-    "naturalearthdata/physical/110m-geography-marine-polys",
-    "naturalearthdata/physical/110m-coastline",
-    "naturalearthdata/physical/110m-geography-marine-polys",
-    "naturalearthdata/physical/110m-geography-regions-points",
-    "naturalearthdata/physical/110m-geography-regions-polys",
-    "naturalearthdata/physical/110m-glaciated-areas",
-    "naturalearthdata/physical/110m-lakes",
-    "naturalearthdata/physical/110m-land",
-    "naturalearthdata/physical/110m-ocean",
-    "naturalearthdata/physical/110m-physical-geographic-lines",
-    "naturalearthdata/physical/110m-rivers-lake-centerlines"
+    new Layer("naturalearthdata/physical/110m-ocean", { fillStyle: '#9dc3e0', strokeStyle: '#8db3d0', lineWidth: '5' }),
+    new Layer("naturalearthdata/physical/110m-geography-marine-polys", { strokeStyle: '#ffff80', lineWidth: '0.5' }),
+    new Layer("naturalearthdata/physical/110m-land", { fillStyle: '#202020' }),
+    new Layer("naturalearthdata/physical/110m-geography-regions-polys", { strokeStyle: 'rgba(100,100,100,0.5)', lineWidth: '0.5' }),
+    new Layer("naturalearthdata/physical/110m-glaciated-areas", { fillStyle: 'rgb(40,40,70)' }),    
+    new Layer("naturalearthdata/physical/110m-coastline", { strokeStyle: '#ffffff', lineWidth: '2.0' }),
+    new Layer("naturalearthdata/physical/110m-geography-regions-points", { fillStyle: 'red' }),
+    new Layer("naturalearthdata/physical/110m-lakes", { fillStyle: '#9dc3e0', strokeStyle: 'white', lineWidth: '0.5' }),
+    new Layer("naturalearthdata/physical/110m-physical-geographic-lines", { strokeStyle: 'white', lineWidth: '0.5' }),
+    new Layer("naturalearthdata/physical/110m-rivers-lake-centerlines", { strokeStyle: '#9dc3e0', lineWidth: '0.5' }) 
   ]);
   
   var map2 = new Map('cultural', [
-    'naturalearthdata/cultural/110m-admin-0-boundary-lines',
-    'naturalearthdata/cultural/110m-admin-1-states-provinces-lines-shp',
-    'naturalearthdata/cultural/110m-admin-0-countries',
-    'naturalearthdata/cultural/110m-admin-1-states-provinces-poly-shp',
-    'naturalearthdata/cultural/110m-admin-0-pacific-groupings',
-    'naturalearthdata/cultural/110m-populated-places',
-    'naturalearthdata/cultural/110m-admin-0-tiny-countries'
+    // country shapes
+    new Layer('naturalearthdata/cultural/110m-admin-0-countries', { fillStyle: '#fadfa8', strokeStyle: '#5c3d1f', lineWidth: '0.5' }),
+    // mainly USA state shapes
+    new Layer('naturalearthdata/cultural/110m-admin-1-states-provinces-poly-shp', { fillStyle: '#fadfa8', strokeStyle: '#5c3d1f', lineWidth: '1' }),
+    // mainly USA state boundaries
+    new Layer('naturalearthdata/cultural/110m-admin-1-states-provinces-lines-shp', { strokeStyle: '#9b5c3d', lineWidth: '0.5' }),
+    // internal country borders:
+    new Layer('naturalearthdata/cultural/110m-admin-0-boundary-lines', { strokeStyle: '#9b5c3d', lineWidth: '1' }),
+    // mainly the lines around the pacific islands
+    new Layer('naturalearthdata/cultural/110m-admin-0-pacific-groupings', { strokeStyle: '#3993c7', lineWidth: '0.5' }),
+    // dots for small countries?
+    new Layer('naturalearthdata/cultural/110m-admin-0-tiny-countries', { fillStyle: 'rgb(0,0,0)' }),
+    // dots for cities
+    new Layer('naturalearthdata/cultural/110m-populated-places', { fillStyle: 'rgb(0,0,0)' })
   ]);
   
 }
@@ -195,12 +219,17 @@ body {
   margin: 20px;
 }
 .map {
-  width: 800px;
-  height: 400px;
-  background-color: #fff;
+  width: 1024px;
+  height: 512px;
   margin: 0;
   padding: 0;
-  border: 1px solid red;
+  border: 0;
+}
+#cultural {
+  background-color: #9dc3e0;
+}
+#physical {
+  background-color: #9dc3e0;
 }
 canvas {
   margin: 0;
