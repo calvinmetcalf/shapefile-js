@@ -8,13 +8,17 @@
 <!--[if IE]><script src="lib/excanvas.js"></script><![endif]-->
 <script type="text/javascript">
 
+function log(s) {
+  //if (window.console && window.console.log) console.log(s);
+}
+
 function Map(id, layers) {
 
   var parent = document.getElementById(id);
   if (!parent.style.position) parent.style.position = 'relative';
-  
+
   for (var i = 0; i < layers.length; i++) {
-    if (window.console && window.console.log) console.log('creating canvas...');
+    log('creating canvas...');
 
     var layer = layers[i];
 
@@ -33,21 +37,101 @@ function Map(id, layers) {
     canvas.height = parseInt(canvas.style.height.match(/\d+/));
 
     layer.canvas = canvas;
-    layer.onComplete = onLayerComplete;
+    layer.box = { x: -180, y: -90, width: 360, height: 180 };
     
     layer.load();
   }
   
-}
-
-function onLayerComplete(shpFile, dbfFile) {
   var box = { x: -180, y: -90, width: 360, height: 180 };
-  if (shpFile.header.shapeType == ShpType.SHAPE_POLYGON || shpFile.header.shapeType == ShpType.SHAPE_POLYLINE) {
-    renderPolygons(this.canvas, shpFile.records, dbfFile.records, box, this.style);
+  
+  var render = function() {
+    for (var i = 0; i < layers.length; i++) {
+      layers[i].box = box;
+      layers[i].render();
+    }
   }
-  else if (shpFile.header.shapeType == ShpType.SHAPE_POINT) {
-    renderPoints(this.canvas, shpFile.records, dbfFile.records, box, this.style);
+  
+  var panBy = function(x,y) {
+    var degreesPerPixel = box.width / 1024.0;
+    box.x -= x * degreesPerPixel;
+    box.y += y * degreesPerPixel;
+    render();
   }
+  
+  var zoomBy = function(s,x,y) {
+    var degreesPerPixel = box.width / 1024.0;
+    var boxX = box.x + (x * degreesPerPixel)
+    var boxY = box.y + ((512-y) * degreesPerPixel)
+    box.x -= boxX;
+    box.y -= boxY;
+    box.x *= s;
+    box.y *= s;
+    box.width *= s;
+    box.height *= s;
+    box.x += boxX;
+    box.y += boxY;
+    render();
+  }
+  
+  var mouseDown = function(e) {
+    var prevMouse = { x: e.clientX, y: e.clientY };
+    var mouseMove = function(e) {
+      panBy(e.clientX - prevMouse.x, e.clientY - prevMouse.y);
+      prevMouse.x = e.clientX;
+      prevMouse.y = e.clientY;
+      e.preventDefault(); // hopefully no selecting
+    }
+    var mouseUp = function(e) {
+      document.body.style.cursor = null;
+      document.removeEventListener('mousemove', mouseMove, false);
+      document.removeEventListener('mouseup', mouseUp, false);
+    }
+    document.body.style.cursor = 'hand';
+    document.addEventListener('mousemove', mouseMove, false);
+    document.addEventListener('mouseup', mouseUp, false);
+  };
+  
+  parent.addEventListener('mousedown', mouseDown, false);
+
+  var mouseWheel = function(e) {
+
+    var localX = e.clientX;
+    var localY = e.clientY;
+  
+    // correct for scrolled document
+    localX += document.body.scrollLeft + document.documentElement.scrollLeft;
+    localY += document.body.scrollTop + document.documentElement.scrollTop;
+
+    // correct for nested offsets in DOM
+    for(var node = parent; node; node = node.offsetParent) {
+      localX -= node.offsetLeft;
+      localY -= node.offsetTop;
+    }  
+    
+    var delta = 0;
+    if (e.wheelDelta) {
+        delta = e.wheelDelta;
+    }
+    else if (e.detail) {
+        delta = -e.detail;
+    }
+  
+    if (delta > 0) {
+      zoomBy(0.9, localX, localY);
+    }
+    else if (delta < 0) {
+      zoomBy(1.1, localX, localY);
+    }
+    
+    // cancel page scroll
+    e.preventDefault();
+  }
+
+  // Safari
+  parent.addEventListener('mousewheel', mouseWheel, false);
+  // Firefox
+  parent.addEventListener('DOMMouseScroll', mouseWheel, false);
+  
 }
 
 function Layer(url, style) {
@@ -58,13 +142,20 @@ function Layer(url, style) {
 
   var theLayer = this;
   
-  var loadComplete = function() {
-    if (theLayer.dbfFile && theLayer.shpFile && theLayer.onComplete) {
-      theLayer.onComplete.apply(theLayer, [ theLayer.shpFile, theLayer.dbfFile ]);
-      // TODO: cleanup?
+  this.render = function() {
+    // it's a little bit "this"-ish... how to put all these member vars into scope?
+    if (this.dbfFile && this.shpFile) {
+      var ctx = this.canvas.getContext('2d');
+      ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+      if (this.shpFile.header.shapeType == ShpType.SHAPE_POLYGON || this.shpFile.header.shapeType == ShpType.SHAPE_POLYLINE) {
+        renderPolygons(this.canvas, this.shpFile.records, this.dbfFile.records, this.box, this.style);
+      }
+      else if (this.shpFile.header.shapeType == ShpType.SHAPE_POINT) {
+        renderPoints(this.canvas, this.shpFile.records, this.dbfFile.records, this.box, this.style);
+      }
     }
   }
-  
+
   var onShpFail = function() { 
     alert('failed to load ' + theLayer.shpURL);
   };
@@ -74,16 +165,16 @@ function Layer(url, style) {
 
   var onShpComplete = function(oHTTP) {
     var binFile = oHTTP.binaryResponse;
-    if (window.console && window.console.log) console.log('got data for ' + theLayer.shpURL + ', parsing shapefile');
+    log('got data for ' + theLayer.shpURL + ', parsing shapefile');
     theLayer.shpFile = new ShpFile(binFile);
-    loadComplete();
+    if (theLayer.dbfFile) theLayer.render();
   }
 
   var onDbfComplete = function(oHTTP) {
     var binFile = oHTTP.binaryResponse;
-    if (window.console && window.console.log) console.log('got data for ' + theLayer.dbfURL + ', parsing dbf file');
+    log('got data for ' + theLayer.dbfURL + ', parsing dbf file');
     theLayer.dbfFile = new DbfFile(binFile);
-    loadComplete();
+    if (theLayer.shpFile) theLayer.render();
   }  
 
   this.load = function() {
@@ -96,10 +187,10 @@ function Layer(url, style) {
 
 function renderPoints(canvas, records, data, box, style) {
 
-  if (window.console && window.console.log) console.log('rendering points');
+  log('rendering points');
 
   var t1 = new Date().getTime();
-  if (window.console && window.console.log) console.log('starting rendering...');
+  log('starting rendering...');
 
   var ctx = canvas.getContext('2d');
   
@@ -148,7 +239,7 @@ function renderPoints(canvas, records, data, box, style) {
   }
   
   t2 = new Date().getTime();
-  if (window.console && window.console.log) console.log('done rendering in ' + (t2 - t1) + ' ms');
+  log('done rendering in ' + (t2 - t1) + ' ms');
 }
 
 // from http://blog.stevenlevithan.com/archives/faster-trim-javascript
@@ -162,10 +253,10 @@ function trim(str) {
 
 function renderPolygons(canvas, records, data, box, style) {
 
-  if (window.console && window.console.log) console.log('rendering polygons');
+  log('rendering polygons');
 
   var t1 = new Date().getTime();
-  if (window.console && window.console.log) console.log('starting rendering...');
+  log('starting rendering...');
 
   var ctx = canvas.getContext('2d');
   
@@ -198,7 +289,7 @@ function renderPolygons(canvas, records, data, box, style) {
     }
   }
   t2 = new Date().getTime();
-  if (window.console && window.console.log) console.log('done rendering in ' + (t2 - t1) + ' ms');
+  log('done rendering in ' + (t2 - t1) + ' ms');
 }
 
 window.onload = function() {

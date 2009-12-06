@@ -104,12 +104,12 @@ function DbfField(src) {
     this.indexFlag = src.getByte();
 }
 DbfField.prototype.readZeroTermANSIString = function(src) {
-    var r = "";
+    var r = [];
     var b;
     while (b = src.getByte()) {
-        r += String.fromCharCode(b);
+        r[r.length] = String.fromCharCode(b);
     }
-    return r;
+    return r.join('');
 }
 
 function DbfRecord(src, header) {
