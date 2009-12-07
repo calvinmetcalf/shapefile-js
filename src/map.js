@@ -1,5 +1,5 @@
 function log(s) {
-  if (window.console && window.console.log) console.log(s);
+  //if (window.console && window.console.log) console.log(s);
 }
 
 function Map(id, layers) {

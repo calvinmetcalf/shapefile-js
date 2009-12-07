@@ -92,7 +92,7 @@ function renderPoints(canvas, records, data, box, style) {
     helper.clearRect(0,0,style.helper.width,style.helper.height);
     helper.fillStyle = 'black';
     
-//    var helper = ctx;
+    //var helper = ctx;
 
     if (style.font) ctx.font = style.font;
     if (style.textFill) ctx.fillStyle = style.textFill;
@@ -115,7 +115,7 @@ function renderPoints(canvas, records, data, box, style) {
           var tw = Math.round(ctx.measureText(text).width);
           var th = 12;
 
-          if (tx < 0 || tx+tw > canvas.width || ty < 0 || ty > canvas.height) continue;
+          if (tx < 0 || tx+tw >= canvas.width || ty-th/2 < 0 || ty+th/2 >= canvas.height) continue;
           
           var img = helper.getImageData(tx+tw/2,ty,1,1);
           if (img.data[3]) continue;
