@@ -27,25 +27,36 @@ function getOpenLayersFeatures(url, callback) {
 	    // turn shapefile geometry into WKT
 	    // points are easy!
 	    if (instance.shpFile.header.shapeType == ShpType.SHAPE_POINT) {
-		var wkt = 'POINT(' + record.shape.x + ' ' + record.shape.y + ')'
+		var wkt = 'POINT(' + record.shape.x + ' ' + record.shape.y + ')';
 	    }
 
 	    // lines: not too hard--
 	    else if (instance.shpFile.header.shapeType == ShpType.SHAPE_POLYLINE) {
 		// prepopulate the first point
-		var points = [record.shape.rings[0].x + ' ' + record.shape.rings[0].y];
+		var points = [];//record.shape.rings[0].x + ' ' + record.shape.rings[0].y];
 		var pointsLen = record.shape.rings[0].length;
-		for (var i = 0; i < pointsLen; i++) {
-		    points.push(record.shape.rings[0][i].x + ' ' + record.shape.rings[0][i].x);
+		for (var j = 0; j < pointsLen; j++) {
+		    points.push(record.shape.rings[0][j].x + ' ' + record.shape.rings[0][j].y);
 		}
 		
-		var wkt = 'LINESTRING(' + points.join + ')';
+		var wkt = 'LINESTRING(' + points.join(', ') + ')';
 	    }
 
 	    // polygons: donuts
 	    else if (instance.shpFile.header.shapeType == ShpType.SHAPE_POLYGON) {
-		// TODO
-		var wkt = 'POLYGON()';
+		var ringsLen = record.shape.rings.length;
+		var wktOuter = [];
+		for (var j = 0; j < ringsLen; j++) {
+		    var ring = record.shape.rings[j];
+		    if (ring.length < 1) continue;
+		    var wktInner = [];//ring.x + ' ' + ring.y];
+		    var ringLen = ring.length;
+		    for (var k = 0; k < ringLen; k++) {
+			wktInner.push(ring[k].x + ' ' + ring[k].y);
+		    }
+		    wktOuter.push('(' + wktInner.join(', ') + ')');
+		}
+		var wkt = 'POLYGON(' + wktOuter.join(', ') + ')';
 	    }
 
 	    var the_geom = OpenLayers.Geometry.fromWKT(wkt);
