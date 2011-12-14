@@ -7,7 +7,7 @@
 <script type="text/javascript" src="src/dbf.js"></script>
 <script type="text/javascript" src="src/ol_shapefile.js"></script>
 <script type="text/javascript" src="OpenLayers/OpenLayers.js"></script>
-<script type="text/javascript" src="openlayers.js"></script>
+<script type="text/javascript" src="ol_simple.js"></script>
 
 <!--[if IE]><script src="lib/excanvas.js"></script><![endif]-->
 <style type="text/css">
@@ -25,10 +25,6 @@ body {
   border: 0;
   background-color: #9dc3e0;
 }
-canvas {
-  margin: 0;
-  padding: 0;
-}
 a img {
   border: 0;
 }
@@ -39,7 +35,7 @@ a img {
 <p>This is an experimental javascript shapefile viewer. For no reason in particular it doesn't really work in IE, sorry. Elsewhere, uninformative errors may appear in the dark crevices of your browser.</p>
 <p>See <a href="http://github.com/RandomEtc/shapefile-js">http://github.com/RandomEtc/shapefile-js</a> for more details.</p>
 <h2>110m Cultural Vectors (2 layers)</h2>
-<div id="map" style="width: 100%; height: 100%"></div>
+<div id="map" ></div>
 <p><a href="http://www.naturalearthdata.com/"><img src="naturalearthdata/NEV-Logo-Black_sm.png"></a></p>
 </body>
 </html>
