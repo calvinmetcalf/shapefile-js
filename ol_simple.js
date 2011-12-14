@@ -1,8 +1,9 @@
-// all the interactaction stuff is copied almost verbatim from http://www.openlayers.org/dev/examples/dynamic-text-layer.html
+// all the interaction stuff is copied almost verbatim from 
+// http://www.openlayers.org/dev/examples/dynamic-text-layer.html
 
 window.onload = function () {
     map = new OpenLayers.Map('map', {sphericalMercator: true});
-    var osm = new OpenLayers.Layer.OSM({sphericalMetcator: true});
+    var osm = new OpenLayers.Layer.OSM({sphericalMercator: true});
 
     var shpLayer = new OpenLayers.Layer.Vector({projection: new OpenLayers.Projection('EPSG:4326')});
     map.addLayers([osm, shpLayer]);
