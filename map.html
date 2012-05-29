@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+    <head><style>
+    html { height: 100% }
+  body { height: 100%; margin: 0; padding: 0;font-family: Verdana,Arial,sans-serif;font-size: .9em; }
+  #map{ height: 100%;width: 100%; }
+    </style>
+        <title>Example </title>        <script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?key=AIzaSyBvl2Lx_Tj-9N_fT9arfnl8utRkVPe50uA&sensor=true"></script>
+
+        <script type="text/javascript" src="shp.js"></script>
+
+<script>
+
+
+var url = "files/pandr"
+var shapefile = new shp({url:url,cb:function(){
+     var m = new google.maps.Map(document.getElementById('map'), {
+      center: new google.maps.LatLng(41.914541,-71.592407),
+      zoom: 8,
+      mapTypeId: 'roadmap'
+    });
+    for(var i = 0,len=shapefile.shapes.length;i<len;i++){
+      
+      var marker = new google.maps.Marker({position:new google.maps.LatLng(shapefile.shapes[i].point.y,shapefile.shapes[i].point.x),title:"A point"});
+marker.setMap(m);
+      }
+    }});
+</script>
+    </head>
+    <body>
+<div id="map" ></div>
+    </body>
+</html>

@@ -712,39 +712,44 @@ var BinaryAjax = (function() {
 	}
 
 }());
-var shp = function(baseurl){
+var shp = function(params){
+   params=params||{};
 var url = {};
-url.base = baseurl;
-url.shp= url.base + ".shp"
-url.dbf= url.base + ".dbf"
+url.base = params.url;
+url.shp= url.base + ".shp";
+url.dbf= url.base + ".dbf";
 var _name=this;
-_name.url = url;
+var cb = params.cb;
 var _onfail = function(){
  alert("whoops");   
 }
-
+var _dbf,_shp;
 
 
 var _shpData = function(data){
-    _name.shp =  new ShpFile(data.binaryResponse);
+    _shp =  new ShpFile(data.binaryResponse);
     
-    if(_name.dbf){
+    if(_dbf){
      _render();   
     }
 }
 var _dbfData = function(data){
-    _name.dbf =  new DbfFile(data.binaryResponse);
-       if(_name.shp){
+    _dbf =  new DbfFile(data.binaryResponse);
+       if(_shp){
      _render();   
     }
 }
 var _onfail = function(){
  alert("whoops");   
 }
-
+var doSomething = function(){
+    if(cb){
+     cb();   
+    }
+}
 var _render = function(){
-    shp = _name.shp;
-    dbf = _name.dbf;
+    shp = _shp;
+    dbf = _dbf;
   _name.bounds={
       x:shp.header.boundsXY.x,
       y:shp.header.boundsXY.y,
@@ -759,15 +764,25 @@ var _render = function(){
       y:shp.header.boundsZ.y,
       }
       };
-      _name.SHPtype = shp.header.shapeType;
-      _name.type = _shpNums[_name.SHPtype];
+      _shptype = shp.header.shapeType;
+      _name.type = _geotype[_shptype];
       _name.fields = [];
 
       for(var i = 0,len=dbf.header.fields.length;i<len;i++){
        _name.fields.push(dbf.header.fields[i].name);  
       }
-      _name.shapes=[];
-     
+       _name.shapes=[];
+     if(_name.type=="Point"){
+        for(var i=0,lenz=shp.records.length;i<lenz;i++){
+    var record = {};
+    record.point = {
+        x: shp.records[i].shape.x,
+         y: shp.records[i].shape.y}
+  
+      record.fields=dbf.records[i].values
+     _name.shapes.push(record);
+  };   
+     }else{    
   for(var i=0,lenz=shp.records.length;i<lenz;i++){
     var record = {};
     record.geometry = shp.records[i].shape;
@@ -775,7 +790,8 @@ var _render = function(){
       record.fields=dbf.records[i].values
     _name.shapes.push(record);
   };
-    
+     }; 
+     doSomething();
 };
 var _shpNums = {
 
@@ -847,6 +863,79 @@ var _shpNums = {
      * (currently unsupported).
      */
     "31": "Multipatch"
+
+};
+
+var _geotype = {
+
+    /**
+     * Unknow Shape Type (for internal use) 
+     */
+    "-1": "unk",
+    /**
+     * ESRI Shapefile Null Shape shape type.
+     */     
+    "0": "null",
+    /**
+     * ESRI Shapefile Point Shape shape type.
+     */
+    "1": "Point",
+    /**
+     * ESRI Shapefile PolyLine Shape shape type.
+     */
+    "3": "Polyline",
+    /**
+     * ESRI Shapefile Polygon Shape shape type.
+     */
+    "5":"Polygon",
+    /**
+     * ESRI Shapefile Multipoint Shape shape type
+     * (currently unsupported).
+     */
+    "8":"Multipoint",
+    /**
+     * ESRI Shapefile PointZ Shape shape type.
+     */
+    "11": "Point",
+    /**
+     * ESRI Shapefile PolylineZ Shape shape type
+     * (currently unsupported).
+     */
+    "13": "Polyline",
+    /**
+     * ESRI Shapefile PolygonZ Shape shape type
+     * (currently unsupported).
+     */
+    "15": "Polygon",
+    /**
+     * ESRI Shapefile MultipointZ Shape shape type
+     * (currently unsupported).
+     */
+    "18": "Multipoint",
+    /**
+     * ESRI Shapefile PointM Shape shape type
+     */
+    "21": "Point",
+    /**
+     * ESRI Shapefile PolyLineM Shape shape type
+     * (currently unsupported).
+     */
+    "23": "PolyLine",
+    /**
+     * ESRI Shapefile PolygonM Shape shape type
+     * (currently unsupported).
+     */
+    "25": "Polygon",
+    /**
+     * ESRI Shapefile MultiPointM Shape shape type
+     * (currently unsupported).
+     */
+   "28": "Multipoint",
+    /**
+     * ESRI Shapefile MultiPatch Shape shape type
+     * (currently unsupported).
+     */
+    "31": "unk"
 
 };
 var _shploader =  new BinaryAjax(url.shp,_shpData,_onfail);
