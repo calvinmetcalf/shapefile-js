@@ -5,6 +5,7 @@ Works in Aurora and Chrome basically I took [Random Etc's](https://github.com/Ra
 ```js
 var shapefile = new shp({url:"path/to/shapfile/without/extention",cb:callback});
 ```
+
 Currently it will detect if it's a point feature and will probobly do others at somepoint, at the moment does not reproject but will probobly merge in some functionality from [this for state plane](https://github.com/calvinmetcalf/lcc) maybe based on the .prjfile.
 
 there are some examples here, hopefully there will be some good examples soon (polygon.html loads a polyon, dosn't desplay anything, open web console and type "shapefile" to see what loaded, ditto for pt.html.  map.html takes point and puts it on a google map, need to replace that shapefile with one that has decent fields)
