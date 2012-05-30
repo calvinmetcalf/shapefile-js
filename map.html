@@ -6,24 +6,33 @@
   #map{ height: 100%;width: 100%; }
     </style>
         <title>Example </title>        <script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?key=AIzaSyBvl2Lx_Tj-9N_fT9arfnl8utRkVPe50uA&sensor=true"></script>
-
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
         <script type="text/javascript" src="shp.js"></script>
 
 <script>
 
 
 var url = "files/pandr"
+
 var shapefile = new shp({url:url,cb:function(){
      var m = new google.maps.Map(document.getElementById('map'), {
       center: new google.maps.LatLng(41.914541,-71.592407),
       zoom: 8,
       mapTypeId: 'roadmap'
     });
-    for(var i = 0,len=shapefile.shapes.length;i<len;i++){
-      
-      var marker = new google.maps.Marker({position:new google.maps.LatLng(shapefile.shapes[i].point.y,shapefile.shapes[i].point.x),title:"A point"});
-marker.setMap(m);
-      }
+    var infowindow = new google.maps.InfoWindow();
+ $.each(shapefile.shapes, function(i,v){
+     v.marker = new google.maps.Marker({position:new google.maps.LatLng(v.point.y,v.point.x),title:v.fields.TOWN});
+     v.marker.setMap(m);
+     var content = "<div class='iwindow'>Town: " + v.fields.TOWN + "<br/>Location: " + v.fields.LOCATION + "</div>";
+      google.maps.event.addListener(v.marker, 'click',
+                        	function()
+							{
+                                infowindow.setContent(content);
+                              infowindow.open(m,v.marker);
+							});
+    } )
+    
     }});
 </script>
     </head>

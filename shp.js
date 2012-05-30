@@ -778,8 +778,11 @@ var _render = function(){
     record.point = {
         x: shp.records[i].shape.x,
          y: shp.records[i].shape.y}
-  
-      record.fields=dbf.records[i].values
+  record.fields={};
+    for(var j=0,len=_name.fields.length;j<len;j++){
+      var field = _name.fields[j];
+    record.fields[field]=dbf.records[i].values[field].trim();
+    }
      _name.shapes.push(record);
   };   
      }else{    
@@ -787,7 +790,11 @@ var _render = function(){
     var record = {};
     record.geometry = shp.records[i].shape;
   
-      record.fields=dbf.records[i].values
+      record.fields={};
+    for(var j=0,len=_name.fields.length;j<len;j++){
+      var field = _name.fields[j];
+    record.fields[field]=dbf.records[i].values[field].trim();
+    }
     _name.shapes.push(record);
   };
      }; 
