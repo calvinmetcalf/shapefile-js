@@ -135,6 +135,7 @@ function parsePolygon(data){
 	var out = parsePolyline(data);
 	if(out.type === "LineString"){
 		out.type = "Polygon";
+		out.coordinates = [out.coordinates];
 		return out;
 	}else{
 		out.coordinates = out.coordinates.reduce(polyReduce,[]);
