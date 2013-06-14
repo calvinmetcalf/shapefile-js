@@ -1,7 +1,31 @@
 <!DOCTYPE html><html><head>
 <meta charset='utf-8'/>
 
-	 <title>test!</title>
-	 </head><body>
+	 <title>test!</title>   <style>
+      html { height: 100% }
+      body { height: 100%; margin: 0; padding: 0;}
+      #map{ height: 100% }
+    </style>
+	 <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.css" />
+<!--[if lte IE 8]>
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.ie.css" />
+<![endif]-->
+
+<script src="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.js"></script>
+	 </head><body>  <div id="map"></div>
 <script src="shp.js"> </script>
+
+      <script type="text/javascript">
+      var m= L.map('map').setView([34.74161249883172,18.6328125], 2);
+      var geo = L.geoJson().addTo(m);
+	shp.getShp('files/TM_WORLD_BORDERS_SIMPL-0.3').then(function(a){console.log(a);
+	
+		for(var key in a){
+			var DATA = {
+        "type": "Feature",
+        "geometry":a[key]};
+			geo.addData(DATA);
+		}
+	});
+</script>
 </body></html>
