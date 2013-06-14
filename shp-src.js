@@ -1,4 +1,6 @@
 (function(exports){
+'use strict';
+
 shp.binaryAjax = function(url){
 	var promise = shp.deferred();
 	var ajax = new XMLHttpRequest();
