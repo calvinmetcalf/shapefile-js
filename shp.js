@@ -341,6 +341,8 @@ function shp(){};/*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc,
 })(shp);
 
 (function(exports){
+'use strict';
+
 shp.binaryAjax = function(url){
 	var promise = shp.deferred();
 	var ajax = new XMLHttpRequest();
