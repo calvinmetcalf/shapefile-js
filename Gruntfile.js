@@ -4,7 +4,7 @@ module.exports = function(grunt) {
 		concat:{
 			all:{
 				options:{
-					banner:"function shp(){};"
+					banner:"function shp(base){return shp.all([shp.getShp(base),shp.getDbf(base)]).then(shp.make)}"
 				},
 				src:['./setImmediate.js','./promiscuous.js','./shp-src.js'],
 				dest:'./shp.js'

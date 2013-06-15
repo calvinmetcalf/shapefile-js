@@ -1,4 +1,4 @@
-function shp(){};/*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc, Donavon West, and Domenic Denicola @license MIT https://github.com/NobleJS/setImmediate */
+function shp(base){return shp.all([shp.getShp(base),shp.getDbf(base)]).then(shp.make)}/*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc, Donavon West, and Domenic Denicola @license MIT https://github.com/NobleJS/setImmediate */
 (function (attachTo,global) {
     "use strict";
 
@@ -342,7 +342,6 @@ function shp(){};/*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc,
 
 (function(exports){
 'use strict';
-
 shp.binaryAjax = function(url){
 	var promise = shp.deferred();
 	var ajax = new XMLHttpRequest();
@@ -526,14 +525,14 @@ var getRow = function(buffer,offset){
 var getRows = function(buffer,parseShape){
 	var offset=100;
 	var len = buffer.byteLength;
-	var out = {};
+	var out = [];
 	var current;
 	while(offset<len){
 		current = getRow(buffer,offset);
 		offset += 8;
 		offset += current.len;
 		if(current.type){
-			out[current.id]=parseShape(current.data);
+			out.push(parseShape(current.data));
 		}
 	}
 	return out;
@@ -546,4 +545,95 @@ var parseShp = function(buffer){
 shp.getShp = function(base){
 	return shp.binaryAjax(base+'.shp').then(parseShp);
 }
-})(window);
+
+function dbfHeader(buffer){
+	var data = new DataView(buffer);
+	var out = {}
+	out.lastUpdated = new Date(data.getUint8(1,true)+1900,data.getUint8(2,true),data.getUint8(3,true));
+	out.records = data.getUint32(4,true);
+	out.headerLen = data.getUint16(8,true);
+	out.recLen = data.getUint16(10,true)
+	return out;
+}
+
+function dbfRowHeader(buffer){
+	var data = new DataView(buffer);
+	var out = [];
+	var offset = 32;
+	while(true){
+		out.push({
+			name : String.fromCharCode.apply(this,(new Uint8Array(buffer,offset,10))),
+			dataType : String.fromCharCode(data.getUint8(offset+11)),
+			len : data.getUint8(offset+16),
+			decimal : data.getUint8(offset+17)
+		});
+		if(data.getUint8(offset+32)===13){
+			break;
+		}else{
+			offset+=32;
+		}
+	}
+	return out;
+}
+var rowFuncs = function(buffer,offset,len,type){
+	var data = (new Uint8Array(buffer,offset,len));
+	var textData = String.fromCharCode.apply(this,data);
+	if(type === 'N'){
+		return parseFloat(textData,10);
+	}else{
+		return textData;
+	}
+}
+function parseRow(buffer,offset,rowHeaders){
+	var out={};
+	var i = 0;
+	var len = rowHeaders.length;
+	var field;
+	var header;
+	while(i<len){
+		header = rowHeaders[i];
+		field = rowFuncs(buffer,offset,header.len,header.dataType);
+		offset += header.len;
+		if(typeof field !== 'undefined'){
+			out[header.name]=field;
+		}
+		i++;
+	}
+	return out;
+}
+function parseDbf(buffer){
+	var rowHeaders = dbfRowHeader(buffer);
+	var header = dbfHeader(buffer);
+	var offset = ((rowHeaders.length+1)<<5)+2;
+	var recLen = header.recLen;
+	var records = header.records;
+	var data = new DataView(buffer);
+	var out = [];
+	while(records){
+		out.push(parseRow(buffer,offset,rowHeaders));
+		offset += recLen;
+		records--;
+	}
+	return out;
+}
+shp.getDbf = function(base){
+	return shp.binaryAjax(base+'.dbf').then(parseDbf);
+}
+shp.make=function(arr){
+	var out = {};
+	out.type="FeatureCollection";
+	out.features=[];
+	var i = 0;
+	var len = arr[0].length;
+	while(i<len){
+		out.features.push({
+			"type": "Feature",
+			"geometry": arr[0][i],
+			"properties": arr[1][i]
+		});
+		i++;
+	}
+	return out;
+}
+
+})(shp);
