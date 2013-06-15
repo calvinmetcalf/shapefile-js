@@ -1,6 +1,5 @@
 (function(exports){
 'use strict';
-
 shp.binaryAjax = function(url){
 	var promise = shp.deferred();
 	var ajax = new XMLHttpRequest();
@@ -184,14 +183,14 @@ var getRow = function(buffer,offset){
 var getRows = function(buffer,parseShape){
 	var offset=100;
 	var len = buffer.byteLength;
-	var out = {};
+	var out = [];
 	var current;
 	while(offset<len){
 		current = getRow(buffer,offset);
 		offset += 8;
 		offset += current.len;
 		if(current.type){
-			out[current.id]=parseShape(current.data);
+			out.push(parseShape(current.data));
 		}
 	}
 	return out;
@@ -234,30 +233,65 @@ function dbfRowHeader(buffer){
 	}
 	return out;
 }
-function parseRow(data,offset,rowHeaders){
-/*
-*
-*    WRITE ME!!!!!!!!!!
-*
-*/
-
+var rowFuncs = function(buffer,offset,len,type){
+	var data = (new Uint8Array(buffer,offset,len));
+	var textData = String.fromCharCode.apply(this,data);
+	if(type === 'N'){
+		return parseFloat(textData,10);
+	}else{
+		return textData;
+	}
 }
-function dbfRows(buffer){
-	var rowHeaders = dbfRowHeader(buffer);
-	var header = dbfHeader(buffer);
-	var data = new DataView(buffer);
-	var offset = ((rowHeaders.length+1)<<5)+1;
-	var recLen = header.recLen;
-	var records = header.records;
-	var out = [];
-	while(true){
-		out.push(parseRow(data,offset,rowHeaders));
-		if(data.getUint8(offset+recLen)===26){
-			break;
-		} else {
-			offset += recLen;
+function parseRow(buffer,offset,rowHeaders){
+	var out={};
+	var i = 0;
+	var len = rowHeaders.length;
+	var field;
+	var header;
+	while(i<len){
+		header = rowHeaders[i];
+		field = rowFuncs(buffer,offset,header.len,header.dataType);
+		offset += header.len;
+		if(typeof field !== 'undefined'){
+			out[header.name]=field;
 		}
+		i++;
 	}
 	return out;
 }
-})(window);
+function parseDbf(buffer){
+	var rowHeaders = dbfRowHeader(buffer);
+	var header = dbfHeader(buffer);
+	var offset = ((rowHeaders.length+1)<<5)+2;
+	var recLen = header.recLen;
+	var records = header.records;
+	var data = new DataView(buffer);
+	var out = [];
+	while(records){
+		out.push(parseRow(buffer,offset,rowHeaders));
+		offset += recLen;
+		records--;
+	}
+	return out;
+}
+shp.getDbf = function(base){
+	return shp.binaryAjax(base+'.dbf').then(parseDbf);
+}
+shp.make=function(arr){
+	var out = {};
+	out.type="FeatureCollection";
+	out.features=[];
+	var i = 0;
+	var len = arr[0].length;
+	while(i<len){
+		out.features.push({
+			"type": "Feature",
+			"geometry": arr[0][i],
+			"properties": arr[1][i]
+		});
+		i++;
+	}
+	return out;
+}
+
+})(shp);
