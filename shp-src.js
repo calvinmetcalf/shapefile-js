@@ -204,4 +204,60 @@ var parseShp = function(buffer){
 shp.getShp = function(base){
 	return shp.binaryAjax(base+'.shp').then(parseShp);
 }
+
+function dbfHeader(buffer){
+	var data = new DataView(buffer);
+	var out = {}
+	out.lastUpdated = new Date(data.getUint8(1,true)+1900,data.getUint8(2,true),data.getUint8(3,true));
+	out.records = data.getUint32(4,true);
+	out.headerLen = data.getUint16(8,true);
+	out.recLen = data.getUint16(10,true)
+	return out;
+}
+
+function dbfRowHeader(buffer){
+	var data = new DataView(buffer);
+	var out = [];
+	var offset = 32;
+	while(true){
+		out.push({
+			name : String.fromCharCode.apply(this,(new Uint8Array(buffer,offset,10))),
+			dataType : String.fromCharCode(data.getUint8(offset+11)),
+			len : data.getUint8(offset+16),
+			decimal : data.getUint8(offset+17)
+		});
+		if(data.getUint8(offset+32)===13){
+			break;
+		}else{
+			offset+=32;
+		}
+	}
+	return out;
+}
+function parseRow(data,offset,rowHeaders){
+/*
+*
+*    WRITE ME!!!!!!!!!!
+*
+*/
+
+}
+function dbfRows(buffer){
+	var rowHeaders = dbfRowHeader(buffer);
+	var header = dbfHeader(buffer);
+	var data = new DataView(buffer);
+	var offset = ((rowHeaders.length+1)<<5)+1;
+	var recLen = header.recLen;
+	var records = header.records;
+	var out = [];
+	while(true){
+		out.push(parseRow(data,offset,rowHeaders));
+		if(data.getUint8(offset+recLen)===26){
+			break;
+		} else {
+			offset += recLen;
+		}
+	}
+	return out;
+}
 })(window);
