@@ -4,8 +4,8 @@ shp.binaryAjax = function(url){
 	var promise = shp.deferred();
 	var ajax = new XMLHttpRequest();
 	ajax.onreadystatechange=callback;
-	ajax.responseType='arraybuffer';
 	ajax.open("GET",url,true);
+	ajax.responseType='arraybuffer';
 	ajax.send();
 	function callback(resp){
 		if(ajax.readyState === 4 && ajax.status === 200) {
@@ -196,12 +196,9 @@ var getRows = function(buffer,parseShape){
 	return out;
 }
 
-var parseShp = function(buffer){
+shp.parseShp = function(buffer){
 	var headers = parseHeader(buffer);
 	return getRows(buffer,shpFuncs[headers.shpCode]);
-}
-shp.getShp = function(base){
-	return shp.binaryAjax(base+'.shp').then(parseShp);
 }
 
 function dbfHeader(buffer){
@@ -220,7 +217,7 @@ function dbfRowHeader(buffer){
 	var offset = 32;
 	while(true){
 		out.push({
-			name : String.fromCharCode.apply(this,(new Uint8Array(buffer,offset,10))),
+			name : String.fromCharCode.apply(this,(new Uint8Array(buffer,offset,10))).replace(/\0|\s+$/g,''),
 			dataType : String.fromCharCode(data.getUint8(offset+11)),
 			len : data.getUint8(offset+16),
 			decimal : data.getUint8(offset+17)
@@ -235,7 +232,7 @@ function dbfRowHeader(buffer){
 }
 var rowFuncs = function(buffer,offset,len,type){
 	var data = (new Uint8Array(buffer,offset,len));
-	var textData = String.fromCharCode.apply(this,data);
+	var textData = String.fromCharCode.apply(this,data).replace(/\0|\s+$/g,'');
 	if(type === 'N'){
 		return parseFloat(textData,10);
 	}else{
@@ -259,7 +256,7 @@ function parseRow(buffer,offset,rowHeaders){
 	}
 	return out;
 }
-function parseDbf(buffer){
+shp.parseDbf = function(buffer){
 	var rowHeaders = dbfRowHeader(buffer);
 	var header = dbfHeader(buffer);
 	var offset = ((rowHeaders.length+1)<<5)+2;
@@ -274,10 +271,7 @@ function parseDbf(buffer){
 	}
 	return out;
 }
-shp.getDbf = function(base){
-	return shp.binaryAjax(base+'.dbf').then(parseDbf);
-}
-shp.make=function(arr){
+shp.combine=function(arr){
 	var out = {};
 	out.type="FeatureCollection";
 	out.features=[];

@@ -1,4 +1,8 @@
-function shp(base){return shp.all([shp.getShp(base),shp.getDbf(base)]).then(shp.make)}/*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc, Donavon West, and Domenic Denicola @license MIT https://github.com/NobleJS/setImmediate */
+function shp(base){
+					return shp.all([
+						shp.binaryAjax(base+'.shp').then(shp.parseShp),
+						shp.binaryAjax(base+'.dbf').then(shp.parseDbf)]
+					).then(shp.combine)}/*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc, Donavon West, and Domenic Denicola @license MIT https://github.com/NobleJS/setImmediate */
 (function (attachTo,global) {
     "use strict";
 
@@ -346,8 +350,8 @@ shp.binaryAjax = function(url){
 	var promise = shp.deferred();
 	var ajax = new XMLHttpRequest();
 	ajax.onreadystatechange=callback;
-	ajax.responseType='arraybuffer';
 	ajax.open("GET",url,true);
+	ajax.responseType='arraybuffer';
 	ajax.send();
 	function callback(resp){
 		if(ajax.readyState === 4 && ajax.status === 200) {
@@ -538,12 +542,9 @@ var getRows = function(buffer,parseShape){
 	return out;
 }
 
-var parseShp = function(buffer){
+shp.parseShp = function(buffer){
 	var headers = parseHeader(buffer);
 	return getRows(buffer,shpFuncs[headers.shpCode]);
-}
-shp.getShp = function(base){
-	return shp.binaryAjax(base+'.shp').then(parseShp);
 }
 
 function dbfHeader(buffer){
@@ -601,7 +602,7 @@ function parseRow(buffer,offset,rowHeaders){
 	}
 	return out;
 }
-function parseDbf(buffer){
+shp.parseDbf = function(buffer){
 	var rowHeaders = dbfRowHeader(buffer);
 	var header = dbfHeader(buffer);
 	var offset = ((rowHeaders.length+1)<<5)+2;
@@ -616,10 +617,7 @@ function parseDbf(buffer){
 	}
 	return out;
 }
-shp.getDbf = function(base){
-	return shp.binaryAjax(base+'.dbf').then(parseDbf);
-}
-shp.make=function(arr){
+shp.combine=function(arr){
 	var out = {};
 	out.type="FeatureCollection";
 	out.features=[];
