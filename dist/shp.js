@@ -1,8 +1,10 @@
 function shp(base){
-					return shp.all([
-						shp.binaryAjax(base+'.shp').then(shp.parseShp),
-						shp.binaryAjax(base+'.dbf').then(shp.parseDbf)]
-					).then(shp.combine)}/*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc, Donavon West, and Domenic Denicola @license MIT https://github.com/NobleJS/setImmediate */
+	return shp.all([
+		shp.binaryAjax(base+'.shp').then(shp.parseShp),
+		shp.binaryAjax(base+'.dbf').then(shp.parseDbf)
+	]).then(shp.combine)}
+
+/*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc, Donavon West, and Domenic Denicola @license MIT https://github.com/NobleJS/setImmediate */
 (function (attachTo,global) {
     "use strict";
 
