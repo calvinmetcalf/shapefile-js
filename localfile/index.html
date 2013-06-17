@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=1024, user-scalable=no">
+    <style>
+      html { height: 100% }
+      body { height: 100%; margin: 0; padding: 0;}
+      #map{ height: 100% }
+      
+      .upStuff{
+      	display:none;
+      }
+    </style>
+    <link rel="stylesheet" href="css/bootstrap.css" />
+
+<link rel="stylesheet" href="../site/gh-fork-ribbon.css" />
+<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.css" />
+<!--[if lte IE 8]>
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.ie.css" />
+<![endif]-->
+
+
+<title>Leaflet</title></head><body><div id="map"></div><div class="github-fork-ribbon-wrapper right">
+		<div class="github-fork-ribbon">
+			<a href="https://github.com/calvinmetcalf/shapefile-js">Fork me on GitHub</a>
+		</div>
+	</div> 
+
+
+<script src="colorbrewer.js"></script>
+
+
+<script src="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.js"></script>
+<script src="sha512.js"></script>
+<script src="../dist/shp.js"></script>
+
+<script>
+L.Control.Layers.prototype._addItem= function (obj) {
+    	var label = document.createElement('label'),
+		    input,
+		    checked = this._map.hasLayer(obj.layer);
+
+		if (obj.overlay) {
+			input = document.createElement('input');
+			input.type = 'checkbox';
+			input.className = 'leaflet-control-layers-selector';
+			input.defaultChecked = checked;
+		} else {
+			input = this._createRadioElement('leaflet-base-layers', checked);
+		}
+
+		input.layerId = L.stamp(obj.layer);
+
+		L.DomEvent.on(input, 'click', this._onInputClick, this);
+
+		var name = document.createElement('span');
+		name.innerHTML = ' ' + obj.name;
+
+		label.appendChild(input);
+		label.appendChild(name);
+        label.className = obj.overlay ? "checkbox" : "radio";
+		var container = obj.overlay ? this._overlaysList : this._baseLayersList;
+		container.appendChild(label);
+
+		return label;
+	}
+var m = L.map("map",{zoomControl:false}).setView([32.69,10.55],3);
+var url = 'http://otile{s}.mqcdn.com/tiles/1.0.0/osm/{z}/{x}/{y}.jpeg';
+
+var attributionText = 'Tiles Courtesy of <a href="http://www.mapquest.com/">MapQuest</a> &mdash; Map data &copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+var mapquestSubdomains = '1234';
+
+var optionsObject = {
+    attribution : attributionText,
+    subdomains : mapquestSubdomains
+}
+
+var mq=L.tileLayer(url, optionsObject);
+var watercolor = L.tileLayer('http://{s}.tile.stamen.com/watercolor/{z}/{x}/{y}.jpg',{attribution:'Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>'})
+watercolor.addTo(m);
+var lc = L.control.layers({"Stamen Watercolor":watercolor,"Map Quest Open":mq}).addTo(m);
+//make the map
+var options = {
+	onEachFeature:function(feature, layer) {
+		if (feature.properties) {
+			layer.bindPopup(Object.keys(feature.properties).map(function(k){
+				return k + ": " + feature.properties[k] ;
+			}).join("<br />"));
+    	}
+	},
+    style:function(feature){
+        return{opacity:1,fillOpacity:0.7,radius:6,color : colorbrewer.Spectral[11][parseInt((new jsSHA(JSON.stringify(feature), "TEXT")).getHash("SHA-512", "HEX").slice(0,16),16)%11]}
+    },
+    pointToLayer:function (feature, latlng) {
+        return L.circleMarker(latlng, {opacity:1,fillOpacity:0.7,color : colorbrewer.Spectral[11][parseInt((new jsSHA(JSON.stringify(feature), "TEXT")).getHash("SHA-512", "HEX").slice(0,16),16)%11]});
+    }
+};
+
+
+var NewButton= L.Control.extend({//creating the buttons
+    options: {
+        position: 'topleft'
+    },
+    onAdd: function (map) {
+        // create the control container with a particular class name
+        var div = L.DomUtil.create('form','bgroup');
+        div.id="dropzone";
+        var upButton = L.DomUtil.create('input', 'upStuff',div);
+        upButton.type="file";
+       upButton.id = "input";
+      
+       var doneButton = L.DomUtil.create('button', "btn  btn-primary",div);
+       doneButton.type = "button";
+       doneButton.innerHTML="Add A Zipped Shapefile";
+        L.DomEvent.addListener(doneButton,"click",function(){
+        	upButton.click();
+           });
+   upButton.onchange = function(){
+   	var file = document.getElementById("input").files[0];
+           
+       handleFile(file);
+   }
+   function handleFile(file){
+   	    var reader = new FileReader();
+        reader.onload=function(){
+           	if(reader.readyState !== 2 || reader.error){
+           		return;
+           	}else{
+           		lc.addOverlay(L.geoJson(shp.parseZip(reader.result),options).addTo(m),file.name.slice(0,-8));
+           }
+           };
+           reader.readAsArrayBuffer(file);
+   }
+
+ 
+var dropbox = document.getElementById("map");
+dropbox.addEventListener("dragenter", dragenter, false);
+dropbox.addEventListener("dragover", dragover, false);
+dropbox.addEventListener("drop", drop, false);
+dropbox.addEventListener("dragleave",function(){m.scrollWheelZoom.enable();},false);
+function dragenter(e) {
+  e.stopPropagation();
+  e.preventDefault();
+ m.scrollWheelZoom.disable();
+}
+ 
+function dragover(e) {
+  e.stopPropagation();
+  e.preventDefault();
+} 
+
+function drop(e) {
+  e.stopPropagation();
+  e.preventDefault();
+ m.scrollWheelZoom.enable();
+  var dt = e.dataTransfer;
+  var files = dt.files;
+ 
+ var i = 0;
+ var len = files.length;
+ if(!len){return}
+ while(i<len){
+ 	handleFile(files[i]);
+ 	i++;
+ }
+}
+        return div;
+    }
+});
+//add them to the map
+m.addControl(new NewButton());
+
+
+
+</script><script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-40454900-1', 'calvinmetcalf.github.io');
+  ga('send', 'pageview');
+
+</script>
+</body>
+</html>
