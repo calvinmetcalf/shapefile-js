@@ -11,7 +11,7 @@
     "url": "git://github.com/calvinmetcalf/shapefile-js.git"
   },
   "author": "",
-  "license": "BSD",
+  "license": "MIT",
   "readmeFilename": "README.md",
   "gitHead": "4265d009e4ee268cd9573704046569d50932ffcb",
   "devDependencies": {
