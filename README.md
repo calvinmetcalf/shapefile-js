@@ -11,6 +11,7 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 - [Countries](http://calvinmetcalf.github.io/shapefile-js)
 - [Google maps](http://calvinmetcalf.github.io/shapefile-js/map.html)
 - [zip file](http://calvinmetcalf.github.io/shapefile-js/zip.html)
+- [Local Zipfile](http://calvinmetcalf.github.io/shapefile-js/localfile)
 
 ##API
 
