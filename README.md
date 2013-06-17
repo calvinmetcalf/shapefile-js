@@ -22,8 +22,16 @@ Has a function `shp` which accepts a string which is the path the she shapefile 
 		//do something with your geojson
 	});
 ```
+or you can call it on a .zip file which contains the shapefile
 
-You could also load the arraybuffers some other way and call `shp.parseShp` and `shp.parseDbf` to parse the two parts and `shp.combine` to combine them into geojson. Lastly we have `shp.binaryAjax` which downloads a file and returns a promise for the file as an array buffer.
+```javascript
+	//for the shapefiles in the files folder called pandr.shp
+	shp("files/pandr.zip").then(function(geojson){
+		//do something with your geojson
+	});
+```
+
+You could also load the arraybuffers some other way and call `shp.parseShp`  `shp.parseDbf` to parse the two parts and `shp.combine` to combine them into geojson or shp.parseZip if you have a zipfile as an array buffer. Lastly we have `shp.binaryAjax` which downloads a file and returns a promise for the file as an array buffer.
 
 ##Done
 
