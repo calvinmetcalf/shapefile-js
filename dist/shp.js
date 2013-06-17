@@ -583,10 +583,13 @@ var rowFuncs = function(buffer,offset,len,type){
 	var textData = String.fromCharCode.apply(this,data).replace(/\0|\s+$/g,'');
 	if(type === 'N'){
 		return parseFloat(textData,10);
-	}else{
-		return textData;
+	} else if (type === 'D') {
+        // Use the long to-date function to work with older browsers (IE)
+        return new Date(textData.substring(0,4), parseInt(textData.substring(4,6),10)-1, textData.substring(6,8));
+    } else {
+        return textData;
 	}
-}
+};
 function parseRow(buffer,offset,rowHeaders){
 	var out={};
 	var i = 0;
