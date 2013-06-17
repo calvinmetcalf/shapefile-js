@@ -88,7 +88,7 @@ var options = {
 		if (feature.properties) {
 			layer.bindPopup(Object.keys(feature.properties).map(function(k){
 				return k + ": " + feature.properties[k] ;
-			}).join("<br />"));
+			}).join("<br />"),{maxHeight:200});
     	}
 	},
     style:function(feature){
