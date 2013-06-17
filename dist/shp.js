@@ -632,11 +632,9 @@ shp.combine=function(arr){
 	}
 	return out;
 }
-
-function getZip(base){
-	return shp.binaryAjax(base).then(function(a){
+shp.parseZip = function(buffer){
 		var key;
-		var zip=shp.unzip(a);
+		var zip=shp.unzip(buffer);
 		var temp = [];
 		for(key in zip){
 			if(key.slice(-3)==="shp"){
@@ -646,7 +644,9 @@ function getZip(base){
 			}
 		}
 	return  shp.combine(temp);
-	});
+	}
+function getZip(base){
+	return shp.binaryAjax(base).then(shp.parseZip);
 }
 shp.getShapefile = function(base){
 	if(base.slice(-4)==='.zip'){
