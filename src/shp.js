@@ -287,5 +287,10 @@ shp.combine=function(arr){
 	}
 	return out;
 }
-
+shp.getShapefile = function(base){
+	shp.all([
+		shp.binaryAjax(base+'.shp').then(shp.parseShp),
+		shp.binaryAjax(base+'.dbf').then(shp.parseDbf)
+	]).then(shp.combine)}
+	
 })(shp);
