@@ -580,7 +580,9 @@ var rowFuncs = function(buffer,offset,len,type){
 	var textData = String.fromCharCode.apply(this,data).replace(/\0|\s+$/g,'');
 	if(type === 'N'){
 		return parseFloat(textData,10);
-	}else{
+	} else if (type === 'D') {
+		return new Date(textData.slice(0,4), parseInt(textData.slice(4,6),10)-1, textData.slice(6,8));
+	} else {
 		return textData;
 	}
 }
