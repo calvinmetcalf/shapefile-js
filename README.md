@@ -6,6 +6,12 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 - [ESRI white paper](http://www.esri.com/library/whitepapers/pdfs/shapefile.pdf)
 - [This page on Xbase](http://www.clicketyclick.dk/databases/xbase/format/dbf.html)
 
+##Demos
+
+- [Countries](http://calvinmetcalf.github.io/shapefile-js)
+- [Google maps](http://calvinmetcalf.github.io/shapefile-js/map.html)
+- [zip file](http://calvinmetcalf.github.io/shapefile-js/zip.html)
+
 ##API
 
 Has a function `shp` which accepts a string which is the path the she shapefile minus the extention and returns a promise which resolves into geojson.
