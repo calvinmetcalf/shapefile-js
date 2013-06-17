@@ -3,7 +3,10 @@ module.exports = function(grunt) {
 		pkg: grunt.file.readJSON('package.json'),
 		concat:{
 			all:{
-				src:['./src/top.js','./src/setImmediate.js','./src/promiscuous.js','./src/shp.js'],
+                options:{
+                    banner:'/*! <%= pkg.name %> <%= grunt.template.today("yyyy-mm-dd") %>*/\nfunction shp(base){return shp.getShapefile(base);};\n'
+                },
+				src:['./src/setImmediate.js','./src/promiscuous.js','./src/top.js','./src/shp.js','./src/dbf.js','./src/bottom.js','./src/jszip.js'],
 				dest:'./dist/shp.js'
 			}
 		}
