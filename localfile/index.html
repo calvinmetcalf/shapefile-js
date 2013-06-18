@@ -34,9 +34,13 @@
 
 <script src="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.js"></script>
 <script src="sha512.js"></script>
-<script src="../dist/shp.js"></script>
+<script src="../site/communist.js"></script>
 
 <script>
+var worker = communist(function(data,cb){
+	importScripts('../dist/shp.js');
+	cb(shp.parseZip(data));
+});
 L.Control.Layers.prototype._addItem= function (obj) {
     	var label = document.createElement('label'),
 		    input,
@@ -129,9 +133,11 @@ var NewButton= L.Control.extend({//creating the buttons
            	if(reader.readyState !== 2 || reader.error){
            		return;
            	}else{
-           		lc.addOverlay(L.geoJson(shp.parseZip(reader.result),options).addTo(m),file.name.slice(0,-8));
+           		worker.data(reader.result,[reader.result]).then(function(geoJson){
+           			lc.addOverlay(L.geoJson(geoJson,options).addTo(m),file.name.slice(0,-8));
+           		});
            }
-           };
+       };
            reader.readAsArrayBuffer(file);
    }
 
