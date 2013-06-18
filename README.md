@@ -12,6 +12,8 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 - [Google maps](http://calvinmetcalf.github.io/shapefile-js/map.html)
 - [zip file](http://calvinmetcalf.github.io/shapefile-js/zip.html)
 - [Local Zipfile](http://calvinmetcalf.github.io/shapefile-js/localfile)
+- [Projected big with web workers](http://calvinmetcalf.github.io/shapefile-js/proj.html)
+- [Projected small](http://calvinmetcalf.github.io/shapefile-js/proj-small.html)
 
 ##API
 
@@ -55,3 +57,6 @@ Main library MIT license, origional version was less permisive but there is 0 co
 - [setImmediate](https://github.com/NobleJS/setImmediate) by @NobleJS et al MIT
 - [World Borders shapefile](http://thematicmapping.org/downloads/world_borders.php) is CC-BY-SA 3.0.
 - Park and Ride shapefile is from [MassDOT](http://mass.gov/massdot) and is public domain.
+- MA town boundaries from [MassGIS](http://www.mass.gov/anf/research-and-tech/it-serv-and-support/application-serv/office-of-geographic-information-massgis/) and is public domain
+- NJ County Boundaries from [NJgin](https://njgin.state.nj.us/NJ_NJGINExplorer/index.jsp) and should be public domain.
+- [Projforjs](https://github.com/calvinmetcalf/projforjs) easy stuff by me hard stuff by other people Apache licensed

@@ -1,7 +1,7 @@
 <!DOCTYPE html><html><head>
 <meta charset='utf-8'/>
 
-	 <title>Shapefile in Leaflet!</title>   <style>
+	 <title>Projected Shapefiles in Leaflet!</title>   <style>
       html { height: 100% }
       body { height: 100%; margin: 0; padding: 0;}
       #map{ height: 100% }
@@ -36,7 +36,7 @@ var wfunc = function(base,cb){
 	shp(base).then(cb);
 }
 
-		communist(wfunc,communist.makeUrl('files/nj.zip')).then(function(data){
+		communist(wfunc,communist.makeUrl('files/nj_muni.zip')).then(function(data){
 		geo.addData(data);
 		},function(a){console.log(a)});
 		communist(wfunc,communist.makeUrl('files/maSP.zip')).then(function(data){
