@@ -43,12 +43,15 @@ You could also load the arraybuffers some other way and call `shp.parseShp`  `sh
 - parse the dbf
 - join em
 - zip
+- file api
+- Some Projections
 
 ##to do
 
-- projections?
+- More Projections
 - check for geometry validity.
-- file api
+- Tests
+
 
 ##LICENSE
 Main library MIT license, origional version was less permisive but there is 0 code shared. Included libraries are under their respective lisenses which are:
