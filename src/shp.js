@@ -36,21 +36,23 @@ function polyReduce(a,b){
 	}
 	return a;
 }
-function parsePoint(data,offset){
-	offset = offset||0;
-	return [data.getFloat64(offset,true),data.getFloat64(offset+8,true)]
+function parsePoint(data,offset,trans){
+	if(trans){
+		return trans([data.getFloat64(offset,true),data.getFloat64(offset+8,true)]);
 	}
-function parsePointArray(data,offset,num){
+	return [data.getFloat64(offset,true),data.getFloat64(offset+8,true)];
+	}
+function parsePointArray(data,offset,num,trans){
 	var out = [];
 	var done = 0;
 	while(done<num){
-		out.push(parsePoint(data,offset));
+		out.push(parsePoint(data,offset,trans));
 		offset += 16;
 		done++;
 	}
 	return out;
 }
-function parseArrayGroup(data,offset,partOffset,num,tot){
+function parseArrayGroup(data,offset,partOffset,num,tot,trans){
 	var out = [];
 	var done = 0;
 	var curNum,nextNum=0,pointNumber;
@@ -67,12 +69,12 @@ function parseArrayGroup(data,offset,partOffset,num,tot){
 		if(!pointNumber){
 			continue;
 		}
-		out.push(parsePointArray(data,offset,pointNumber));
+		out.push(parsePointArray(data,offset,pointNumber,trans));
 		offset += (pointNumber<<4);
 	}
 	return out;
 }
-function parseMultiPoint(data){
+function parseMultiPoint(data,trans){
 	var out = {};
 	out.bbox = [
 		data.getFloat64(0,true),
@@ -81,18 +83,17 @@ function parseMultiPoint(data){
 		data.getFloat64(24,true)
 	];
 	var num = data.getInt32(32,true);
-	var done = 0;
 	var offset = 36;
 	if(num===1){
 		out.type = "Point";
-		out.coordinates = parsePoint(data,offset)
+		out.coordinates = parsePoint(data,offset,trans);
 	}else{
 		out.type = "MultiPoint";
-		out.coordinates = parsePointArray(data,offset,num);
+		out.coordinates = parsePointArray(data,offset,num,trans);
 	}
 	return out;
 }
-function parsePolyline(data){
+function parsePolyline(data,trans){
 	var out = {};
 	out.bbox = [
 		data.getFloat64(0,true),
@@ -106,17 +107,17 @@ function parsePolyline(data){
 	if(numParts === 1){
 		out.type = "LineString";
 		offset = 44;
-		out.coordinates = parsePointArray(data,offset,num);
+		out.coordinates = parsePointArray(data,offset,num,trans);
 	}else{
 		out.type = "MultiLineString";
 		offset = 40 + (numParts<<2);
 		partOffset = 40;
-		out.coordinates = parseArrayGroup(data,offset,partOffset,numParts,num);
+		out.coordinates = parseArrayGroup(data,offset,partOffset,numParts,num,trans);
 	}
 	return out;
 }
-function parsePolygon(data){
-	var out = parsePolyline(data);
+function parsePolygon(data,trans){
+	var out = parsePolyline(data,trans);
 	if(out.type === "LineString"){
 		out.type = "Polygon";
 		out.coordinates = [out.coordinates];
@@ -135,11 +136,11 @@ function parsePolygon(data){
 }
 var shpFuncs = [
 	null,
-	function(data){
+	function(data,trans){
 		return {
 			"type": "Point",
-			"coordinates":parsePoint(data)
-		}
+			"coordinates":parsePoint(data,0,trans)
+		};
 	},
 	null,
 	parsePolyline,
@@ -160,10 +161,10 @@ var getRow = function(buffer,offset){
 		len:len,
 		data:data,
 		type:view.getInt32(8,true)
-	}
-}
+	};
+};
 
-var getRows = function(buffer,parseShape){
+var getRows = function(buffer,parseShape,trans){
 	var offset=100;
 	var len = buffer.byteLength;
 	var out = [];
@@ -173,13 +174,13 @@ var getRows = function(buffer,parseShape){
 		offset += 8;
 		offset += current.len;
 		if(current.type){
-			out.push(parseShape(current.data));
+			out.push(parseShape(current.data,trans));
 		}
 	}
 	return out;
-}
+};
 
-shp.parseShp = function(buffer){
+shp.parseShp = function(buffer,trans){
 	var headers = parseHeader(buffer);
-	return getRows(buffer,shpFuncs[headers.shpCode]);
-}
+	return getRows(buffer,shpFuncs[headers.shpCode],trans);
+};
