@@ -6,7 +6,7 @@ module.exports = function(grunt) {
                 options:{
                     banner:'/*! <%= pkg.name %> <%= grunt.template.today("yyyy-mm-dd") %>*/\nfunction shp(base){return shp.getShapefile(base);};\n'
                 },
-				src:['./src/setImmediate.js','./src/promiscuous.js','./src/top.js','./src/shp.js','./src/dbf.js','./src/bottom.js','./src/jszip.js'],
+				src:['./src/setImmediate.js','./src/promiscuous.js','./src/proj.js','./src/top.js','./src/shp.js','./src/dbf.js','./src/bottom.js','./src/jszip.js'],
 				dest:'./dist/shp.js'
 			}
 		}
