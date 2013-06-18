@@ -36,17 +36,12 @@ function polyReduce(a,b){
 	}
 	return a;
 }
-function parsePoint(data,offset,trans){
-	if(trans){
-		return trans([data.getFloat64(offset,true),data.getFloat64(offset+8,true)]);
-	}
-	return [data.getFloat64(offset,true),data.getFloat64(offset+8,true)];
-	}
+
 function parsePointArray(data,offset,num,trans){
 	var out = [];
 	var done = 0;
 	while(done<num){
-		out.push(parsePoint(data,offset,trans));
+		out.push(trans(data,offset));
 		offset += 16;
 		done++;
 	}
@@ -86,7 +81,7 @@ function parseMultiPoint(data,trans){
 	var offset = 36;
 	if(num===1){
 		out.type = "Point";
-		out.coordinates = parsePoint(data,offset,trans);
+		out.coordinates = trans(data,offset);
 	}else{
 		out.type = "MultiPoint";
 		out.coordinates = parsePointArray(data,offset,num,trans);
@@ -139,7 +134,7 @@ var shpFuncs = [
 	function(data,trans){
 		return {
 			"type": "Point",
-			"coordinates":parsePoint(data,0,trans)
+			"coordinates":trans(data,0)
 		};
 	},
 	null,
@@ -179,8 +174,18 @@ var getRows = function(buffer,parseShape,trans){
 	}
 	return out;
 };
-
+function makeParsePoint(trans){
+	if(trans){
+		return function(data,offset){
+			return trans([data.getFloat64(offset,true),data.getFloat64(offset+8,true)]);
+		}
+	}else{
+		return function(data,offset){
+			return [data.getFloat64(offset,true),data.getFloat64(offset+8,true)];
+		}
+	}
+}
 shp.parseShp = function(buffer,trans){
 	var headers = parseHeader(buffer);
-	return getRows(buffer,shpFuncs[headers.shpCode],trans);
+	return getRows(buffer,shpFuncs[headers.shpCode],makeParsePoint(trans));
 };
