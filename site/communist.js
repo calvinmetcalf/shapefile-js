@@ -1,4 +1,4 @@
-/*! communist 2013-06-12*/
+/*! communist 2013-06-18*/
 /*!©2013 Calvin Metcalf @license MIT https://github.com/calvinmetcalf/communist */
 if (typeof document === "undefined") {
 	self._noTransferable=true;
@@ -239,16 +239,16 @@ function moveImports(string){
 	var script;
 	var match = string.match(/(importScripts\(.*\);)/);
 	if(match){
-		script = match[0].replace(/importScripts\((.*\.js\')\);?/,
+		script = match[0].replace(/importScripts\((.*\.js[\'\"])\);?/,
 		function(a,b){
 			if(b){
 				return "importScripts("+b.split(",").map(function(cc){
-					return "'"+c.makeUrl(cc.slice(1,-1))+"'";
+					return cc.slice(0,1)+c.makeUrl(cc.slice(1,-1))+cc.slice(-1);
 				})+");\n";
 			} else {
 				return "";
 			}
-		})+string.replace(/(importScripts\(.*\.js\'\);?)/,"\n");
+		})+string.replace(/(importScripts\(.*\.js[\'\"]\);?)/,"\n");
 	}else{
 		script = string;
 	}
