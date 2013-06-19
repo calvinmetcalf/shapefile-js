@@ -1,4 +1,4 @@
-/*! shapefile-js 2013-06-18*/
+/*! shapefile-js 2013-06-19*/
 function shp(base){return shp.getShapefile(base);};
 /*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc, Donavon West, and Domenic Denicola @license MIT https://github.com/NobleJS/setImmediate */
 (function (attachTo,global) {
@@ -978,18 +978,27 @@ shp.combine=function(arr){
 shp.parseZip = function(buffer){
 		var key;
 		var zip=shp.unzip(buffer);
-		var temp = {};
+		var names = [];
 		for(key in zip){
 			if(key.slice(-3)==="shp"){
-				temp.shp=zip[key];
+				names.push(key.slice(0,-4));
 			}else if(key.slice(-3)==="dbf"){
-				temp.dbf=shp.parseDbf(zip[key]);
+				zip[key]=shp.parseDbf(zip[key]);
 			}else if(key.slice(-3)==="prj"){
-				temp.prj=shp.proj(String.fromCharCode.apply(this,new Uint8Array(zip[key])));
+				zip[key]=shp.proj(String.fromCharCode.apply(this,new Uint8Array(zip[key])));
 			}
 		}
-	return  shp.combine([shp.parseShp(temp.shp,temp.prj),temp.dbf]);
+	var geojson = names.map(function(name){
+		var parsed =  shp.combine([shp.parseShp(zip[name +'.shp'],zip[name +'.prj']),zip[name +'.dbf']]);
+		parsed.fileName = name;
+		return parsed;
+	});
+	if(geojson.length === 1){
+		return geojson[0];
+	}else{
+		return geojson;
 	}
+};
 function getZip(base){
 	return shp.binaryAjax(base).then(shp.parseZip);
 }
