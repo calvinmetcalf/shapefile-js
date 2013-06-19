@@ -20,7 +20,7 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 Has a function `shp` which accepts a string which is the path the she shapefile minus the extention and returns a promise which resolves into geojson.
 
 ```javascript
-	//for the shapefiles in the files folder called pandr.shp
+	//for the shapefiles in the folder called 'files' with the name pandr.shp
 	shp("files/pandr").then(function(geojson){
 		//do something with your geojson
 	});
@@ -30,11 +30,83 @@ or you can call it on a .zip file which contains the shapefile
 ```javascript
 	//for the shapefiles in the files folder called pandr.shp
 	shp("files/pandr.zip").then(function(geojson){
-		//do something with your geojson
+		//see bellow for whats here this internally call shp.parseZip()
 	});
 ```
 
-You could also load the arraybuffers some other way and call `shp.parseShp`  `shp.parseDbf` to parse the two parts and `shp.combine` to combine them into geojson or shp.parseZip if you have a zipfile as an array buffer. Lastly we have `shp.binaryAjax` which downloads a file and returns a promise for the file as an array buffer.
+or if you got the zip some other way (like the file api) then with the arrayBuffer you can call
+
+```javascript
+shp.parseZip(buffer);
+```
+If there is only one shp in the zipefile it returns geojson, if there are multiple then it will be an array.  All of the geojson objects have an extra key `fileName` the value of which is the 
+name of the shapefile minus the extention (I.E. the part of the name that's the same for all of them)
+
+You could also load the arraybuffers seperately:
+
+```javascript
+shp.combine([shp.parseShp(shpBuffer),shp.parseDbf(dbfBuffer)]);
+```
+
+if it needs to be projected you can call `shp.proj` which expects a string of WKT transformation info, aka the contents of the .prj
+
+```javascript
+//if it's a string
+var projFunc = shp.proj(prjString);
+//returns func
+
+//if it's an array buffer
+var projFunc = shp.proj(String.fromCharCode.apply(this,new Uint8Array(zip[key])));
+//returns func
+```
+
+which can then be given to parseShp
+
+```javascript
+shp.parseShp(shpBuffer,projFunc);
+```
+
+##Stick it in a worker
+
+I used my library [communist](http://communistjs.com/) to parallelize the demos to do so I changed
+
+```html
+<script src='dist/shp.js'> </script>
+<script>
+	shp('files/shapeFile.zip').then(function(data){
+		//do stuff with data
+	});
+</script>
+```
+
+to 
+
+```html
+<script src='website/communist.js'> </script>
+<script>
+	var worker = communist(function(base,cb){
+		importScripts('dist/shp.js');
+		shp(base).then(cb);
+	});
+	//worker can be called multiple times
+	worker.data(communist.makeUrl('files/shapeFile.zip')).then(function(data){
+		//do stuff with data
+	});
+</script>
+```
+
+to send the worker a buffer from the file api you'd do (I'm omiting where you include the communist script)
+
+```javascript
+var worker = communist(function(data){
+	importScripts('../dist/shp.js');
+	return shp.parseZip(data);
+});
+
+worker.data(reader.result,[reader.result]).then(function(data){
+	//do stuff with data
+});
+```
 
 ##Done
 
