@@ -74,7 +74,7 @@ I used my library [communist](http://communistjs.com/) to parallelize the demos 
 <script src='dist/shp.js'> </script>
 <script>
 	shp('files/shapeFile.zip').then(function(data){
-		/do stuff with data
+		//do stuff with data
 	});
 </script>
 ```
