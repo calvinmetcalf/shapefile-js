@@ -134,8 +134,14 @@ var NewButton= L.Control.extend({//creating the buttons
            		return;
            	}else{
            		worker.data(reader.result,[reader.result]).then(function(geoJson){
-           			lc.addOverlay(L.geoJson(geoJson,options).addTo(m),file.name.slice(0,-4));
-           		});
+           			if(geoJson.type){
+           				lc.addOverlay(L.geoJson(geoJson,options).addTo(m),file.name.slice(0,-4));
+           			}else{
+           				for(var key in geoJson){
+           					lc.addOverlay(L.geoJson(geoJson[key],options).addTo(m),key);
+           				}
+           			}
+           		},function(a){console.log(a)});
            }
        };
            reader.readAsArrayBuffer(file);
