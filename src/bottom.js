@@ -17,17 +17,22 @@ shp.combine=function(arr){
 shp.parseZip = function(buffer){
 		var key;
 		var zip=shp.unzip(buffer);
+		var names = [];
 		var temp = {};
 		for(key in zip){
 			if(key.slice(-3)==="shp"){
-				temp.shp=zip[key];
+				names.push(key.slice(0,-4));
+				temp[key]=zip[key];
 			}else if(key.slice(-3)==="dbf"){
-				temp.dbf=shp.parseDbf(zip[key]);
+				temp[key]=shp.parseDbf(zip[key]);
 			}else if(key.slice(-3)==="prj"){
-				temp.prj=shp.proj(String.fromCharCode.apply(this,new Uint8Array(zip[key])));
+				temp[key]=shp.proj(String.fromCharCode.apply(this,new Uint8Array(zip[key])));
 			}
 		}
-	return  shp.combine([shp.parseShp(temp.shp,temp.prj),temp.dbf]);
+	var tshp = temp[names[0]+'.shp'];
+	var tprj = temp[names[0]+'.prj'];
+	var tdbf = temp[names[0]+'.dbf'];
+	return shp.combine([shp.parseShp(tshp,tprj),tdbf]);
 	}
 function getZip(base){
 	return shp.binaryAjax(base).then(shp.parseZip);
