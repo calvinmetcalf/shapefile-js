@@ -988,12 +988,13 @@ shp.parseZip = function(buffer){
 				zip[key]=shp.proj(String.fromCharCode.apply(this,new Uint8Array(zip[key])));
 			}
 		}
-	var geojson = {}
-	names.forEach(function(name){
-		geojson[name] = shp.combine([shp.parseShp(zip[name +'.shp'],zip[name +'.prj']),zip[name +'.dbf']]);
+	var geojson = names.map(function(name){
+		var parsed =  shp.combine([shp.parseShp(zip[name +'.shp'],zip[name +'.prj']),zip[name +'.dbf']]);
+		parsed.fileName = name;
+		return parsed;
 	});
-	if(Object.keys(geojson).length === 1){
-		return geojson[Object.keys(geojson)];
+	if(geojson.length === 1){
+		return geojson[0];
 	}else{
 		return geojson;
 	}

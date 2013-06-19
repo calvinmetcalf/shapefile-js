@@ -128,18 +128,19 @@ var NewButton= L.Control.extend({//creating the buttons
        handleFile(file);
    }
    function handleFile(file){
+		var addIt = function(geoJson){
+			lc.addOverlay(L.geoJson(geoJson,options).addTo(m),geoJson.fileName);
+		}
    	    var reader = new FileReader();
         reader.onload=function(){
            	if(reader.readyState !== 2 || reader.error){
            		return;
            	}else{
            		worker.data(reader.result,[reader.result]).then(function(geoJson){
-           			if(geoJson.type){
-           				lc.addOverlay(L.geoJson(geoJson,options).addTo(m),file.name.slice(0,-4));
+           			if(Array.isArray(geoJson)){
+           				geoJson.forEach(addIt)
            			}else{
-           				for(var key in geoJson){
-           					lc.addOverlay(L.geoJson(geoJson[key],options).addTo(m),key);
-           				}
+	           			addIt(geoJson);
            			}
            		},function(a){console.log(a)});
            }
