@@ -1,4 +1,4 @@
-/*! shapefile-js 2013-06-19*/
+/*! shapefile-js 2013-06-20*/
 function shp(base){return shp.getShapefile(base);};
 /*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc, Donavon West, and Domenic Denicola @license MIT https://github.com/NobleJS/setImmediate */
 (function (attachTo,global) {
@@ -980,17 +980,25 @@ shp.parseZip = function(buffer){
 		var zip=shp.unzip(buffer);
 		var names = [];
 		for(key in zip){
-			if(key.slice(-3)==="shp"){
+			if(key.slice(-3).toLowerCase()==="shp"){
 				names.push(key.slice(0,-4));
-			}else if(key.slice(-3)==="dbf"){
+			}else if(key.slice(-3).toLowerCase()==="dbf"){
 				zip[key]=shp.parseDbf(zip[key]);
-			}else if(key.slice(-3)==="prj"){
+			}else if(key.slice(-3).toLowerCase()==="prj"){
 				zip[key]=shp.proj(String.fromCharCode.apply(this,new Uint8Array(zip[key])));
+			}else if(key.slice(-7).toLowerCase()==="geojson"){
+				names.push(key);
 			}
 		}
 	var geojson = names.map(function(name){
-		var parsed =  shp.combine([shp.parseShp(zip[name +'.shp'],zip[name +'.prj']),zip[name +'.dbf']]);
-		parsed.fileName = name;
+		var parsed
+		if(name.slice(-7).toLowerCase()==="geojson"){
+			parsed = JSON.parse(zip[name]);
+			parsed.fileName = name.slice(0,-8);
+		}else{
+			parsed =  shp.combine([shp.parseShp(zip[name +'.shp'],zip[name +'.prj']),zip[name +'.dbf']]);
+			parsed.fileName = name;
+		}
 		return parsed;
 	});
 	if(geojson.length === 1){
@@ -3291,7 +3299,12 @@ var zip = new JSZip(buffer);
 var files = zip.file(/.+/);
 var out = {};
 files.forEach(function(a){
-    out[a.name]=a.asArrayBuffer();
+	if(a.name.slice(-7).toLowerCase()==="geojson"){
+		out[a.name]=a.asText();
+	}else{
+		out[a.name]=a.asArrayBuffer();
+	}
+
 });
 return out;
 }
