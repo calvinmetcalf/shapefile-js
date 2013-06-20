@@ -32,7 +32,7 @@ shp.parseZip = function(buffer){
 	var geojson = names.map(function(name){
 		var parsed
 		if(name.slice(-7).toLowerCase()==="geojson"){
-			parsed = zip[name];
+			parsed = JSON.parse(zip[name]);
 			parsed.fileName = name.slice(0,-8);
 		}else{
 			parsed =  shp.combine([shp.parseShp(zip[name +'.shp'],zip[name +'.prj']),zip[name +'.dbf']]);
