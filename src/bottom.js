@@ -19,17 +19,25 @@ shp.parseZip = function(buffer){
 		var zip=shp.unzip(buffer);
 		var names = [];
 		for(key in zip){
-			if(key.slice(-3)==="shp"){
+			if(key.slice(-3).toLowerCase()==="shp"){
 				names.push(key.slice(0,-4));
-			}else if(key.slice(-3)==="dbf"){
+			}else if(key.slice(-3).toLowerCase()==="dbf"){
 				zip[key]=shp.parseDbf(zip[key]);
-			}else if(key.slice(-3)==="prj"){
+			}else if(key.slice(-3).toLowerCase()==="prj"){
 				zip[key]=shp.proj(String.fromCharCode.apply(this,new Uint8Array(zip[key])));
+			}else if(key.slice(-7).toLowerCase()==="geojson"){
+				names.push(key);
 			}
 		}
 	var geojson = names.map(function(name){
-		var parsed =  shp.combine([shp.parseShp(zip[name +'.shp'],zip[name +'.prj']),zip[name +'.dbf']]);
-		parsed.fileName = name;
+		var parsed
+		if(name.slice(-7).toLowerCase()==="geojson"){
+			parsed = zip[name];
+			parsed.fileName = name.slice(0,-8);
+		}else{
+			parsed =  shp.combine([shp.parseShp(zip[name +'.shp'],zip[name +'.prj']),zip[name +'.dbf']]);
+			parsed.fileName = name;
+		}
 		return parsed;
 	});
 	if(geojson.length === 1){
