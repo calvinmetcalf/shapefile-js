@@ -1,4 +1,4 @@
-/*! shapefile-js 2013-06-20*/
+/*! shapefile-js 2013-07-05*/
 function shp(base){return shp.getShapefile(base);};
 /*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc, Donavon West, and Domenic Denicola @license MIT https://github.com/NobleJS/setImmediate */
 (function (attachTo,global) {
@@ -733,7 +733,17 @@ function polyReduce(a,b){
 	}
 	return a;
 }
-
+function parsePoint(data,trans){
+	return {
+		"type": "Point",
+		"coordinates":trans(data,0)
+	};
+}
+function parseZPoint(data,trans){
+	var pointXY = parsePoint(data,trans);
+	pointXY.coordinates.push(trans(data,16));
+	return pointXY;
+}
 function parsePointArray(data,offset,num,trans){
 	var out = [];
 	var done = 0;
@@ -744,12 +754,21 @@ function parsePointArray(data,offset,num,trans){
 	}
 	return out;
 }
+function parseZPointArray(data,zOffset,num,coordinates){
+	var i = 0;
+	while(i<num){
+		coordinates[i].push(data.getFloat64(zOffset,true));
+		i++;
+		zOffset += 8;
+	}
+	return coordinates;
+}
 function parseArrayGroup(data,offset,partOffset,num,tot,trans){
 	var out = [];
 	var done = 0;
 	var curNum,nextNum=0,pointNumber;
 	while(done<num){
-		done++
+		done++;
 		partOffset += 4;
 		curNum = nextNum;
 		if(done===num){
@@ -765,6 +784,15 @@ function parseArrayGroup(data,offset,partOffset,num,tot,trans){
 		offset += (pointNumber<<4);
 	}
 	return out;
+}
+function parseZArrayGroup(data,zOffset,num,coordinates){
+	var i = 0;
+	while(i<num){
+		coordinates[i] = parseZPointArray(data,zOffset,coordinates[i].length,coordinates[i]);
+		zOffset += (coordinates[i].length<<3);
+		i++;
+	}
+	return coordinates;
 }
 function parseMultiPoint(data,trans){
 	var out = {};
@@ -784,6 +812,19 @@ function parseMultiPoint(data,trans){
 		out.coordinates = parsePointArray(data,offset,num,trans);
 	}
 	return out;
+}
+function parseZMultiPoint(data,trans){
+	var geoJson = parseMultiPoint(data,trans);
+	var num;
+	if(geoJson.type === "Point"){
+		geoJson.coordinates.push(data.getFloat64(72,true));
+		return geoJson;
+	}else{
+		num = geoJson.coordinates.length;
+	}
+	var zOffset = 56 + (num<<4);
+	geoJson.coordinates =  parseZPointArray(data,zOffset,num,geoJson.coordinates);
+	return geoJson;
 }
 function parsePolyline(data,trans){
 	var out = {};
@@ -808,8 +849,19 @@ function parsePolyline(data,trans){
 	}
 	return out;
 }
-function parsePolygon(data,trans){
-	var out = parsePolyline(data,trans);
+function parseZPolyline(data,trans){
+	var geoJson = parsePolyline(data,trans);
+	var num = geoJson.coordinates.length;
+	var zOffset = 60 + (num<<4);
+	if(geoJson.type === "LineString"){
+		geoJson.coordinates =  parseZPointArray(data,zOffset,num,geoJson.coordinates);
+		return geoJson;
+	}else{
+		geoJson.coordinates =  parseZArrayGroup(data,zOffset,num,geoJson.coordinates);
+		return geoJson;
+	}
+}
+function polyFuncs(out){
 	if(out.type === "LineString"){
 		out.type = "Polygon";
 		out.coordinates = [out.coordinates];
@@ -826,23 +878,38 @@ function parsePolygon(data,trans){
 		}
 	}
 }
-var shpFuncs = [
-	null,
-	function(data,trans){
-		return {
-			"type": "Point",
-			"coordinates":trans(data,0)
+function parsePolygon(data,trans){
+	return polyFuncs(parsePolyline(data,trans));
+}
+function parseZPolygon(data,trans){
+	return polyFuncs(parseZPolyline(data,trans));
+}
+var shpFuncObj = {
+	1:parsePoint,
+	3:parsePolyline,
+	5:parsePolygon,
+	8:parseMultiPoint,
+	11:parseZPoint,
+	13:parseZPolyline,
+	15:parseZPolygon,
+	18:parseZMultiPoint
+};
+function shpFuncs (num,tran){
+	if(num>20){
+		num -= 20;
+	}
+	if(!(num in shpFuncObj)){
+		console.log("I don't know that shp type");
+		return function(){
+			return function(){};
 		};
-	},
-	null,
-	parsePolyline,
-	null,
-	parsePolygon,
-	null,
-	null,
-	parseMultiPoint
-	];
-	
+	}
+	var shpFunc = shpFuncObj[num];
+	var parseCoord = makeParseCoord(tran);
+	return function(data){
+		return shpFunc(data,parseCoord);
+	};
+}
 var getRow = function(buffer,offset){
 	var view = new DataView(buffer,offset,12);
 	var len = view.getInt32(4,false)<<1;
@@ -871,7 +938,7 @@ var getRows = function(buffer,parseShape,trans){
 	}
 	return out;
 };
-function makeParsePoint(trans){
+function makeParseCoord(trans){
 	if(trans){
 		return function(data,offset){
 			return trans([data.getFloat64(offset,true),data.getFloat64(offset+8,true)]);
@@ -884,7 +951,7 @@ function makeParsePoint(trans){
 }
 shp.parseShp = function(buffer,trans){
 	var headers = parseHeader(buffer);
-	return getRows(buffer,shpFuncs[headers.shpCode],makeParsePoint(trans));
+	return getRows(buffer,shpFuncs(headers.shpCode,trans));
 };
 
 function dbfHeader(buffer){
