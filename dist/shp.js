@@ -1,4 +1,4 @@
-/*! shapefile-js 2013-06-20*/
+/*! shapefile-js 2013-07-05*/
 function shp(base){return shp.getShapefile(base);};
 /*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc, Donavon West, and Domenic Denicola @license MIT https://github.com/NobleJS/setImmediate */
 (function (attachTo,global) {
@@ -733,7 +733,12 @@ function polyReduce(a,b){
 	}
 	return a;
 }
-
+function parsePoint(data,trans){
+		return {
+			"type": "Point",
+			"coordinates":trans(data,0)
+		};
+	}
 function parsePointArray(data,offset,num,trans){
 	var out = [];
 	var done = 0;
@@ -749,7 +754,7 @@ function parseArrayGroup(data,offset,partOffset,num,tot,trans){
 	var done = 0;
 	var curNum,nextNum=0,pointNumber;
 	while(done<num){
-		done++
+		done++;
 		partOffset += 4;
 		curNum = nextNum;
 		if(done===num){
@@ -826,23 +831,24 @@ function parsePolygon(data,trans){
 		}
 	}
 }
-var shpFuncs = [
-	null,
-	function(data,trans){
-		return {
-			"type": "Point",
-			"coordinates":trans(data,0)
-		};
-	},
-	null,
-	parsePolyline,
-	null,
-	parsePolygon,
-	null,
-	null,
-	parseMultiPoint
-	];
-	
+var shpFuncObj = {
+	1:parsePoint,
+	3:parsePolyline,
+	5:parsePolygon,
+	8:parseMultiPoint
+};
+function shpFuncs (num,tran){
+	if(num>10){
+		num -= 10;
+	}else if(num>20){
+		num -= 20;
+	}
+	var shpFunc =  shpFuncObj[num];
+	var parseCoord = makeParseCoord(tran);
+	return function(data){
+		return shpFunc(data,parseCoord);
+	};
+}
 var getRow = function(buffer,offset){
 	var view = new DataView(buffer,offset,12);
 	var len = view.getInt32(4,false)<<1;
@@ -871,7 +877,7 @@ var getRows = function(buffer,parseShape,trans){
 	}
 	return out;
 };
-function makeParsePoint(trans){
+function makeParseCoord(trans){
 	if(trans){
 		return function(data,offset){
 			return trans([data.getFloat64(offset,true),data.getFloat64(offset+8,true)]);
@@ -884,7 +890,7 @@ function makeParsePoint(trans){
 }
 shp.parseShp = function(buffer,trans){
 	var headers = parseHeader(buffer);
-	return getRows(buffer,shpFuncs[headers.shpCode],makeParsePoint(trans));
+	return getRows(buffer,shpFuncs(headers.shpCode,trans));
 };
 
 function dbfHeader(buffer){
