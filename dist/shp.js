@@ -1,4 +1,4 @@
-/*! shapefile-js 2013-07-05*/
+/*! shapefile-js 2013-08-08*/
 function shp(base){return shp.getShapefile(base);};
 /*!From setImmediate Copyright (c) 2012 Barnesandnoble.com,llc, Donavon West, and Domenic Denicola @license MIT https://github.com/NobleJS/setImmediate */
 (function (attachTo,global) {
@@ -1078,14 +1078,18 @@ function getZip(base){
 	return shp.binaryAjax(base).then(shp.parseZip);
 }
 shp.getShapefile = function(base){
-	if(base.slice(-4)==='.zip'){
-		return getZip(base);
-	}else{ 
-	return shp.all([
-		shp.binaryAjax(base+'.shp').then(shp.parseShp),
-		shp.binaryAjax(base+'.dbf').then(shp.parseDbf)
-	]).then(shp.combine)}
+	if(typeof base === 'string'){
+		if(base.slice(-4)==='.zip'){
+			return getZip(base);
+		}else{ 
+		return shp.all([
+			shp.binaryAjax(base+'.shp').then(shp.parseShp),
+			shp.binaryAjax(base+'.dbf').then(shp.parseDbf)
+		]).then(shp.combine)}
+	}else{
+		return shp.resolve(shp.parseZip(base));
 	}
+}
 })(shp);
 shp.unzip=function(buffer){
     

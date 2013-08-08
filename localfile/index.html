@@ -34,12 +34,12 @@
 
 <script src="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.js"></script>
 <script src="sha512.js"></script>
-<script src="../site/communist.js"></script>
+<script src="../site/catiline.js"></script>
 
 <script>
-var worker = communist(function(data,cb){
+var worker = cw(function(data,cb){
 	importScripts('../dist/shp.js');
-	cb(shp.parseZip(data));
+	shp(data).then(cb);
 });
 L.Control.Layers.prototype._addItem= function (obj) {
     	var label = document.createElement('label'),

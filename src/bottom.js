@@ -50,12 +50,16 @@ function getZip(base){
 	return shp.binaryAjax(base).then(shp.parseZip);
 }
 shp.getShapefile = function(base){
-	if(base.slice(-4)==='.zip'){
-		return getZip(base);
-	}else{ 
-	return shp.all([
-		shp.binaryAjax(base+'.shp').then(shp.parseShp),
-		shp.binaryAjax(base+'.dbf').then(shp.parseDbf)
-	]).then(shp.combine)}
+	if(typeof base === 'string'){
+		if(base.slice(-4)==='.zip'){
+			return getZip(base);
+		}else{ 
+		return shp.all([
+			shp.binaryAjax(base+'.shp').then(shp.parseShp),
+			shp.binaryAjax(base+'.dbf').then(shp.parseDbf)
+		]).then(shp.combine)}
+	}else{
+		return shp.resolve(shp.parseZip(base));
 	}
+}
 })(shp);
