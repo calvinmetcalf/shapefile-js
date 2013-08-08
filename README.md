@@ -37,7 +37,9 @@ or you can call it on a .zip file which contains the shapefile
 or if you got the zip some other way (like the file api) then with the arrayBuffer you can call
 
 ```javascript
-shp.parseZip(buffer);
+shp(buffer).then(function(geojson){});
+//or
+shp.parseZip(buffer)->returns zip
 ```
 If there is only one shp in the zipefile it returns geojson, if there are multiple then it will be an array.  All of the geojson objects have an extra key `fileName` the value of which is the 
 name of the shapefile minus the extention (I.E. the part of the name that's the same for all of them)
@@ -84,21 +86,21 @@ to
 ```html
 <script src='website/catiline.js'> </script>
 <script>
-	var worker = communist(function(base,cb){
+	var worker = cw(function(base,cb){
 		importScripts('dist/shp.js');
 		shp(base).then(cb);
 	});
 	//worker can be called multiple times
-	worker.data(communist.makeUrl('files/shapeFile.zip')).then(function(data){
+	worker.data(cw.makeUrl('files/shapeFile.zip')).then(function(data){
 		//do stuff with data
 	});
 </script>
 ```
 
-to send the worker a buffer from the file api you'd do (I'm omiting where you include the communist script)
+to send the worker a buffer from the file api you'd do (I'm omiting where you include the catiline script)
 
 ```javascript
-var worker = communist(function(data){
+var worker = cw(function(data){
 	importScripts('../dist/shp.js');
 	return shp.parseZip(data);
 });
