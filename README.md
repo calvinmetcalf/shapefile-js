@@ -68,7 +68,7 @@ shp.parseShp(shpBuffer,projFunc);
 
 ##Stick it in a worker
 
-I used my library [communist](http://communistjs.com/) to parallelize the demos to do so I changed
+I used my library [catiline](http://catilinejs.com/) to parallelize the demos to do so I changed
 
 ```html
 <script src='dist/shp.js'> </script>
@@ -82,7 +82,7 @@ I used my library [communist](http://communistjs.com/) to parallelize the demos 
 to 
 
 ```html
-<script src='website/communist.js'> </script>
+<script src='website/catiline.js'> </script>
 <script>
 	var worker = communist(function(base,cb){
 		importScripts('dist/shp.js');

@@ -17,7 +17,7 @@
 			<a href="https://github.com/calvinmetcalf/shapefile-js">Fork me on GitHub</a>
 		</div>
 	</div>  <div id="map"></div>
-<script src="site/communist.js"> </script>
+<script src="site/catiline.js"> </script>
       <script type="text/javascript">
 	 var m= L.map('map').setView([40.59935608796518,-73.56],8);
 var watercolor = L.tileLayer('http://{s}.tile.stamen.com/watercolor/{z}/{x}/{y}.jpg',{attribution:'Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>'})
@@ -36,10 +36,10 @@ var wfunc = function(base,cb){
 	shp(base).then(cb);
 }
 
-		communist(wfunc,communist.makeUrl('files/nj_muni.zip')).then(function(data){
+		cw(wfunc,cw.makeUrl('files/nj_muni.zip')).then(function(data){
 		geo.addData(data);
 		},function(a){console.log(a)});
-		communist(wfunc,communist.makeUrl('files/maSP.zip')).then(function(data){
+		cw(wfunc,cw.makeUrl('files/maSP.zip')).then(function(data){
 		geo.addData(data);
 		},function(a){console.log(a)});
 </script><script>
