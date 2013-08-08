@@ -35,11 +35,11 @@ var wfunc = function(base,cb){
 	importScripts('dist/shp.js');
 	shp(base).then(cb);
 }
-
-		cw(wfunc,cw.makeUrl('files/nj_muni.zip')).then(function(data){
+var worker = cw({data:wfunc},2);
+		worker.data(cw.makeUrl('files/nj_muni.zip')).then(function(data){
 		geo.addData(data);
 		},function(a){console.log(a)});
-		cw(wfunc,cw.makeUrl('files/maSP.zip')).then(function(data){
+	worker.data(cw.makeUrl('files/maSP.zip')).then(function(data){
 		geo.addData(data);
 		},function(a){console.log(a)});
 </script><script>
