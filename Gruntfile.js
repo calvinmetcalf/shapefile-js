@@ -1,16 +1,26 @@
 module.exports = function(grunt) {
 	grunt.initConfig({
 		pkg: grunt.file.readJSON('package.json'),
-		concat:{
-			all:{
-                options:{
-                    banner:'/*! <%= pkg.name %> <%= grunt.template.today("yyyy-mm-dd") %>*/\nfunction shp(base){return shp.getShapefile(base);};\n'
-                },
-				src:['./src/setImmediate.js','./src/promiscuous.js','./src/proj.js','./src/top.js','./src/shp.js','./src/dbf.js','./src/bottom.js','./src/jszip.js'],
-				dest:'./dist/shp.js'
-			}
-		}
-	});
-	grunt.loadNpmTasks('grunt-contrib-concat');
-	grunt.registerTask('default', ['concat']);
+		requirejs:{
+        all:{options:{
+          out: "./dist/shp.js",
+          baseUrl: "./src",
+          //name: "proj4",
+          wrap: {
+            startFile: 'almond/top.frag',
+            endFile: 'almond/end.frag'
+          },
+          name: '../node_modules/almond/almond',
+          include: ['shp'],
+          optimize:'none',
+          //uglify2:{
+          //  mangle: true
+          //},
+          preserveLicenseComments: false
+        }
+      }
+      }
+      });
+	grunt.loadNpmTasks('grunt-contrib-requirejs');
+	grunt.registerTask('default', ['requirejs']);
 }

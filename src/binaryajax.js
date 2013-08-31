@@ -1,4 +1,4 @@
-define(['jam/lie'],function(deferred){
+define(['./lie'],function(deferred){
 return function(url){
     var promise = deferred();
 	var ajax = new XMLHttpRequest();

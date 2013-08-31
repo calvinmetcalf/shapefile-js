@@ -1,23 +1,23 @@
 {
   "name": "shapefile-js",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "A binary shapefile loader, for javascript. Many caveats:",
-  "main": "shp-new.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "main": "dist/shp.js",
   "repository": {
     "type": "git",
     "url": "git://github.com/calvinmetcalf/shapefile-js.git"
   },
-  "author": "",
+  "author": "Calvin Metcalf",
   "license": "MIT",
   "readmeFilename": "README.md",
-  "gitHead": "4265d009e4ee268cd9573704046569d50932ffcb",
   "devDependencies": {
     "grunt-contrib-concat": "~0.3.0",
     "grunt-cli": "~0.1.9",
     "grunt": "~0.4.1",
-    "grunt-contrib-jshint": "~0.6.0"
+    "grunt-contrib-jshint": "~0.6.0",
+    "lie": "~1.0.0",
+    "proj4js": "~1.1.0",
+    "grunt-contrib-requirejs": "~0.4.1",
+    "almond": "~0.2.6"
   }
 }

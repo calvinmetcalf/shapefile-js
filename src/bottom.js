@@ -1,3 +1,7 @@
+define([],function(){
+function shp(base){
+    return shp.getShapefile(base);
+};
 shp.combine=function(arr){
 	var out = {};
 	out.type="FeatureCollection";
@@ -62,4 +66,5 @@ shp.getShapefile = function(base){
 		return shp.resolve(shp.parseZip(base));
 	}
 }
-})(shp);
+return shp;
+});

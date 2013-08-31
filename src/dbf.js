@@ -1,3 +1,4 @@
+define(function(){
 function dbfHeader(buffer){
     var data = new DataView(buffer);
 	var out = {}
@@ -55,7 +56,7 @@ function parseRow(buffer,offset,rowHeaders){
 	}
 	return out;
 }
-shp.parseDbf = function(buffer){
+return function(buffer){
 	var rowHeaders = dbfRowHeader(buffer);
 	var header = dbfHeader(buffer);
 	var offset = ((rowHeaders.length+1)<<5)+2;
@@ -70,3 +71,4 @@ shp.parseDbf = function(buffer){
 	}
 	return out;
 }
+});
