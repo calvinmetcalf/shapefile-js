@@ -1,5 +1,3 @@
-shp.unzip=function(buffer){
-    
 /**
 
 JSZip - A Javascript class for generating and reading zip files
@@ -25,6 +23,7 @@ Usage:
  * @param {String=|ArrayBuffer=|Uint8Array=} data the data to load, if any (optional).
  * @param {Object=} options the options for creating this objects (optional).
  */
+define(function(){
 var JSZip = function(data, options) {
    // object containing the files :
    // {
@@ -2272,17 +2271,5 @@ if(!JSZip.compressions["DEFLATE"]) {
 }
 
 })();
-
-var zip = new JSZip(buffer);
-var files = zip.file(/.+/);
-var out = {};
-files.forEach(function(a){
-	if(a.name.slice(-7).toLowerCase()==="geojson"){
-		out[a.name]=a.asText();
-	}else{
-		out[a.name]=a.asArrayBuffer();
-	}
-
+return JSZip;
 });
-return out;
-}

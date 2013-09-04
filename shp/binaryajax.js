@@ -1,8 +1,6 @@
-
-(function(exports){
-'use strict';
-shp.binaryAjax = function(url){
-    var promise = shp.deferred();
+define(['./lie'],function(deferred){
+return function(url){
+    var promise = deferred();
 	var ajax = new XMLHttpRequest();
 	ajax.onreadystatechange=callback;
 	ajax.open("GET",url,true);
@@ -15,3 +13,4 @@ shp.binaryAjax = function(url){
 	}
 	return promise.promise;
 }
+});
