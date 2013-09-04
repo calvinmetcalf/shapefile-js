@@ -1,16 +1,23 @@
 define(['./lie'],function(deferred){
 return function(url){
     var promise = deferred();
+    var type = url.slice(-3);
 	var ajax = new XMLHttpRequest();
-	ajax.onreadystatechange=callback;
 	ajax.open("GET",url,true);
-	ajax.responseType='arraybuffer';
-	ajax.send();
-	function callback(resp){
-		if(ajax.readyState === 4 && ajax.status === 200) {
-			promise.resolve(ajax.response);
-		}
+	if(type !== 'prj'){
+		ajax.responseType='arraybuffer';
 	}
+	ajax.addEventListener("load",function(){
+		if(ajax.status>399){
+			if(type==='prj'){
+				return promise.resolve(false);
+			}else{
+				return promise.reject(ajax.status);
+			}
+		}
+		promise.resolve(ajax.response);
+	}, false);
+	ajax.send();
 	return promise.promise;
-}
+};
 });

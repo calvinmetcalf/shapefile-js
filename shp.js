@@ -17,7 +17,7 @@ shp.combine=function(arr){
 		i++;
 	}
 	return out;
-}
+};
 shp.parseZip = function(buffer){
 		var key;
 		var zip=unzip(buffer);
@@ -34,7 +34,7 @@ shp.parseZip = function(buffer){
 			}
 		}
 	var geojson = names.map(function(name){
-		var parsed
+		var parsed;
 		if(name.slice(-7).toLowerCase()==="geojson"){
 			parsed = JSON.parse(zip[name]);
 			parsed.fileName = name.slice(0,-8);
@@ -59,7 +59,12 @@ shp.getShapefile = function(base){
 			return getZip(base);
 		}else{ 
 		return deferred.all([
-			binaryAjax(base+'.shp').then(parseShp),
+			deferred.all([
+				binaryAjax(base+'.shp'),
+				binaryAjax(base+'.prj')
+			]).then(function(args){
+				return parseShp(args[0],args[1]?proj4(args[1]):false);
+			}),
 			binaryAjax(base+'.dbf').then(parseDbf)
 		]).then(shp.combine)}
 	}else{
