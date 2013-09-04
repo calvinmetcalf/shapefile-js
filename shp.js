@@ -1,4 +1,4 @@
-define(['proj4','jszip','binaryajax','parseShp','dbf'],function(proj4,unzip,binaryAjax,parseShp,parseDbf){
+define(['proj4','shp/jszip','shp/binaryajax','shp/parseShp','shp/dbf','shp/lie'],function(proj4,unzip,binaryAjax,parseShp,parseDbf,deferred){
 function shp(base){
     return shp.getShapefile(base);
 };
@@ -58,13 +58,13 @@ shp.getShapefile = function(base){
 		if(base.slice(-4)==='.zip'){
 			return getZip(base);
 		}else{ 
-		return shp.all([
-			binaryAjax(base+'.shp').then(shp.parseShp),
-			binaryAjax(base+'.dbf').then(shp.parseDbf)
+		return deferred.all([
+			binaryAjax(base+'.shp').then(parseShp),
+			binaryAjax(base+'.dbf').then(parseDbf)
 		]).then(shp.combine)}
 	}else{
-		return shp.resolve(shp.parseZip(base));
+		return deferred.resolve(shp.parseZip(base));
 	}
-}
+};
 return shp;
 });

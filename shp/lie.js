@@ -219,8 +219,8 @@
 
 /*! lie 1.0.0 2013-08-30*/
 /*! (c)2013 Ruben Verborgh & Calvin Metcalf @license MIT https://github.com/calvinmetcalf/lie*/
-(function(){
-	var create = function(tick,exports) {
+
+	define(function(){
 		var func = 'function';
 		// Creates a deferred: an object with a promise and corresponding resolve/reject methods
 		function Deferred() {
@@ -309,7 +309,7 @@
 		// Executes the callback with the specified value,
 		// resolving or rejecting the deferred
 		function execute(callback, value, deferred) {
-			tick(function() {
+			setImmediate(function() {
 				var result;
 				try {
 					result = callback(value);
@@ -325,32 +325,40 @@
 				}
 			});
 		}
-		exports = createDeferred;
 		// Returns a resolved promise
-		exports.resolve = function(value) {
+		createDeferred.resolve = function(value) {
 			var promise = {};
 			promise.then = createHandler(promise, value, true);
 			return promise;
 		};
 		// Returns a rejected promise
-		exports.reject = function(reason) {
+		createDeferred.reject = function(reason) {
 			var promise = {};
 			promise.then = createHandler(promise, reason, false);
 			return promise;
 		};
 		// Returns a deferred
 		
-
-		return exports;
-	};
-
-	if(typeof define === 'function'){
-		define(function(){
-			return create(typeof setImmediate === 'function'?setImmediate:setTimeout,{});
-		});
-	}else if(typeof module === 'undefined' || !('exports' in module)){
-		create(typeof setImmediate === 'function'?setImmediate:setTimeout,typeof global === 'object' && global ? global : this);
-	}else{
-		module.exports = create(process.nextTick,{});
-	}
-})();
+	createDeferred.all = function(array) {
+			var promise = createDeferred();
+			var len = array.length;
+			var resolved = 0;
+			var out = [];
+			var onSuccess = function(n) {
+				return function(v) {
+					out[n] = v;
+					resolved++;
+					if (resolved === len) {
+						promise.resolve(out);
+					}
+				};
+			};
+			array.forEach(function(v, i) {
+				v.then(onSuccess(i), function(a) {
+					promise.reject(a);
+				});
+			});
+			return promise.promise;
+		};
+		return createDeferred;
+});

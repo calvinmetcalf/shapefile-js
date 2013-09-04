@@ -1,6 +1,6 @@
 {
   "name": "shapefile-js",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A binary shapefile loader, for javascript. Many caveats:",
   "main": "dist/shp.js",
   "repository": {
@@ -11,12 +11,8 @@
   "license": "MIT",
   "readmeFilename": "README.md",
   "devDependencies": {
-    "grunt-contrib-concat": "~0.3.0",
     "grunt-cli": "~0.1.9",
     "grunt": "~0.4.1",
-    "grunt-contrib-jshint": "~0.6.0",
-    "lie": "~1.0.0",
-    "proj4js": "~1.1.0",
     "grunt-contrib-requirejs": "~0.4.1",
     "almond": "~0.2.6"
   }

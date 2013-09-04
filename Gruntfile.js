@@ -4,18 +4,17 @@ module.exports = function(grunt) {
 		requirejs:{
         all:{options:{
           out: "./dist/shp.js",
-          baseUrl: "./src",
-          //name: "proj4",
+          baseUrl: ".",
           wrap: {
             startFile: 'almond/top.frag',
             endFile: 'almond/end.frag'
           },
-          name: '../node_modules/almond/almond',
+          name: 'node_modules/almond/almond',
           include: ['shp'],
-          optimize:'none',
-          //uglify2:{
-          //  mangle: true
-          //},
+          optimize:'uglify2',
+          uglify2:{
+           mangle: true
+          },
           preserveLicenseComments: false
         }
       }

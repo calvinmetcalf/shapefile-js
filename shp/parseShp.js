@@ -227,7 +227,7 @@ var getRow = function(buffer,offset){
 	};
 };
 
-var getRows = function(buffer,parseShape,trans){
+var getRows = function(buffer,parseShape){
 	var offset=100;
 	var len = buffer.byteLength;
 	var out = [];
@@ -237,23 +237,26 @@ var getRows = function(buffer,parseShape,trans){
 		offset += 8;
 		offset += current.len;
 		if(current.type){
-			out.push(parseShape(current.data,trans));
+			out.push(parseShape(current.data));
 		}
 	}
 	return out;
 };
 function makeParseCoord(trans){
 	if(trans){
+		console.log(trans);
 		return function(data,offset){
 			return trans.inverse([data.getFloat64(offset,true),data.getFloat64(offset+8,true)]);
 		}
 	}else{
+		console.log('no trans');
 		return function(data,offset){
 			return [data.getFloat64(offset,true),data.getFloat64(offset+8,true)];
 		}
 	}
 }
 return function(buffer,trans){
+	console.log('trans is ',trans)
 	var headers = parseHeader(buffer);
 	return getRows(buffer,shpFuncs(headers.shpCode,trans));
 };
