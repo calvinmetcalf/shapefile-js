@@ -21,7 +21,7 @@
       <script type="text/javascript">
      curl.config({
     //By default load any module IDs from js/lib
-    baseUrl: './src',
+    baseUrl: '.',
     //except, if the module ID starts with "app",
     //load it from the js/app directory. paths
     //config is relative to the baseUrl, and
@@ -49,7 +49,7 @@ watercolor.addTo(m);
 
 
 
-		shp('files/maSP.zip').then(function(data){
+		shp('files/nj_counties.zip').then(function(data){
 		geo.addData(data);
 		},function(a){console.log(a)});
 });
