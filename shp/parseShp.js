@@ -244,19 +244,16 @@ var getRows = function(buffer,parseShape){
 };
 function makeParseCoord(trans){
 	if(trans){
-		console.log(trans);
 		return function(data,offset){
 			return trans.inverse([data.getFloat64(offset,true),data.getFloat64(offset+8,true)]);
-		}
+		};
 	}else{
-		console.log('no trans');
 		return function(data,offset){
 			return [data.getFloat64(offset,true),data.getFloat64(offset+8,true)];
-		}
+		};
 	}
 }
 return function(buffer,trans){
-	console.log('trans is ',trans)
 	var headers = parseHeader(buffer);
 	return getRows(buffer,shpFuncs(headers.shpCode,trans));
 };
