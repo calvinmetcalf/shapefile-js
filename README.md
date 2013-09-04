@@ -119,10 +119,10 @@ worker.data(reader.result,[reader.result]).then(function(data){
 - zip
 - file api
 - Some Projections
+- More Projections
 
 ##to do
 
-- More Projections
 - check for geometry validity.
 - Tests
 
@@ -130,10 +130,10 @@ worker.data(reader.result,[reader.result]).then(function(data){
 ##LICENSE
 Main library MIT license, origional version was less permisive but there is 0 code shared. Included libraries are under their respective lisenses which are:
 - [JSZip](https://github.com/Stuk/jszip/) by @Stuk MIT or GPLv3
-- [Promiscuous](https://github.com/RubenVerborgh/promiscuous) by @RubenVerborgh MIT 
+- [lie](https://github.com/calvinmetcalf/lie) by me and @RubenVerborgh MIT 
 - [setImmediate](https://github.com/NobleJS/setImmediate) by @NobleJS et al MIT
 - [World Borders shapefile](http://thematicmapping.org/downloads/world_borders.php) is CC-BY-SA 3.0.
 - Park and Ride shapefile is from [MassDOT](http://mass.gov/massdot) and is public domain.
 - MA town boundaries from [MassGIS](http://www.mass.gov/anf/research-and-tech/it-serv-and-support/application-serv/office-of-geographic-information-massgis/) and is public domain
 - NJ County Boundaries from [NJgin](https://njgin.state.nj.us/NJ_NJGINExplorer/index.jsp) and should be public domain.
-- [Projforjs](https://github.com/calvinmetcalf/projforjs) easy stuff by me hard stuff by other people Apache licensed
+- [Proj4js](https://github.com/proj4js/proj4js) by me et al MIT
