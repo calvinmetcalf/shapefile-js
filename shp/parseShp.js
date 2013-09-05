@@ -30,7 +30,7 @@ function isClockWise(array){
 	return sum > 0;
 }
 function polyReduce(a,b){
-	if(isClockWise(b)){
+	if(isClockWise(b)||!a.length){
 		a.push([b]);
 	}else{
 		a[a.length-1].push(b);
