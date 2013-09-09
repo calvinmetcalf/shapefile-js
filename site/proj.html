@@ -10,30 +10,15 @@
 <!--[if lte IE 8]>
     <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.ie.css" />
 <![endif]-->
-<link rel="stylesheet" href="site/gh-fork-ribbon.css" />
+<link rel="stylesheet" href="gh-fork-ribbon.css" />
 <script src="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.js"></script>
 	 </head><body><div class="github-fork-ribbon-wrapper right">
 		<div class="github-fork-ribbon">
 			<a href="https://github.com/calvinmetcalf/shapefile-js">Fork me on GitHub</a>
 		</div>
 	</div>  <div id="map"></div>
-<script src='site/curl.js'> </script>
+<script src="catiline.js"> </script>
       <script type="text/javascript">
-     curl.config({
-    //By default load any module IDs from js/lib
-    baseUrl: '.',
-    //except, if the module ID starts with "app",
-    //load it from the js/app directory. paths
-    //config is relative to the baseUrl, and
-    //never includes a ".js" extension since
-    //the paths config could be for a directory.
-    use: {
-        leaflet: {
-            attach: 'leaflet'
-        }
-    }
-});
-curl(['shp']).then(function(shp){
 	 var m= L.map('map').setView([40.59935608796518,-73.56],8);
 var watercolor = L.tileLayer('http://{s}.tile.stamen.com/watercolor/{z}/{x}/{y}.jpg',{attribution:'Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>'})
 watercolor.addTo(m);
@@ -46,13 +31,17 @@ watercolor.addTo(m);
         l.bindPopup(out.join("<br />"));
     }
 }}).addTo(m);
-
-
-
-		shp('files/nj_counties.zip').then(function(data){
+var wfunc = function(base,cb){
+	importScripts('../dist/shp.js');
+	shp(base).then(cb);
+}
+var worker = cw({data:wfunc},2);
+		worker.data(cw.makeUrl('../files/nj_muni.zip')).then(function(data){
 		geo.addData(data);
 		},function(a){console.log(a)});
-});
+	worker.data(cw.makeUrl('../files/maSP.zip')).then(function(data){
+		geo.addData(data);
+		},function(a){console.log(a)});
 </script><script>
   (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
   (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),

@@ -1,4 +1,4 @@
-define(['proj4','shp/jszip','shp/binaryajax','shp/parseShp','shp/dbf','shp/lie'],function(proj4,unzip,binaryAjax,parseShp,parseDbf,deferred){
+define(['proj4','shp/unzip','shp/binaryajax','shp/parseShp','shp/parseDbf','shp/lie'],function(proj4,unzip,binaryAjax,parseShp,parseDbf,deferred){
 function shp(base){
     return shp.getShapefile(base);
 };

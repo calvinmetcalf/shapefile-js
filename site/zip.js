@@ -1,6 +1,6 @@
 requirejs.config({
     //By default load any module IDs from js/lib
-    baseUrl: '.',
+    baseUrl: '..',
     //except, if the module ID starts with "app",
     //load it from the js/app directory. paths
     //config is relative to the baseUrl, and
@@ -23,7 +23,7 @@ require(['shp'],function(shp){
         l.bindPopup(out.join("<br />"));
     }
 }}).addTo(m);
-      var base = 'files/TM_WORLD_BORDERS_SIMPL-0.3.zip';
+      var base = '../files/TM_WORLD_BORDERS_SIMPL-0.3.zip';
       var dbf,sh;
 		shp(base).then(function(data){
 		geo.addData(data);

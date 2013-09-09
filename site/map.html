@@ -6,11 +6,11 @@
   #map{ height: 100%;width: 100%; }
     </style>
         <title>Example </title>        <script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?key=AIzaSyBvl2Lx_Tj-9N_fT9arfnl8utRkVPe50uA&sensor=true"></script>
-        <script type="text/javascript" src="dist/shp.js"></script>
+        <script type="text/javascript" src="../dist/shp.js"></script>
 
 <script>
-var url = "files/pandr"
-var shapefile = new shp(url).then(function(data){
+var url = "../files/pandr"
+shp(url).then(function(data){
 	var googleMap = new google.maps.Map(
 		// Add a Google Map
 		document.getElementById('map'), {

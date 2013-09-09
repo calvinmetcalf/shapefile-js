@@ -9,11 +9,11 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 ##Demos
 
 - [Countries](http://calvinmetcalf.github.io/shapefile-js)
-- [Google maps](http://calvinmetcalf.github.io/shapefile-js/map.html)
-- [zip file](http://calvinmetcalf.github.io/shapefile-js/zip.html)
+- [Google maps](http://calvinmetcalf.github.io/shapefile-js/site/map.html)
+- [zip file](http://calvinmetcalf.github.io/shapefile-js/site/zip.html)
 - [Local Zipfile](http://calvinmetcalf.github.io/shapefile-js/localfile)
-- [Projected big with web workers](http://calvinmetcalf.github.io/shapefile-js/proj.html)
-- [Projected small](http://calvinmetcalf.github.io/shapefile-js/proj-small.html)
+- [Projected big with web workers](http://calvinmetcalf.github.io/shapefile-js/site/proj.html)
+- [Projected small](http://calvinmetcalf.github.io/shapefile-js/site/proj-small.html)
 
 ##API
 
