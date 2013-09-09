@@ -1,0 +1,29 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Mocha Tests</title>
+  <link rel="stylesheet" href="../node_modules/mocha/mocha.css" />
+</head>
+<body><div id="mocha"></div>
+  <script src="../node_modules/mocha/mocha.js"></script>
+  <script src="../node_modules/mocha-as-promised/mocha-as-promised.js"></script>
+  <script src="../node_modules/chai/chai.js"></script>
+  <script src="../node_modules/chai-as-promised/lib/chai-as-promised.js"></script>
+  <script src="../dist/shp.js"></script>
+  <script src="data/pandr.js"></script>
+  <script>
+  mocha.setup({
+      ui: "bdd",
+      globals: ["console"],
+      timeout: 300000,
+       ignoreLeaks: true
+    });
+  chai.should();
+  </script>
+  <script src="test.js"></script>
+  <script>
+     if (window.mochaPhantomJS) { mochaPhantomJS.run(); }
+      else { mocha.run(); }
+      </script>
+</body>
+</html>

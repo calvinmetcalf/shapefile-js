@@ -1,4 +1,9375 @@
-!function(t,s){"function"==typeof define&&define.amd?define(s):"undefined"!=typeof module?module.exports=s():t.shp=s()}(this,function(){var requirejs,require,define;return function(t){function s(t,s){return g.call(t,s)}function i(t,s){var i,e,a,n,r,h,o,l,u,f,c=s&&s.split("/"),d=m.map,p=d&&d["*"]||{};if(t&&"."===t.charAt(0))if(s){for(c=c.slice(0,c.length-1),t=c.concat(t.split("/")),l=0;l<t.length;l+=1)if(f=t[l],"."===f)t.splice(l,1),l-=1;else if(".."===f){if(1===l&&(".."===t[2]||".."===t[0]))break;l>0&&(t.splice(l-1,2),l-=2)}t=t.join("/")}else 0===t.indexOf("./")&&(t=t.substring(2));if((c||p)&&d){for(i=t.split("/"),l=i.length;l>0;l-=1){if(e=i.slice(0,l).join("/"),c)for(u=c.length;u>0;u-=1)if(a=d[c.slice(0,u).join("/")],a&&(a=a[e])){n=a,r=l;break}if(n)break;!h&&p&&p[e]&&(h=p[e],o=l)}!n&&h&&(n=h,r=o),n&&(i.splice(0,r,n),t=i.join("/"))}return t}function e(s,i){return function(){return u.apply(t,_.call(arguments,0).concat([s,i]))}}function a(t){return function(s){return i(s,t)}}function n(t){return function(s){d[t]=s}}function r(i){if(s(p,i)){var e=p[i];delete p[i],M[i]=!0,l.apply(t,e)}if(!s(d,i)&&!s(M,i))throw new Error("No "+i);return d[i]}function h(t){var s,i=t?t.indexOf("!"):-1;return i>-1&&(s=t.substring(0,i),t=t.substring(i+1,t.length)),[s,t]}function o(t){return function(){return m&&m.config&&m.config[t]||{}}}var l,u,f,c,d={},p={},m={},M={},g=Object.prototype.hasOwnProperty,_=[].slice;f=function(t,s){var e,n=h(t),o=n[0];return t=n[1],o&&(o=i(o,s),e=r(o)),o?t=e&&e.normalize?e.normalize(t,a(s)):i(t,s):(t=i(t,s),n=h(t),o=n[0],t=n[1],o&&(e=r(o))),{f:o?o+"!"+t:t,n:t,pr:o,p:e}},c={require:function(t){return e(t)},exports:function(t){var s=d[t];return"undefined"!=typeof s?s:d[t]={}},module:function(t){return{id:t,uri:"",exports:d[t],config:o(t)}}},l=function(i,a,h,o){var l,u,m,g,_,y,v=[];if(o=o||i,"function"==typeof h){for(a=!a.length&&h.length?["require","exports","module"]:a,_=0;_<a.length;_+=1)if(g=f(a[_],o),u=g.f,"require"===u)v[_]=c.require(i);else if("exports"===u)v[_]=c.exports(i),y=!0;else if("module"===u)l=v[_]=c.module(i);else if(s(d,u)||s(p,u)||s(M,u))v[_]=r(u);else{if(!g.p)throw new Error(i+" missing "+u);g.p.load(g.n,e(o,!0),n(u),{}),v[_]=d[u]}m=h.apply(d[i],v),i&&(l&&l.exports!==t&&l.exports!==d[i]?d[i]=l.exports:m===t&&y||(d[i]=m))}else i&&(d[i]=h)},requirejs=require=u=function(s,i,e,a,n){return"string"==typeof s?c[s]?c[s](i):r(f(s,i).f):(s.splice||(m=s,i.splice?(s=i,i=e,e=null):s=t),i=i||function(){},"function"==typeof e&&(e=a,a=n),a?l(t,s,i,e):setTimeout(function(){l(t,s,i,e)},4),u)},u.config=function(t){return m=t,m.deps&&u(m.deps,m.callback),u},requirejs._defined=d,define=function(t,i,e){i.splice||(e=i,i=[]),s(d,t)||s(p,t)||(p[t]=[t,i,e])},define.amd={jQuery:!0}}(),define("node_modules/almond/almond",function(){}),define("proj4/mgrs",["require","exports","module"],function(t,s){function i(t){return t*(Math.PI/180)}function e(t){return 180*(t/Math.PI)}function a(t){var s,e,a,n,h,o,l,u,f,c=t.lat,d=t.lon,p=6378137,m=.00669438,M=.9996,g=i(c),_=i(d);f=Math.floor((d+180)/6)+1,180===d&&(f=60),c>=56&&64>c&&d>=3&&12>d&&(f=32),c>=72&&84>c&&(d>=0&&9>d?f=31:d>=9&&21>d?f=33:d>=21&&33>d?f=35:d>=33&&42>d&&(f=37)),s=6*(f-1)-180+3,u=i(s),e=m/(1-m),a=p/Math.sqrt(1-m*Math.sin(g)*Math.sin(g)),n=Math.tan(g)*Math.tan(g),h=e*Math.cos(g)*Math.cos(g),o=Math.cos(g)*(_-u),l=p*((1-m/4-3*m*m/64-5*m*m*m/256)*g-(3*m/8+3*m*m/32+45*m*m*m/1024)*Math.sin(2*g)+(15*m*m/256+45*m*m*m/1024)*Math.sin(4*g)-35*m*m*m/3072*Math.sin(6*g));var y=M*a*(o+(1-n+h)*o*o*o/6+(5-18*n+n*n+72*h-58*e)*o*o*o*o*o/120)+5e5,v=M*(l+a*Math.tan(g)*(o*o/2+(5-n+9*h+4*h*h)*o*o*o*o/24+(61-58*n+n*n+600*h-330*e)*o*o*o*o*o*o/720));return 0>c&&(v+=1e7),{northing:Math.round(v),easting:Math.round(y),zoneNumber:f,zoneLetter:r(c)}}function n(t){var s=t.northing,i=t.easting,a=t.zoneLetter,r=t.zoneNumber;if(0>r||r>60)return null;var h,o,l,u,f,c,d,p,m,M,g=.9996,_=6378137,y=.00669438,v=(1-Math.sqrt(1-y))/(1+Math.sqrt(1-y)),b=i-5e5,x=s;"N">a&&(x-=1e7),p=6*(r-1)-180+3,h=y/(1-y),d=x/g,m=d/(_*(1-y/4-3*y*y/64-5*y*y*y/256)),M=m+(3*v/2-27*v*v*v/32)*Math.sin(2*m)+(21*v*v/16-55*v*v*v*v/32)*Math.sin(4*m)+151*v*v*v/96*Math.sin(6*m),o=_/Math.sqrt(1-y*Math.sin(M)*Math.sin(M)),l=Math.tan(M)*Math.tan(M),u=h*Math.cos(M)*Math.cos(M),f=_*(1-y)/Math.pow(1-y*Math.sin(M)*Math.sin(M),1.5),c=b/(o*g);var C=M-o*Math.tan(M)/f*(c*c/2-(5+3*l+10*u-4*u*u-9*h)*c*c*c*c/24+(61+90*l+298*u+45*l*l-252*h-3*u*u)*c*c*c*c*c*c/720);C=e(C);var P=(c-(1+2*l+u)*c*c*c/6+(5-2*u+28*l-3*u*u+8*h+24*l*l)*c*c*c*c*c/120)/Math.cos(M);P=p+e(P);var S;if(t.accuracy){var A=n({northing:t.northing+t.accuracy,easting:t.easting+t.accuracy,zoneLetter:t.zoneLetter,zoneNumber:t.zoneNumber});S={top:A.lat,right:A.lon,bottom:C,left:P}}else S={lat:C,lon:P};return S}function r(t){var s="Z";return 84>=t&&t>=72?s="X":72>t&&t>=64?s="W":64>t&&t>=56?s="V":56>t&&t>=48?s="U":48>t&&t>=40?s="T":40>t&&t>=32?s="S":32>t&&t>=24?s="R":24>t&&t>=16?s="Q":16>t&&t>=8?s="P":8>t&&t>=0?s="N":0>t&&t>=-8?s="M":-8>t&&t>=-16?s="L":-16>t&&t>=-24?s="K":-24>t&&t>=-32?s="J":-32>t&&t>=-40?s="H":-40>t&&t>=-48?s="G":-48>t&&t>=-56?s="F":-56>t&&t>=-64?s="E":-64>t&&t>=-72?s="D":-72>t&&t>=-80&&(s="C"),s}function h(t,s){var i=""+t.easting,e=""+t.northing;return t.zoneNumber+t.zoneLetter+o(t.easting,t.northing,t.zoneNumber)+i.substr(i.length-5,s)+e.substr(e.length-5,s)}function o(t,s,i){var e=l(i),a=Math.floor(t/1e5),n=Math.floor(s/1e5)%20;return u(a,n,e)}function l(t){var s=t%m;return 0===s&&(s=m),s}function u(t,s,i){var e=i-1,a=M.charCodeAt(e),n=g.charCodeAt(e),r=a+t-1,h=n+s,o=!1;r>x&&(r=r-x+_-1,o=!0),(r===y||y>a&&r>y||(r>y||y>a)&&o)&&r++,(r===v||v>a&&r>v||(r>v||v>a)&&o)&&(r++,r===y&&r++),r>x&&(r=r-x+_-1),h>b?(h=h-b+_-1,o=!0):o=!1,(h===y||y>n&&h>y||(h>y||y>n)&&o)&&h++,(h===v||v>n&&h>v||(h>v||v>n)&&o)&&(h++,h===y&&h++),h>b&&(h=h-b+_-1);var l=String.fromCharCode(r)+String.fromCharCode(h);return l}function f(t){if(t&&0===t.length)throw"MGRSPoint coverting from nothing";for(var s,i=t.length,e=null,a="",n=0;!/[A-Z]/.test(s=t.charAt(n));){if(n>=2)throw"MGRSPoint bad conversion from: "+t;a+=s,n++}var r=parseInt(a,10);if(0===n||n+3>i)throw"MGRSPoint bad conversion from: "+t;var h=t.charAt(n++);if("A">=h||"B"===h||"Y"===h||h>="Z"||"I"===h||"O"===h)throw"MGRSPoint zone letter "+h+" not handled: "+t;e=t.substring(n,n+=2);for(var o=l(r),u=c(e.charAt(0),o),f=d(e.charAt(1),o);f<p(h);)f+=2e6;var m=i-n;if(0!==m%2)throw"MGRSPoint has to have an even number \nof digits after the zone letter and two 100km letters - front \nhalf for easting meters, second half for \nnorthing meters"+t;var M,g,_,y,v,b=m/2,x=0,C=0;return b>0&&(M=1e5/Math.pow(10,b),g=t.substring(n,n+b),x=parseFloat(g)*M,_=t.substring(n+b),C=parseFloat(_)*M),y=x+u,v=C+f,{easting:y,northing:v,zoneLetter:h,zoneNumber:r,accuracy:M}}function c(t,s){for(var i=M.charCodeAt(s-1),e=1e5,a=!1;i!==t.charCodeAt(0);){if(i++,i===y&&i++,i===v&&i++,i>x){if(a)throw"Bad character: "+t;i=_,a=!0}e+=1e5}return e}function d(t,s){if(t>"V")throw"MGRSPoint given invalid Northing "+t;for(var i=g.charCodeAt(s-1),e=0,a=!1;i!==t.charCodeAt(0);){if(i++,i===y&&i++,i===v&&i++,i>b){if(a)throw"Bad character: "+t;i=_,a=!0}e+=1e5}return e}function p(t){var s;switch(t){case"C":s=11e5;break;case"D":s=2e6;break;case"E":s=28e5;break;case"F":s=37e5;break;case"G":s=46e5;break;case"H":s=55e5;break;case"J":s=64e5;break;case"K":s=73e5;break;case"L":s=82e5;break;case"M":s=91e5;break;case"N":s=0;break;case"P":s=8e5;break;case"Q":s=17e5;break;case"R":s=26e5;break;case"S":s=35e5;break;case"T":s=44e5;break;case"U":s=53e5;break;case"V":s=62e5;break;case"W":s=7e6;break;case"X":s=79e5;break;default:s=-1}if(s>=0)return s;throw"Invalid zone letter: "+t}var m=6,M="AJSAJS",g="AFAFAF",_=65,y=73,v=79,b=86,x=90;s.forward=function(t,s){return s=s||5,h(a({lat:t.lat,lon:t.lon}),s)},s.inverse=function(t){var s=n(f(t.toUpperCase()));return[s.left,s.bottom,s.right,s.top]}}),define("proj4/Point",["./mgrs"],function(t){function s(t,i,e){if(!(this instanceof s))return new s(t,i,e);if("object"==typeof t)this.x=t[0],this.y=t[1],this.z=t[2]||0;else if("string"==typeof t&&"undefined"==typeof i){var a=t.split(",");this.x=parseFloat(a[0]),this.y=parseFloat(a[1]),this.z=parseFloat(a[2])||0}else this.x=t,this.y=i,this.z=e||0;this.clone=function(){return new s(this.x,this.y,this.z)},this.toString=function(){return"x="+this.x+",y="+this.y},this.toShortString=function(){return this.x+", "+this.y}}return s.fromMGRS=function(i){var e=t.inverse(i);return new s((e[2]+e[0])/2,(e[3]+e[1])/2)},s.prototype.toMGRS=function(s){return t.forward({lon:this.x,lat:this.y},s)},s}),define("proj4/extend",[],function(){return function(t,s){t=t||{};var i,e;if(!s)return t;for(e in s)i=s[e],void 0!==i&&(t[e]=i);return t}}),define("proj4/common",[],function(){var t={PI:3.141592653589793,HALF_PI:1.5707963267948966,TWO_PI:6.283185307179586,FORTPI:.7853981633974483,R2D:57.29577951308232,D2R:.017453292519943295,SEC_TO_RAD:484813681109536e-20,EPSLN:1e-10,MAX_ITER:20,COS_67P5:.3826834323650898,AD_C:1.0026,PJD_UNKNOWN:0,PJD_3PARAM:1,PJD_7PARAM:2,PJD_GRIDSHIFT:3,PJD_WGS84:4,PJD_NODATUM:5,SRS_WGS84_SEMIMAJOR:6378137,SRS_WGS84_ESQUARED:.006694379990141316,SIXTH:.16666666666666666,RA4:.04722222222222222,RA6:.022156084656084655,RV4:.06944444444444445,RV6:.04243827160493827,msfnz:function(t,s,i){var e=t*s;return i/Math.sqrt(1-e*e)},tsfnz:function(t,s,i){var e=t*i,a=.5*t;return e=Math.pow((1-e)/(1+e),a),Math.tan(.5*(this.HALF_PI-s))/e},phi2z:function(t,s){for(var i,e,a=.5*t,n=this.HALF_PI-2*Math.atan(s),r=0;15>=r;r++)if(i=t*Math.sin(n),e=this.HALF_PI-2*Math.atan(s*Math.pow((1-i)/(1+i),a))-n,n+=e,Math.abs(e)<=1e-10)return n;return-9999},qsfnz:function(t,s){var i;return t>1e-7?(i=t*s,(1-t*t)*(s/(1-i*i)-.5/t*Math.log((1-i)/(1+i)))):2*s},iqsfnz:function(s,i){var e=1-(1-s*s)/(2*s)*Math.log((1-s)/(1+s));if(Math.abs(Math.abs(i)-e)<1e-6)return 0>i?-1*t.HALF_PI:t.HALF_PI;for(var a,n,r,h,o=Math.asin(.5*i),l=0;30>l;l++)if(n=Math.sin(o),r=Math.cos(o),h=s*n,a=Math.pow(1-h*h,2)/(2*r)*(i/(1-s*s)-n/(1-h*h)+.5/s*Math.log((1-h)/(1+h))),o+=a,Math.abs(a)<=1e-10)return o;return 0/0},asinz:function(t){return Math.abs(t)>1&&(t=t>1?1:-1),Math.asin(t)},e0fn:function(t){return 1-.25*t*(1+t/16*(3+1.25*t))},e1fn:function(t){return.375*t*(1+.25*t*(1+.46875*t))},e2fn:function(t){return.05859375*t*t*(1+.75*t)},e3fn:function(t){return t*t*t*(35/3072)},mlfn:function(t,s,i,e,a){return t*a-s*Math.sin(2*a)+i*Math.sin(4*a)-e*Math.sin(6*a)},imlfn:function(t,s,i,e,a){var n,r;n=t/s;for(var h=0;15>h;h++)if(r=(t-(s*n-i*Math.sin(2*n)+e*Math.sin(4*n)-a*Math.sin(6*n)))/(s-2*i*Math.cos(2*n)+4*e*Math.cos(4*n)-6*a*Math.cos(6*n)),n+=r,Math.abs(r)<=1e-10)return n;return 0/0},srat:function(t,s){return Math.pow((1-t)/(1+t),s)},sign:function(t){return 0>t?-1:1},adjust_lon:function(t){return t=Math.abs(t)<this.PI?t:t-this.sign(t)*this.TWO_PI},adjust_lat:function(t){return t=Math.abs(t)<this.HALF_PI?t:t-this.sign(t)*this.PI},latiso:function(t,s,i){if(Math.abs(s)>this.HALF_PI)return Number.NaN;if(s===this.HALF_PI)return Number.POSITIVE_INFINITY;if(s===-1*this.HALF_PI)return Number.NEGATIVE_INFINITY;var e=t*i;return Math.log(Math.tan((this.HALF_PI+s)/2))+t*Math.log((1-e)/(1+e))/2},fL:function(t,s){return 2*Math.atan(t*Math.exp(s))-this.HALF_PI},invlatiso:function(t,s){var i=this.fL(1,s),e=0,a=0;do e=i,a=t*Math.sin(e),i=this.fL(Math.exp(t*Math.log((1+a)/(1-a))/2),s);while(Math.abs(i-e)>1e-12);return i},sinh:function(t){var s=Math.exp(t);return s=(s-1/s)/2},cosh:function(t){var s=Math.exp(t);return s=(s+1/s)/2},tanh:function(t){var s=Math.exp(t);return s=(s-1/s)/(s+1/s)},asinh:function(t){var s=t>=0?1:-1;return s*Math.log(Math.abs(t)+Math.sqrt(t*t+1))},acosh:function(t){return 2*Math.log(Math.sqrt((t+1)/2)+Math.sqrt((t-1)/2))},atanh:function(t){return Math.log((t-1)/(t+1))/2},gN:function(t,s,i){var e=s*i;return t/Math.sqrt(1-e*e)},pj_enfn:function(t){var s=[];s[0]=this.C00-t*(this.C02+t*(this.C04+t*(this.C06+t*this.C08))),s[1]=t*(this.C22-t*(this.C04+t*(this.C06+t*this.C08)));var i=t*t;return s[2]=i*(this.C44-t*(this.C46+t*this.C48)),i*=t,s[3]=i*(this.C66-t*this.C68),s[4]=i*t*this.C88,s},pj_mlfn:function(t,s,i,e){return i*=s,s*=s,e[0]*t-i*(e[1]+s*(e[2]+s*(e[3]+s*e[4])))},pj_inv_mlfn:function(s,i,e){for(var a=1/(1-i),n=s,r=t.MAX_ITER;r;--r){var h=Math.sin(n),o=1-i*h*h;if(o=(this.pj_mlfn(n,h,Math.cos(n),e)-s)*o*Math.sqrt(o)*a,n-=o,Math.abs(o)<t.EPSLN)return n}return n},nad_intr:function(t,s){var i,e={x:(t.x-1e-7)/s.del[0],y:(t.y-1e-7)/s.del[1]},a={x:Math.floor(e.x),y:Math.floor(e.y)},n={x:e.x-1*a.x,y:e.y-1*a.y},r={x:Number.NaN,y:Number.NaN};if(a.x<0){if(!(-1===a.x&&n.x>.99999999999))return r;a.x++,n.x=0}else if(i=a.x+1,i>=s.lim[0]){if(!(i===s.lim[0]&&n.x<1e-11))return r;a.x--,n.x=1}if(a.y<0){if(!(-1===a.y&&n.y>.99999999999))return r;a.y++,n.y=0}else if(i=a.y+1,i>=s.lim[1]){if(!(i===s.lim[1]&&n.y<1e-11))return r;a.y++,n.y=1}i=a.y*s.lim[0]+a.x;var h={x:s.cvs[i][0],y:s.cvs[i][1]};i++;var o={x:s.cvs[i][0],y:s.cvs[i][1]};i+=s.lim[0];var l={x:s.cvs[i][0],y:s.cvs[i][1]};i--;var u={x:s.cvs[i][0],y:s.cvs[i][1]},f=n.x*n.y,c=n.x*(1-n.y),d=(1-n.x)*(1-n.y),p=(1-n.x)*n.y;return r.x=d*h.x+c*o.x+p*u.x+f*l.x,r.y=d*h.y+c*o.y+p*u.y+f*l.y,r},nad_cvt:function(s,i,e){var a={x:Number.NaN,y:Number.NaN};if(isNaN(s.x))return a;var n={x:s.x,y:s.y};n.x-=e.ll[0],n.y-=e.ll[1],n.x=t.adjust_lon(n.x-t.PI)+t.PI;var r=t.nad_intr(n,e);if(i){if(isNaN(r.x))return a;r.x=n.x+r.x,r.y=n.y-r.y;var h,o,l=9,u=1e-12;do{if(o=t.nad_intr(r,e),isNaN(o.x)){this.reportError("Inverse grid shift iteration failed, presumably at grid edge.  Using first approximation.");break}h={x:r.x-o.x-n.x,y:r.y+o.y-n.y},r.x-=h.x,r.y-=h.y}while(l--&&Math.abs(h.x)>u&&Math.abs(h.y)>u);if(0>l)return this.reportError("Inverse grid shift iterator failed to converge."),a;a.x=t.adjust_lon(r.x+e.ll[0]),a.y=r.y+e.ll[1]}else isNaN(r.x)||(a.x=s.x-r.x,a.y=s.y+r.y);return a},C00:1,C02:.25,C04:.046875,C06:.01953125,C08:.01068115234375,C22:.75,C44:.46875,C46:.013020833333333334,C48:.007120768229166667,C66:.3645833333333333,C68:.005696614583333333,C88:.3076171875};return t}),define("proj4/constants",[],function(){var t={};return t.PrimeMeridian={greenwich:0,lisbon:-9.131906111111,paris:2.337229166667,bogota:-74.080916666667,madrid:-3.687938888889,rome:12.452333333333,bern:7.439583333333,jakarta:106.807719444444,ferro:-17.666666666667,brussels:4.367975,stockholm:18.058277777778,athens:23.7163375,oslo:10.722916666667},t.Ellipsoid={MERIT:{a:6378137,rf:298.257,ellipseName:"MERIT 1983"},SGS85:{a:6378136,rf:298.257,ellipseName:"Soviet Geodetic System 85"},GRS80:{a:6378137,rf:298.257222101,ellipseName:"GRS 1980(IUGG, 1980)"},IAU76:{a:6378140,rf:298.257,ellipseName:"IAU 1976"},airy:{a:6377563.396,b:6356256.91,ellipseName:"Airy 1830"},"APL4.":{a:6378137,rf:298.25,ellipseName:"Appl. Physics. 1965"},NWL9D:{a:6378145,rf:298.25,ellipseName:"Naval Weapons Lab., 1965"},mod_airy:{a:6377340.189,b:6356034.446,ellipseName:"Modified Airy"},andrae:{a:6377104.43,rf:300,ellipseName:"Andrae 1876 (Den., Iclnd.)"},aust_SA:{a:6378160,rf:298.25,ellipseName:"Australian Natl & S. Amer. 1969"},GRS67:{a:6378160,rf:298.247167427,ellipseName:"GRS 67(IUGG 1967)"},bessel:{a:6377397.155,rf:299.1528128,ellipseName:"Bessel 1841"},bess_nam:{a:6377483.865,rf:299.1528128,ellipseName:"Bessel 1841 (Namibia)"},clrk66:{a:6378206.4,b:6356583.8,ellipseName:"Clarke 1866"},clrk80:{a:6378249.145,rf:293.4663,ellipseName:"Clarke 1880 mod."},clrk58:{a:6378293.645208759,rf:294.2606763692654,ellipseName:"Clarke 1858"},CPM:{a:6375738.7,rf:334.29,ellipseName:"Comm. des Poids et Mesures 1799"},delmbr:{a:6376428,rf:311.5,ellipseName:"Delambre 1810 (Belgium)"},engelis:{a:6378136.05,rf:298.2566,ellipseName:"Engelis 1985"},evrst30:{a:6377276.345,rf:300.8017,ellipseName:"Everest 1830"},evrst48:{a:6377304.063,rf:300.8017,ellipseName:"Everest 1948"},evrst56:{a:6377301.243,rf:300.8017,ellipseName:"Everest 1956"},evrst69:{a:6377295.664,rf:300.8017,ellipseName:"Everest 1969"},evrstSS:{a:6377298.556,rf:300.8017,ellipseName:"Everest (Sabah & Sarawak)"},fschr60:{a:6378166,rf:298.3,ellipseName:"Fischer (Mercury Datum) 1960"},fschr60m:{a:6378155,rf:298.3,ellipseName:"Fischer 1960"},fschr68:{a:6378150,rf:298.3,ellipseName:"Fischer 1968"},helmert:{a:6378200,rf:298.3,ellipseName:"Helmert 1906"},hough:{a:6378270,rf:297,ellipseName:"Hough"},intl:{a:6378388,rf:297,ellipseName:"International 1909 (Hayford)"},kaula:{a:6378163,rf:298.24,ellipseName:"Kaula 1961"},lerch:{a:6378139,rf:298.257,ellipseName:"Lerch 1979"},mprts:{a:6397300,rf:191,ellipseName:"Maupertius 1738"},new_intl:{a:6378157.5,b:6356772.2,ellipseName:"New International 1967"},plessis:{a:6376523,rf:6355863,ellipseName:"Plessis 1817 (France)"},krass:{a:6378245,rf:298.3,ellipseName:"Krassovsky, 1942"},SEasia:{a:6378155,b:6356773.3205,ellipseName:"Southeast Asia"},walbeck:{a:6376896,b:6355834.8467,ellipseName:"Walbeck"},WGS60:{a:6378165,rf:298.3,ellipseName:"WGS 60"},WGS66:{a:6378145,rf:298.25,ellipseName:"WGS 66"},WGS72:{a:6378135,rf:298.26,ellipseName:"WGS 72"},WGS84:{a:6378137,rf:298.257223563,ellipseName:"WGS 84"},sphere:{a:6370997,b:6370997,ellipseName:"Normal Sphere (r=6370997)"}},t.Datum={wgs84:{towgs84:"0,0,0",ellipse:"WGS84",datumName:"WGS84"},ch1903:{towgs84:"674.374,15.056,405.346",ellipse:"bessel",datumName:"swiss"},ggrs87:{towgs84:"-199.87,74.79,246.62",ellipse:"GRS80",datumName:"Greek_Geodetic_Reference_System_1987"},nad83:{towgs84:"0,0,0",ellipse:"GRS80",datumName:"North_American_Datum_1983"},nad27:{nadgrids:"@conus,@alaska,@ntv2_0.gsb,@ntv1_can.dat",ellipse:"clrk66",datumName:"North_American_Datum_1927"},potsdam:{towgs84:"606.0,23.0,413.0",ellipse:"bessel",datumName:"Potsdam Rauenberg 1950 DHDN"},carthage:{towgs84:"-263.0,6.0,431.0",ellipse:"clark80",datumName:"Carthage 1934 Tunisia"},hermannskogel:{towgs84:"653.0,-212.0,449.0",ellipse:"bessel",datumName:"Hermannskogel"},ire65:{towgs84:"482.530,-130.596,564.557,-1.042,-0.214,-0.631,8.15",ellipse:"mod_airy",datumName:"Ireland 1965"},rassadiran:{towgs84:"-133.63,-157.5,-158.62",ellipse:"intl",datumName:"Rassadiran"},nzgd49:{towgs84:"59.47,-5.04,187.44,0.47,-0.1,1.024,-4.5993",ellipse:"intl",datumName:"New Zealand Geodetic Datum 1949"},osgb36:{towgs84:"446.448,-125.157,542.060,0.1502,0.2470,0.8421,-20.4894",ellipse:"airy",datumName:"Airy 1830"},s_jtsk:{towgs84:"589,76,480",ellipse:"bessel",datumName:"S-JTSK (Ferro)"},beduaram:{towgs84:"-106,-87,188",ellipse:"clrk80",datumName:"Beduaram"},gunung_segara:{towgs84:"-403,684,41",ellipse:"bessel",datumName:"Gunung Segara Jakarta"}},t.Datum.OSB36=t.Datum.OSGB36,t.wktProjections={"Lambert Tangential Conformal Conic Projection":"lcc",Lambert_Conformal_Conic:"lcc",Lambert_Conformal_Conic_2SP:"lcc",Mercator:"merc","Popular Visualisation Pseudo Mercator":"merc",Mercator_1SP:"merc",Transverse_Mercator:"tmerc","Transverse Mercator":"tmerc","Lambert Azimuthal Equal Area":"laea","Universal Transverse Mercator System":"utm",Hotine_Oblique_Mercator:"omerc","Hotine Oblique Mercator":"omerc",Hotine_Oblique_Mercator_Azimuth_Natural_Origin:"omerc",Hotine_Oblique_Mercator_Azimuth_Center:"omerc",Van_der_Grinten_I:"vandg",VanDerGrinten:"vandg",Stereographic_North_Pole:"sterea",Oblique_Stereographic:"sterea",Polar_Stereographic:"sterea",Polyconic:"poly",New_Zealand_Map_Grid:"nzmg",Miller_Cylindrical:"mill",Krovak:"krovak",Equirectangular:"eqc",Equidistant_Cylindrical:"eqc",Cassini:"cass",Cassini_Soldner:"cass",Azimuthal_Equidistant:"aeqd",Albers_Conic_Equal_Area:"aea",Albers:"aea",Mollweide:"moll",Lambert_Azimuthal_Equal_Area:"laea",Sinusoidal:"sinu",Equidistant_Conic:"eqdc"},t.grids={"null":{ll:[-3.14159265,-1.57079633],del:[3.14159265,1.57079633],lim:[3,3],count:9,cvs:[[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]]}},t}),define("proj4/global",[],function(){return function(t){t("WGS84","+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees"),t("EPSG:4326","+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees"),t("EPSG:4269","+title=NAD83 (long/lat) +proj=longlat +a=6378137.0 +b=6356752.31414036 +ellps=GRS80 +datum=NAD83 +units=degrees"),t("EPSG:3857","+title=WGS 84 / Pseudo-Mercator +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +no_defs"),t["EPSG:3785"]=t["EPSG:3857"],t.GOOGLE=t["EPSG:3857"],t["EPSG:900913"]=t["EPSG:3857"],t["EPSG:102113"]=t["EPSG:3857"]}}),define("proj4/projString",["./common","./constants"],function(t,s){return function(i){var e={},a={};i.split("+").map(function(t){return t.trim()}).filter(function(t){return t}).forEach(function(t){var s=t.split("=");"@null"!==s[1]&&(s.push(!0),a[s[0].toLowerCase()]=s[1])});var n,r,h,o={proj:"projName",datum:"datumCode",rf:function(t){e.rf=parseFloat(t,10)},lat_0:function(s){e.lat0=s*t.D2R},lat_1:function(s){e.lat1=s*t.D2R},lat_2:function(s){e.lat2=s*t.D2R},lat_ts:function(s){e.lat_ts=s*t.D2R},lon_0:function(s){e.long0=s*t.D2R},lon_1:function(s){e.long1=s*t.D2R},lon_2:function(s){e.long2=s*t.D2R},alpha:function(s){e.alpha=parseFloat(s)*t.D2R},lonc:function(s){e.longc=s*t.D2R},x_0:function(t){e.x0=parseFloat(t,10)},y_0:function(t){e.y0=parseFloat(t,10)},k_0:function(t){e.k0=parseFloat(t,10)},k:function(t){e.k0=parseFloat(t,10)},r_a:function(){e.R_A=!0},zone:function(t){e.zone=parseInt(t,10)},south:function(){e.utmSouth=!0},towgs84:function(t){e.datum_params=t.split(",").map(function(t){return parseFloat(t,10)})},to_meter:function(t){e.to_meter=parseFloat(t,10)},from_greenwich:function(s){e.from_greenwich=s*t.D2R},pm:function(i){e.from_greenwich=(s.PrimeMeridian[i]?s.PrimeMeridian[i]:parseFloat(i,10))*t.D2R},axis:function(t){var s="ewnsud";3===t.length&&-1!==s.indexOf(t.substr(0,1))&&-1!==s.indexOf(t.substr(1,1))&&-1!==s.indexOf(t.substr(2,1))&&(e.axis=t)}};for(n in a)r=a[n],n in o?(h=o[n],"function"==typeof h?h(r):e[h]=r):e[n]=r;return e}}),define("proj4/defs",["./common","./constants","./global","./projString"],function(t,s,i,e){function a(t){var s=this;if(2===arguments.length)a[t]=e(arguments[1]);else if(1===arguments.length)return Array.isArray(t)?t.map(function(t){Array.isArray(t)?a.apply(s,t):a(t)}):("string"==typeof t||("EPSG"in t?a["EPSG:"+t.EPSG]=t:"ESRI"in t?a["ESRI:"+t.ESRI]=t:"IAU2000"in t?a["IAU2000:"+t.IAU2000]=t:console.log(t)),void 0)}return i(a),a}),define("proj4/datum",["./common"],function(t){var s=function(i){if(!(this instanceof s))return new s(i);if(this.datum_type=t.PJD_WGS84,i){if(i.datumCode&&"none"===i.datumCode&&(this.datum_type=t.PJD_NODATUM),i.datum_params){for(var e=0;e<i.datum_params.length;e++)i.datum_params[e]=parseFloat(i.datum_params[e]);(0!==i.datum_params[0]||0!==i.datum_params[1]||0!==i.datum_params[2])&&(this.datum_type=t.PJD_3PARAM),i.datum_params.length>3&&(0!==i.datum_params[3]||0!==i.datum_params[4]||0!==i.datum_params[5]||0!==i.datum_params[6])&&(this.datum_type=t.PJD_7PARAM,i.datum_params[3]*=t.SEC_TO_RAD,i.datum_params[4]*=t.SEC_TO_RAD,i.datum_params[5]*=t.SEC_TO_RAD,i.datum_params[6]=i.datum_params[6]/1e6+1)}this.datum_type=i.grids?t.PJD_GRIDSHIFT:this.datum_type,this.a=i.a,this.b=i.b,this.es=i.es,this.ep2=i.ep2,this.datum_params=i.datum_params,this.datum_type===t.PJD_GRIDSHIFT&&(this.grids=i.grids)}};return s.prototype={compare_datums:function(s){return this.datum_type!==s.datum_type?!1:this.a!==s.a||Math.abs(this.es-s.es)>5e-11?!1:this.datum_type===t.PJD_3PARAM?this.datum_params[0]===s.datum_params[0]&&this.datum_params[1]===s.datum_params[1]&&this.datum_params[2]===s.datum_params[2]:this.datum_type===t.PJD_7PARAM?this.datum_params[0]===s.datum_params[0]&&this.datum_params[1]===s.datum_params[1]&&this.datum_params[2]===s.datum_params[2]&&this.datum_params[3]===s.datum_params[3]&&this.datum_params[4]===s.datum_params[4]&&this.datum_params[5]===s.datum_params[5]&&this.datum_params[6]===s.datum_params[6]:this.datum_type===t.PJD_GRIDSHIFT||s.datum_type===t.PJD_GRIDSHIFT?this.nadgrids===s.nadgrids:!0},geodetic_to_geocentric:function(s){var i,e,a,n,r,h,o,l=s.x,u=s.y,f=s.z?s.z:0,c=0;if(u<-t.HALF_PI&&u>-1.001*t.HALF_PI)u=-t.HALF_PI;else if(u>t.HALF_PI&&u<1.001*t.HALF_PI)u=t.HALF_PI;else if(u<-t.HALF_PI||u>t.HALF_PI)return null;return l>t.PI&&(l-=2*t.PI),r=Math.sin(u),o=Math.cos(u),h=r*r,n=this.a/Math.sqrt(1-this.es*h),i=(n+f)*o*Math.cos(l),e=(n+f)*o*Math.sin(l),a=(n*(1-this.es)+f)*r,s.x=i,s.y=e,s.z=a,c},geocentric_to_geodetic:function(s){var i,e,a,n,r,h,o,l,u,f,c,d,p,m,M,g,_,y=1e-12,v=y*y,b=30,x=s.x,C=s.y,P=s.z?s.z:0;if(p=!1,i=Math.sqrt(x*x+C*C),e=Math.sqrt(x*x+C*C+P*P),i/this.a<y){if(p=!0,M=0,e/this.a<y)return g=t.HALF_PI,_=-this.b,void 0}else M=Math.atan2(C,x);a=P/e,n=i/e,r=1/Math.sqrt(1-this.es*(2-this.es)*n*n),l=n*(1-this.es)*r,u=a*r,m=0;do m++,o=this.a/Math.sqrt(1-this.es*u*u),_=i*l+P*u-o*(1-this.es*u*u),h=this.es*o/(o+_),r=1/Math.sqrt(1-h*(2-h)*n*n),f=n*(1-h)*r,c=a*r,d=c*l-f*u,l=f,u=c;while(d*d>v&&b>m);return g=Math.atan(c/Math.abs(f)),s.x=M,s.y=g,s.z=_,s},geocentric_to_geodetic_noniter:function(s){var i,e,a,n,r,h,o,l,u,f,c,d,p,m,M,g,_,y=s.x,v=s.y,b=s.z?s.z:0;if(y=parseFloat(y),v=parseFloat(v),b=parseFloat(b),_=!1,0!==y)i=Math.atan2(v,y);else if(v>0)i=t.HALF_PI;else if(0>v)i=-t.HALF_PI;else if(_=!0,i=0,b>0)e=t.HALF_PI;else{if(!(0>b))return e=t.HALF_PI,a=-this.b,void 0;e=-t.HALF_PI}return r=y*y+v*v,n=Math.sqrt(r),h=b*t.AD_C,l=Math.sqrt(h*h+r),f=h/l,d=n/l,c=f*f*f,o=b+this.b*this.ep2*c,g=n-this.a*this.es*d*d*d,u=Math.sqrt(o*o+g*g),p=o/u,m=g/u,M=this.a/Math.sqrt(1-this.es*p*p),a=m>=t.COS_67P5?n/m-M:m<=-t.COS_67P5?n/-m-M:b/p+M*(this.es-1),_===!1&&(e=Math.atan(p/m)),s.x=i,s.y=e,s.z=a,s},geocentric_to_wgs84:function(s){if(this.datum_type===t.PJD_3PARAM)s.x+=this.datum_params[0],s.y+=this.datum_params[1],s.z+=this.datum_params[2];else if(this.datum_type===t.PJD_7PARAM){var i=this.datum_params[0],e=this.datum_params[1],a=this.datum_params[2],n=this.datum_params[3],r=this.datum_params[4],h=this.datum_params[5],o=this.datum_params[6],l=o*(s.x-h*s.y+r*s.z)+i,u=o*(h*s.x+s.y-n*s.z)+e,f=o*(-r*s.x+n*s.y+s.z)+a;s.x=l,s.y=u,s.z=f}},geocentric_from_wgs84:function(s){if(this.datum_type===t.PJD_3PARAM)s.x-=this.datum_params[0],s.y-=this.datum_params[1],s.z-=this.datum_params[2];else if(this.datum_type===t.PJD_7PARAM){var i=this.datum_params[0],e=this.datum_params[1],a=this.datum_params[2],n=this.datum_params[3],r=this.datum_params[4],h=this.datum_params[5],o=this.datum_params[6],l=(s.x-i)/o,u=(s.y-e)/o,f=(s.z-a)/o;s.x=l+h*u-r*f,s.y=-h*l+u+n*f,s.z=r*l-n*u+f}}},s}),define("proj4/projCode/longlat",["require","exports","module"],function(t,s){function i(t){return t}s.init=function(){},s.forward=i,s.inverse=i}),define("proj4/projCode/tmerc",["../common"],function(t){return{init:function(){this.e0=t.e0fn(this.es),this.e1=t.e1fn(this.es),this.e2=t.e2fn(this.es),this.e3=t.e3fn(this.es),this.ml0=this.a*t.mlfn(this.e0,this.e1,this.e2,this.e3,this.lat0)},forward:function(s){var i,e,a,n=s.x,r=s.y,h=t.adjust_lon(n-this.long0),o=Math.sin(r),l=Math.cos(r);if(this.sphere){var u=l*Math.sin(h);if(Math.abs(Math.abs(u)-1)<1e-10)return 93;e=.5*this.a*this.k0*Math.log((1+u)/(1-u)),i=Math.acos(l*Math.cos(h)/Math.sqrt(1-u*u)),0>r&&(i=-i),a=this.a*this.k0*(i-this.lat0)}else{var f=l*h,c=Math.pow(f,2),d=this.ep2*Math.pow(l,2),p=Math.tan(r),m=Math.pow(p,2);i=1-this.es*Math.pow(o,2);var M=this.a/Math.sqrt(i),g=this.a*t.mlfn(this.e0,this.e1,this.e2,this.e3,r);e=this.k0*M*f*(1+c/6*(1-m+d+c/20*(5-18*m+Math.pow(m,2)+72*d-58*this.ep2)))+this.x0,a=this.k0*(g-this.ml0+M*p*c*(.5+c/24*(5-m+9*d+4*Math.pow(d,2)+c/30*(61-58*m+Math.pow(m,2)+600*d-330*this.ep2))))+this.y0}return s.x=e,s.y=a,s},inverse:function(s){var i,e,a,n,r,h,o=6;if(this.sphere){var l=Math.exp(s.x/(this.a*this.k0)),u=.5*(l-1/l),f=this.lat0+s.y/(this.a*this.k0),c=Math.cos(f);i=Math.sqrt((1-c*c)/(1+u*u)),r=t.asinz(i),0>f&&(r=-r),h=0===u&&0===c?this.long0:t.adjust_lon(Math.atan2(u,c)+this.long0)}else{var d=s.x-this.x0,p=s.y-this.y0;for(i=(this.ml0+p/this.k0)/this.a,e=i,n=0;!0&&(a=(i+this.e1*Math.sin(2*e)-this.e2*Math.sin(4*e)+this.e3*Math.sin(6*e))/this.e0-e,e+=a,!(Math.abs(a)<=t.EPSLN));n++)if(n>=o)return 95;if(Math.abs(e)<t.HALF_PI){var m=Math.sin(e),M=Math.cos(e),g=Math.tan(e),_=this.ep2*Math.pow(M,2),y=Math.pow(_,2),v=Math.pow(g,2),b=Math.pow(v,2);i=1-this.es*Math.pow(m,2);var x=this.a/Math.sqrt(i),C=x*(1-this.es)/i,P=d/(x*this.k0),S=Math.pow(P,2);r=e-x*g*S/C*(.5-S/24*(5+3*v+10*_-4*y-9*this.ep2-S/30*(61+90*v+298*_+45*b-252*this.ep2-3*y))),h=t.adjust_lon(this.long0+P*(1-S/6*(1+2*v+_-S/20*(5-2*_+28*v-3*y+8*this.ep2+24*b)))/M)}else r=t.HALF_PI*t.sign(p),h=this.long0}return s.x=h,s.y=r,s}}}),define("proj4/projCode/utm",["../common","./tmerc"],function(t,s){return{dependsOn:"tmerc",init:function(){this.zone&&(this.lat0=0,this.long0=(6*Math.abs(this.zone)-183)*t.D2R,this.x0=5e5,this.y0=this.utmSouth?1e7:0,this.k0=.9996,s.init.apply(this),this.forward=s.forward,this.inverse=s.inverse)}}}),define("proj4/projCode/gauss",["../common"],function(t){return{init:function(){var s=Math.sin(this.lat0),i=Math.cos(this.lat0);i*=i,this.rc=Math.sqrt(1-this.es)/(1-this.es*s*s),this.C=Math.sqrt(1+this.es*i*i/(1-this.es)),this.phic0=Math.asin(s/this.C),this.ratexp=.5*this.C*this.e,this.K=Math.tan(.5*this.phic0+t.FORTPI)/(Math.pow(Math.tan(.5*this.lat0+t.FORTPI),this.C)*t.srat(this.e*s,this.ratexp))},forward:function(s){var i=s.x,e=s.y;return s.y=2*Math.atan(this.K*Math.pow(Math.tan(.5*e+t.FORTPI),this.C)*t.srat(this.e*Math.sin(e),this.ratexp))-t.HALF_PI,s.x=this.C*i,s},inverse:function(s){for(var i=1e-14,e=s.x/this.C,a=s.y,n=Math.pow(Math.tan(.5*a+t.FORTPI)/this.K,1/this.C),r=t.MAX_ITER;r>0&&(a=2*Math.atan(n*t.srat(this.e*Math.sin(s.y),-.5*this.e))-t.HALF_PI,!(Math.abs(a-s.y)<i));--r)s.y=a;return r?(s.x=e,s.y=a,s):null}}}),define("proj4/projCode/sterea",["../common","./gauss"],function(t,s){return{init:function(){s.init.apply(this),this.rc&&(this.sinc0=Math.sin(this.phic0),this.cosc0=Math.cos(this.phic0),this.R2=2*this.rc,this.title||(this.title="Oblique Stereographic Alternative"))},forward:function(i){var e,a,n,r;return i.x=t.adjust_lon(i.x-this.long0),s.forward.apply(this,[i]),e=Math.sin(i.y),a=Math.cos(i.y),n=Math.cos(i.x),r=this.k0*this.R2/(1+this.sinc0*e+this.cosc0*a*n),i.x=r*a*Math.sin(i.x),i.y=r*(this.cosc0*e-this.sinc0*a*n),i.x=this.a*i.x+this.x0,i.y=this.a*i.y+this.y0,i},inverse:function(i){var e,a,n,r,h;if(i.x=(i.x-this.x0)/this.a,i.y=(i.y-this.y0)/this.a,i.x/=this.k0,i.y/=this.k0,h=Math.sqrt(i.x*i.x+i.y*i.y)){var o=2*Math.atan2(h,this.R2);e=Math.sin(o),a=Math.cos(o),r=Math.asin(a*this.sinc0+i.y*e*this.cosc0/h),n=Math.atan2(i.x*e,h*this.cosc0*a-i.y*this.sinc0*e)}else r=this.phic0,n=0;return i.x=n,i.y=r,s.inverse.apply(this,[i]),i.x=t.adjust_lon(i.x+this.long0),i}}}),define("proj4/projCode/somerc",[],function(){return{init:function(){var t=this.lat0;this.lambda0=this.long0;var s=Math.sin(t),i=this.a,e=this.rf,a=1/e,n=2*a-Math.pow(a,2),r=this.e=Math.sqrt(n);this.R=this.k0*i*Math.sqrt(1-n)/(1-n*Math.pow(s,2)),this.alpha=Math.sqrt(1+n/(1-n)*Math.pow(Math.cos(t),4)),this.b0=Math.asin(s/this.alpha);var h=Math.log(Math.tan(Math.PI/4+this.b0/2)),o=Math.log(Math.tan(Math.PI/4+t/2)),l=Math.log((1+r*s)/(1-r*s));this.K=h-this.alpha*o+this.alpha*r/2*l},forward:function(t){var s=Math.log(Math.tan(Math.PI/4-t.y/2)),i=this.e/2*Math.log((1+this.e*Math.sin(t.y))/(1-this.e*Math.sin(t.y))),e=-this.alpha*(s+i)+this.K,a=2*(Math.atan(Math.exp(e))-Math.PI/4),n=this.alpha*(t.x-this.lambda0),r=Math.atan(Math.sin(n)/(Math.sin(this.b0)*Math.tan(a)+Math.cos(this.b0)*Math.cos(n))),h=Math.asin(Math.cos(this.b0)*Math.sin(a)-Math.sin(this.b0)*Math.cos(a)*Math.cos(n));return t.y=this.R/2*Math.log((1+Math.sin(h))/(1-Math.sin(h)))+this.y0,t.x=this.R*r+this.x0,t},inverse:function(t){for(var s=t.x-this.x0,i=t.y-this.y0,e=s/this.R,a=2*(Math.atan(Math.exp(i/this.R))-Math.PI/4),n=Math.asin(Math.cos(this.b0)*Math.sin(a)+Math.sin(this.b0)*Math.cos(a)*Math.cos(e)),r=Math.atan(Math.sin(e)/(Math.cos(this.b0)*Math.cos(e)-Math.sin(this.b0)*Math.tan(a))),h=this.lambda0+r/this.alpha,o=0,l=n,u=-1e3,f=0;Math.abs(l-u)>1e-7;){if(++f>20)return;o=1/this.alpha*(Math.log(Math.tan(Math.PI/4+n/2))-this.K)+this.e*Math.log(Math.tan(Math.PI/4+Math.asin(this.e*Math.sin(l))/2)),u=l,l=2*Math.atan(Math.exp(o))-Math.PI/2}return t.x=h,t.y=l,t}}}),define("proj4/projCode/omerc",["../common"],function(t){return{init:function(){this.no_off=this.no_off||!1,this.no_rot=this.no_rot||!1,isNaN(this.k0)&&(this.k0=1);
-var s=Math.sin(this.lat0),i=Math.cos(this.lat0),e=this.e*s;this.bl=Math.sqrt(1+this.es/(1-this.es)*Math.pow(i,4)),this.al=this.a*this.bl*this.k0*Math.sqrt(1-this.es)/(1-e*e);var a=t.tsfnz(this.e,this.lat0,s),n=this.bl/i*Math.sqrt((1-this.es)/(1-e*e));1>n*n&&(n=1);var r,h;if(isNaN(this.longc)){var o=t.tsfnz(this.e,this.lat1,Math.sin(this.lat1)),l=t.tsfnz(this.e,this.lat2,Math.sin(this.lat2));this.el=this.lat0>=0?(n+Math.sqrt(n*n-1))*Math.pow(a,this.bl):(n-Math.sqrt(n*n-1))*Math.pow(a,this.bl);var u=Math.pow(o,this.bl),f=Math.pow(l,this.bl);r=this.el/u,h=.5*(r-1/r);var c=(this.el*this.el-f*u)/(this.el*this.el+f*u),d=(f-u)/(f+u),p=t.adjust_lon(this.long1-this.long2);this.long0=.5*(this.long1+this.long2)-Math.atan(c*Math.tan(.5*this.bl*p)/d)/this.bl,this.long0=t.adjust_lon(this.long0);var m=t.adjust_lon(this.long1-this.long0);this.gamma0=Math.atan(Math.sin(this.bl*m)/h),this.alpha=Math.asin(n*Math.sin(this.gamma0))}else r=this.lat0>=0?n+Math.sqrt(n*n-1):n-Math.sqrt(n*n-1),this.el=r*Math.pow(a,this.bl),h=.5*(r-1/r),this.gamma0=Math.asin(Math.sin(this.alpha)/n),this.long0=this.longc-Math.asin(h*Math.tan(this.gamma0))/this.bl;this.uc=this.no_off?0:this.lat0>=0?this.al/this.bl*Math.atan2(Math.sqrt(n*n-1),Math.cos(this.alpha)):-1*this.al/this.bl*Math.atan2(Math.sqrt(n*n-1),Math.cos(this.alpha))},forward:function(s){var i,e,a,n=s.x,r=s.y,h=t.adjust_lon(n-this.long0);if(Math.abs(Math.abs(r)-t.HALF_PI)<=t.EPSLN)a=r>0?-1:1,e=this.al/this.bl*Math.log(Math.tan(t.FORTPI+.5*a*this.gamma0)),i=-1*a*t.HALF_PI*this.al/this.bl;else{var o=t.tsfnz(this.e,r,Math.sin(r)),l=this.el/Math.pow(o,this.bl),u=.5*(l-1/l),f=.5*(l+1/l),c=Math.sin(this.bl*h),d=(u*Math.sin(this.gamma0)-c*Math.cos(this.gamma0))/f;e=Math.abs(Math.abs(d)-1)<=t.EPSLN?Number.POSITIVE_INFINITY:.5*this.al*Math.log((1-d)/(1+d))/this.bl,i=Math.abs(Math.cos(this.bl*h))<=t.EPSLN?this.al*this.bl*h:this.al*Math.atan2(u*Math.cos(this.gamma0)+c*Math.sin(this.gamma0),Math.cos(this.bl*h))/this.bl}return this.no_rot?(s.x=this.x0+i,s.y=this.y0+e):(i-=this.uc,s.x=this.x0+e*Math.cos(this.alpha)+i*Math.sin(this.alpha),s.y=this.y0+i*Math.cos(this.alpha)-e*Math.sin(this.alpha)),s},inverse:function(s){var i,e;this.no_rot?(e=s.y-this.y0,i=s.x-this.x0):(e=(s.x-this.x0)*Math.cos(this.alpha)-(s.y-this.y0)*Math.sin(this.alpha),i=(s.y-this.y0)*Math.cos(this.alpha)+(s.x-this.x0)*Math.sin(this.alpha),i+=this.uc);var a=Math.exp(-1*this.bl*e/this.al),n=.5*(a-1/a),r=.5*(a+1/a),h=Math.sin(this.bl*i/this.al),o=(h*Math.cos(this.gamma0)+n*Math.sin(this.gamma0))/r,l=Math.pow(this.el/Math.sqrt((1+o)/(1-o)),1/this.bl);return Math.abs(o-1)<t.EPSLN?(s.x=this.long0,s.y=t.HALF_PI):Math.abs(o+1)<t.EPSLN?(s.x=this.long0,s.y=-1*t.HALF_PI):(s.y=t.phi2z(this.e,l),s.x=t.adjust_lon(this.long0-Math.atan2(n*Math.cos(this.gamma0)-h*Math.sin(this.gamma0),Math.cos(this.bl*i/this.al))/this.bl)),s}}}),define("proj4/projCode/lcc",["../common"],function(t){return{init:function(){if(this.lat2||(this.lat2=this.lat1),this.k0||(this.k0=1),!(Math.abs(this.lat1+this.lat2)<t.EPSLN)){var s=this.b/this.a;this.e=Math.sqrt(1-s*s);var i=Math.sin(this.lat1),e=Math.cos(this.lat1),a=t.msfnz(this.e,i,e),n=t.tsfnz(this.e,this.lat1,i),r=Math.sin(this.lat2),h=Math.cos(this.lat2),o=t.msfnz(this.e,r,h),l=t.tsfnz(this.e,this.lat2,r),u=t.tsfnz(this.e,this.lat0,Math.sin(this.lat0));this.ns=Math.abs(this.lat1-this.lat2)>t.EPSLN?Math.log(a/o)/Math.log(n/l):i,isNaN(this.ns)&&(this.ns=i),this.f0=a/(this.ns*Math.pow(n,this.ns)),this.rh=this.a*this.f0*Math.pow(u,this.ns),this.title||(this.title="Lambert Conformal Conic")}},forward:function(s){var i=s.x,e=s.y;Math.abs(2*Math.abs(e)-t.PI)<=t.EPSLN&&(e=t.sign(e)*(t.HALF_PI-2*t.EPSLN));var a,n,r=Math.abs(Math.abs(e)-t.HALF_PI);if(r>t.EPSLN)a=t.tsfnz(this.e,e,Math.sin(e)),n=this.a*this.f0*Math.pow(a,this.ns);else{if(r=e*this.ns,0>=r)return null;n=0}var h=this.ns*t.adjust_lon(i-this.long0);return s.x=this.k0*n*Math.sin(h)+this.x0,s.y=this.k0*(this.rh-n*Math.cos(h))+this.y0,s},inverse:function(s){var i,e,a,n,r,h=(s.x-this.x0)/this.k0,o=this.rh-(s.y-this.y0)/this.k0;this.ns>0?(i=Math.sqrt(h*h+o*o),e=1):(i=-Math.sqrt(h*h+o*o),e=-1);var l=0;if(0!==i&&(l=Math.atan2(e*h,e*o)),0!==i||this.ns>0){if(e=1/this.ns,a=Math.pow(i/(this.a*this.f0),e),n=t.phi2z(this.e,a),-9999===n)return null}else n=-t.HALF_PI;return r=t.adjust_lon(l/this.ns+this.long0),s.x=r,s.y=n,s}}}),define("proj4/projCode/krovak",["../common"],function(t){return{init:function(){this.a=6377397.155,this.es=.006674372230614,this.e=Math.sqrt(this.es),this.lat0||(this.lat0=.863937979737193),this.long0||(this.long0=.4334234309119251),this.k0||(this.k0=.9999),this.s45=.785398163397448,this.s90=2*this.s45,this.fi0=this.lat0,this.e2=this.es,this.e=Math.sqrt(this.e2),this.alfa=Math.sqrt(1+this.e2*Math.pow(Math.cos(this.fi0),4)/(1-this.e2)),this.uq=1.04216856380474,this.u0=Math.asin(Math.sin(this.fi0)/this.alfa),this.g=Math.pow((1+this.e*Math.sin(this.fi0))/(1-this.e*Math.sin(this.fi0)),this.alfa*this.e/2),this.k=Math.tan(this.u0/2+this.s45)/Math.pow(Math.tan(this.fi0/2+this.s45),this.alfa)*this.g,this.k1=this.k0,this.n0=this.a*Math.sqrt(1-this.e2)/(1-this.e2*Math.pow(Math.sin(this.fi0),2)),this.s0=1.37008346281555,this.n=Math.sin(this.s0),this.ro0=this.k1*this.n0/Math.tan(this.s0),this.ad=this.s90-this.uq},forward:function(s){var i,e,a,n,r,h,o,l=s.x,u=s.y,f=t.adjust_lon(l-this.long0);return i=Math.pow((1+this.e*Math.sin(u))/(1-this.e*Math.sin(u)),this.alfa*this.e/2),e=2*(Math.atan(this.k*Math.pow(Math.tan(u/2+this.s45),this.alfa)/i)-this.s45),a=-f*this.alfa,n=Math.asin(Math.cos(this.ad)*Math.sin(e)+Math.sin(this.ad)*Math.cos(e)*Math.cos(a)),r=Math.asin(Math.cos(e)*Math.sin(a)/Math.cos(n)),h=this.n*r,o=this.ro0*Math.pow(Math.tan(this.s0/2+this.s45),this.n)/Math.pow(Math.tan(n/2+this.s45),this.n),s.y=o*Math.cos(h)/1,s.x=o*Math.sin(h)/1,this.czech||(s.y*=-1,s.x*=-1),s},inverse:function(t){var s,i,e,a,n,r,h,o,l=t.x;t.x=t.y,t.y=l,this.czech||(t.y*=-1,t.x*=-1),r=Math.sqrt(t.x*t.x+t.y*t.y),n=Math.atan2(t.y,t.x),a=n/Math.sin(this.s0),e=2*(Math.atan(Math.pow(this.ro0/r,1/this.n)*Math.tan(this.s0/2+this.s45))-this.s45),s=Math.asin(Math.cos(this.ad)*Math.sin(e)-Math.sin(this.ad)*Math.cos(e)*Math.cos(a)),i=Math.asin(Math.cos(e)*Math.sin(a)/Math.cos(s)),t.x=this.long0-i/this.alfa,h=s,o=0;var u=0;do t.y=2*(Math.atan(Math.pow(this.k,-1/this.alfa)*Math.pow(Math.tan(s/2+this.s45),1/this.alfa)*Math.pow((1+this.e*Math.sin(h))/(1-this.e*Math.sin(h)),this.e/2))-this.s45),Math.abs(h-t.y)<1e-10&&(o=1),h=t.y,u+=1;while(0===o&&15>u);return u>=15?null:t}}}),define("proj4/projCode/cass",["../common"],function(t){return{init:function(){this.sphere||(this.e0=t.e0fn(this.es),this.e1=t.e1fn(this.es),this.e2=t.e2fn(this.es),this.e3=t.e3fn(this.es),this.ml0=this.a*t.mlfn(this.e0,this.e1,this.e2,this.e3,this.lat0))},forward:function(s){var i,e,a=s.x,n=s.y;if(a=t.adjust_lon(a-this.long0),this.sphere)i=this.a*Math.asin(Math.cos(n)*Math.sin(a)),e=this.a*(Math.atan2(Math.tan(n),Math.cos(a))-this.lat0);else{var r=Math.sin(n),h=Math.cos(n),o=t.gN(this.a,this.e,r),l=Math.tan(n)*Math.tan(n),u=a*Math.cos(n),f=u*u,c=this.es*h*h/(1-this.es),d=this.a*t.mlfn(this.e0,this.e1,this.e2,this.e3,n);i=o*u*(1-f*l*(1/6-(8-l+8*c)*f/120)),e=d-this.ml0+o*r/h*f*(.5+(5-l+6*c)*f/24)}return s.x=i+this.x0,s.y=e+this.y0,s},inverse:function(s){s.x-=this.x0,s.y-=this.y0;var i,e,a=s.x/this.a,n=s.y/this.a;if(this.sphere){var r=n+this.lat0;i=Math.asin(Math.sin(r)*Math.cos(a)),e=Math.atan2(Math.tan(a),Math.cos(r))}else{var h=this.ml0/this.a+n,o=t.imlfn(h,this.e0,this.e1,this.e2,this.e3);if(Math.abs(Math.abs(o)-t.HALF_PI)<=t.EPSLN)return s.x=this.long0,s.y=t.HALF_PI,0>n&&(s.y*=-1),s;var l=t.gN(this.a,this.e,Math.sin(o)),u=l*l*l/this.a/this.a*(1-this.es),f=Math.pow(Math.tan(o),2),c=a*this.a/l,d=c*c;i=o-l*Math.tan(o)/u*c*c*(.5-(1+3*f)*c*c/24),e=c*(1-d*(f/3+(1+3*f)*f*d/15))/Math.cos(o)}return s.x=t.adjust_lon(e+this.long0),s.y=t.adjust_lat(i),s}}}),define("proj4/projCode/laea",["../common"],function(t){return{S_POLE:1,N_POLE:2,EQUIT:3,OBLIQ:4,init:function(){var s=Math.abs(this.lat0);if(this.mode=Math.abs(s-t.HALF_PI)<t.EPSLN?this.lat0<0?this.S_POLE:this.N_POLE:Math.abs(s)<t.EPSLN?this.EQUIT:this.OBLIQ,this.es>0){var i;switch(this.qp=t.qsfnz(this.e,1),this.mmf=.5/(1-this.es),this.apa=this.authset(this.es),this.mode){case this.N_POLE:this.dd=1;break;case this.S_POLE:this.dd=1;break;case this.EQUIT:this.rq=Math.sqrt(.5*this.qp),this.dd=1/this.rq,this.xmf=1,this.ymf=.5*this.qp;break;case this.OBLIQ:this.rq=Math.sqrt(.5*this.qp),i=Math.sin(this.lat0),this.sinb1=t.qsfnz(this.e,i)/this.qp,this.cosb1=Math.sqrt(1-this.sinb1*this.sinb1),this.dd=Math.cos(this.lat0)/(Math.sqrt(1-this.es*i*i)*this.rq*this.cosb1),this.ymf=(this.xmf=this.rq)/this.dd,this.xmf*=this.dd}}else this.mode===this.OBLIQ&&(this.sinph0=Math.sin(this.lat0),this.cosph0=Math.cos(this.lat0))},forward:function(s){var i,e,a,n,r,h,o,l,u,f,c=s.x,d=s.y;if(c=t.adjust_lon(c-this.long0),this.sphere){if(r=Math.sin(d),f=Math.cos(d),a=Math.cos(c),this.mode===this.OBLIQ||this.mode===this.EQUIT){if(e=this.mode===this.EQUIT?1+f*a:1+this.sinph0*r+this.cosph0*f*a,e<=t.EPSLN)return null;e=Math.sqrt(2/e),i=e*f*Math.sin(c),e*=this.mode===this.EQUIT?r:this.cosph0*r-this.sinph0*f*a}else if(this.mode===this.N_POLE||this.mode===this.S_POLE){if(this.mode===this.N_POLE&&(a=-a),Math.abs(d+this.phi0)<t.EPSLN)return null;e=t.FORTPI-.5*d,e=2*(this.mode===this.S_POLE?Math.cos(e):Math.sin(e)),i=e*Math.sin(c),e*=a}}else{switch(o=0,l=0,u=0,a=Math.cos(c),n=Math.sin(c),r=Math.sin(d),h=t.qsfnz(this.e,r),(this.mode===this.OBLIQ||this.mode===this.EQUIT)&&(o=h/this.qp,l=Math.sqrt(1-o*o)),this.mode){case this.OBLIQ:u=1+this.sinb1*o+this.cosb1*l*a;break;case this.EQUIT:u=1+l*a;break;case this.N_POLE:u=t.HALF_PI+d,h=this.qp-h;break;case this.S_POLE:u=d-t.HALF_PI,h=this.qp+h}if(Math.abs(u)<t.EPSLN)return null;switch(this.mode){case this.OBLIQ:case this.EQUIT:u=Math.sqrt(2/u),e=this.mode===this.OBLIQ?this.ymf*u*(this.cosb1*o-this.sinb1*l*a):(u=Math.sqrt(2/(1+l*a)))*o*this.ymf,i=this.xmf*u*l*n;break;case this.N_POLE:case this.S_POLE:h>=0?(i=(u=Math.sqrt(h))*n,e=a*(this.mode===this.S_POLE?u:-u)):i=e=0}}return s.x=this.a*i+this.x0,s.y=this.a*e+this.y0,s},inverse:function(s){s.x-=this.x0,s.y-=this.y0;var i,e,a,n,r,h,o,l=s.x/this.a,u=s.y/this.a;if(this.sphere){var f,c=0,d=0;if(f=Math.sqrt(l*l+u*u),e=.5*f,e>1)return null;switch(e=2*Math.asin(e),(this.mode===this.OBLIQ||this.mode===this.EQUIT)&&(d=Math.sin(e),c=Math.cos(e)),this.mode){case this.EQUIT:e=Math.abs(f)<=t.EPSLN?0:Math.asin(u*d/f),l*=d,u=c*f;break;case this.OBLIQ:e=Math.abs(f)<=t.EPSLN?this.phi0:Math.asin(c*this.sinph0+u*d*this.cosph0/f),l*=d*this.cosph0,u=(c-Math.sin(e)*this.sinph0)*f;break;case this.N_POLE:u=-u,e=t.HALF_PI-e;break;case this.S_POLE:e-=t.HALF_PI}i=0!==u||this.mode!==this.EQUIT&&this.mode!==this.OBLIQ?Math.atan2(l,u):0}else{if(o=0,this.mode===this.OBLIQ||this.mode===this.EQUIT){if(l/=this.dd,u*=this.dd,h=Math.sqrt(l*l+u*u),h<t.EPSLN)return s.x=0,s.y=this.phi0,s;n=2*Math.asin(.5*h/this.rq),a=Math.cos(n),l*=n=Math.sin(n),this.mode===this.OBLIQ?(o=a*this.sinb1+u*n*this.cosb1/h,r=this.qp*o,u=h*this.cosb1*a-u*this.sinb1*n):(o=u*n/h,r=this.qp*o,u=h*a)}else if(this.mode===this.N_POLE||this.mode===this.S_POLE){if(this.mode===this.N_POLE&&(u=-u),r=l*l+u*u,!r)return s.x=0,s.y=this.phi0,s;o=1-r/this.qp,this.mode===this.S_POLE&&(o=-o)}i=Math.atan2(l,u),e=this.authlat(Math.asin(o),this.apa)}return s.x=t.adjust_lon(this.long0+i),s.y=e,s},P00:.3333333333333333,P01:.17222222222222222,P02:.10257936507936508,P10:.06388888888888888,P11:.0664021164021164,P20:.016415012942191543,authset:function(t){var s,i=[];return i[0]=t*this.P00,s=t*t,i[0]+=s*this.P01,i[1]=s*this.P10,s*=t,i[0]+=s*this.P02,i[1]+=s*this.P11,i[2]=s*this.P20,i},authlat:function(t,s){var i=t+t;return t+s[0]*Math.sin(i)+s[1]*Math.sin(i+i)+s[2]*Math.sin(i+i+i)}}}),define("proj4/projCode/merc",["../common"],function(t){return{init:function(){var s=this.b/this.a;this.es=1-s*s,this.e=Math.sqrt(this.es),this.lat_ts?this.k0=this.sphere?Math.cos(this.lat_ts):t.msfnz(this.e,Math.sin(this.lat_ts),Math.cos(this.lat_ts)):this.k0||(this.k0=this.k?this.k:1)},forward:function(s){var i=s.x,e=s.y;if(e*t.R2D>90&&e*t.R2D<-90&&i*t.R2D>180&&i*t.R2D<-180)return null;var a,n;if(Math.abs(Math.abs(e)-t.HALF_PI)<=t.EPSLN)return null;if(this.sphere)a=this.x0+this.a*this.k0*t.adjust_lon(i-this.long0),n=this.y0+this.a*this.k0*Math.log(Math.tan(t.FORTPI+.5*e));else{var r=Math.sin(e),h=t.tsfnz(this.e,e,r);a=this.x0+this.a*this.k0*t.adjust_lon(i-this.long0),n=this.y0-this.a*this.k0*Math.log(h)}return s.x=a,s.y=n,s},inverse:function(s){var i,e,a=s.x-this.x0,n=s.y-this.y0;if(this.sphere)e=t.HALF_PI-2*Math.atan(Math.exp(-n/(this.a*this.k0)));else{var r=Math.exp(-n/(this.a*this.k0));if(e=t.phi2z(this.e,r),-9999===e)return null}return i=t.adjust_lon(this.long0+a/(this.a*this.k0)),s.x=i,s.y=e,s}}}),define("proj4/projCode/aea",["../common"],function(t){return{init:function(){Math.abs(this.lat1+this.lat2)<t.EPSLN||(this.temp=this.b/this.a,this.es=1-Math.pow(this.temp,2),this.e3=Math.sqrt(this.es),this.sin_po=Math.sin(this.lat1),this.cos_po=Math.cos(this.lat1),this.t1=this.sin_po,this.con=this.sin_po,this.ms1=t.msfnz(this.e3,this.sin_po,this.cos_po),this.qs1=t.qsfnz(this.e3,this.sin_po,this.cos_po),this.sin_po=Math.sin(this.lat2),this.cos_po=Math.cos(this.lat2),this.t2=this.sin_po,this.ms2=t.msfnz(this.e3,this.sin_po,this.cos_po),this.qs2=t.qsfnz(this.e3,this.sin_po,this.cos_po),this.sin_po=Math.sin(this.lat0),this.cos_po=Math.cos(this.lat0),this.t3=this.sin_po,this.qs0=t.qsfnz(this.e3,this.sin_po,this.cos_po),this.ns0=Math.abs(this.lat1-this.lat2)>t.EPSLN?(this.ms1*this.ms1-this.ms2*this.ms2)/(this.qs2-this.qs1):this.con,this.c=this.ms1*this.ms1+this.ns0*this.qs1,this.rh=this.a*Math.sqrt(this.c-this.ns0*this.qs0)/this.ns0)},forward:function(s){var i=s.x,e=s.y;this.sin_phi=Math.sin(e),this.cos_phi=Math.cos(e);var a=t.qsfnz(this.e3,this.sin_phi,this.cos_phi),n=this.a*Math.sqrt(this.c-this.ns0*a)/this.ns0,r=this.ns0*t.adjust_lon(i-this.long0),h=n*Math.sin(r)+this.x0,o=this.rh-n*Math.cos(r)+this.y0;return s.x=h,s.y=o,s},inverse:function(s){var i,e,a,n,r,h;return s.x-=this.x0,s.y=this.rh-s.y+this.y0,this.ns0>=0?(i=Math.sqrt(s.x*s.x+s.y*s.y),a=1):(i=-Math.sqrt(s.x*s.x+s.y*s.y),a=-1),n=0,0!==i&&(n=Math.atan2(a*s.x,a*s.y)),a=i*this.ns0/this.a,this.sphere?h=Math.asin((this.c-a*a)/(2*this.ns0)):(e=(this.c-a*a)/this.ns0,h=this.phi1z(this.e3,e)),r=t.adjust_lon(n/this.ns0+this.long0),s.x=r,s.y=h,s},phi1z:function(s,i){var e,a,n,r,h,o=t.asinz(.5*i);if(s<t.EPSLN)return o;for(var l=s*s,u=1;25>=u;u++)if(e=Math.sin(o),a=Math.cos(o),n=s*e,r=1-n*n,h=.5*r*r/a*(i/(1-l)-e/r+.5/s*Math.log((1-n)/(1+n))),o+=h,Math.abs(h)<=1e-7)return o;return null}}}),define("proj4/projCode/gnom",["../common"],function(t){return{init:function(){this.sin_p14=Math.sin(this.lat0),this.cos_p14=Math.cos(this.lat0),this.infinity_dist=1e3*this.a,this.rc=1},forward:function(s){var i,e,a,n,r,h,o,l,u=s.x,f=s.y;return a=t.adjust_lon(u-this.long0),i=Math.sin(f),e=Math.cos(f),n=Math.cos(a),h=this.sin_p14*i+this.cos_p14*e*n,r=1,h>0||Math.abs(h)<=t.EPSLN?(o=this.x0+this.a*r*e*Math.sin(a)/h,l=this.y0+this.a*r*(this.cos_p14*i-this.sin_p14*e*n)/h):(o=this.x0+this.infinity_dist*e*Math.sin(a),l=this.y0+this.infinity_dist*(this.cos_p14*i-this.sin_p14*e*n)),s.x=o,s.y=l,s},inverse:function(s){var i,e,a,n,r,h;return s.x=(s.x-this.x0)/this.a,s.y=(s.y-this.y0)/this.a,s.x/=this.k0,s.y/=this.k0,(i=Math.sqrt(s.x*s.x+s.y*s.y))?(n=Math.atan2(i,this.rc),e=Math.sin(n),a=Math.cos(n),h=t.asinz(a*this.sin_p14+s.y*e*this.cos_p14/i),r=Math.atan2(s.x*e,i*this.cos_p14*a-s.y*this.sin_p14*e),r=t.adjust_lon(this.long0+r)):(h=this.phic0,r=0),s.x=r,s.y=h,s}}}),define("proj4/projCode/cea",["../common"],function(t){return{init:function(){this.sphere||(this.k0=t.msfnz(this.e,Math.sin(this.lat_ts),Math.cos(this.lat_ts)))},forward:function(s){var i,e,a=s.x,n=s.y,r=t.adjust_lon(a-this.long0);if(this.sphere)i=this.x0+this.a*r*Math.cos(this.lat_ts),e=this.y0+this.a*Math.sin(n)/Math.cos(this.lat_ts);else{var h=t.qsfnz(this.e,Math.sin(n));i=this.x0+this.a*this.k0*r,e=this.y0+.5*this.a*h/this.k0}return s.x=i,s.y=e,s},inverse:function(s){s.x-=this.x0,s.y-=this.y0;var i,e;return this.sphere?(i=t.adjust_lon(this.long0+s.x/this.a/Math.cos(this.lat_ts)),e=Math.asin(s.y/this.a*Math.cos(this.lat_ts))):(e=t.iqsfnz(this.e,2*s.y*this.k0/this.a),i=t.adjust_lon(this.long0+s.x/(this.a*this.k0))),s.x=i,s.y=e,s}}}),define("proj4/projCode/eqc",["../common"],function(t){return{init:function(){this.x0=this.x0||0,this.y0=this.y0||0,this.lat0=this.lat0||0,this.long0=this.long0||0,this.lat_ts=this.lat_t||0,this.title=this.title||"Equidistant Cylindrical (Plate Carre)",this.rc=Math.cos(this.lat_ts)},forward:function(s){var i=s.x,e=s.y,a=t.adjust_lon(i-this.long0),n=t.adjust_lat(e-this.lat0);return s.x=this.x0+this.a*a*this.rc,s.y=this.y0+this.a*n,s},inverse:function(s){var i=s.x,e=s.y;return s.x=t.adjust_lon(this.long0+(i-this.x0)/(this.a*this.rc)),s.y=t.adjust_lat(this.lat0+(e-this.y0)/this.a),s}}}),define("proj4/projCode/poly",["../common"],function(t){return{init:function(){this.temp=this.b/this.a,this.es=1-Math.pow(this.temp,2),this.e=Math.sqrt(this.es),this.e0=t.e0fn(this.es),this.e1=t.e1fn(this.es),this.e2=t.e2fn(this.es),this.e3=t.e3fn(this.es),this.ml0=this.a*t.mlfn(this.e0,this.e1,this.e2,this.e3,this.lat0)},forward:function(s){var i,e,a,n=s.x,r=s.y,h=t.adjust_lon(n-this.long0);if(a=h*Math.sin(r),this.sphere)Math.abs(r)<=t.EPSLN?(i=this.a*h,e=-1*this.a*this.lat0):(i=this.a*Math.sin(a)/Math.tan(r),e=this.a*(t.adjust_lat(r-this.lat0)+(1-Math.cos(a))/Math.tan(r)));else if(Math.abs(r)<=t.EPSLN)i=this.a*h,e=-1*this.ml0;else{var o=t.gN(this.a,this.e,Math.sin(r))/Math.tan(r);i=o*Math.sin(a),e=this.a*t.mlfn(this.e0,this.e1,this.e2,this.e3,r)-this.ml0+o*(1-Math.cos(a))}return s.x=i+this.x0,s.y=e+this.y0,s},inverse:function(s){var i,e,a,n,r,h,o,l,u;if(a=s.x-this.x0,n=s.y-this.y0,this.sphere)if(Math.abs(n+this.a*this.lat0)<=t.EPSLN)i=t.adjust_lon(a/this.a+this.long0),e=0;else{h=this.lat0+n/this.a,o=a*a/this.a/this.a+h*h,l=h;var f;for(r=t.MAX_ITER;r;--r)if(f=Math.tan(l),u=-1*(h*(l*f+1)-l-.5*(l*l+o)*f)/((l-h)/f-1),l+=u,Math.abs(u)<=t.EPSLN){e=l;break}i=t.adjust_lon(this.long0+Math.asin(a*Math.tan(l)/this.a)/Math.sin(e))}else if(Math.abs(n+this.ml0)<=t.EPSLN)e=0,i=t.adjust_lon(this.long0+a/this.a);else{h=(this.ml0+n)/this.a,o=a*a/this.a/this.a+h*h,l=h;var c,d,p,m,M;for(r=t.MAX_ITER;r;--r)if(M=this.e*Math.sin(l),c=Math.sqrt(1-M*M)*Math.tan(l),d=this.a*t.mlfn(this.e0,this.e1,this.e2,this.e3,l),p=this.e0-2*this.e1*Math.cos(2*l)+4*this.e2*Math.cos(4*l)-6*this.e3*Math.cos(6*l),m=d/this.a,u=(h*(c*m+1)-m-.5*c*(m*m+o))/(this.es*Math.sin(2*l)*(m*m+o-2*h*m)/(4*c)+(h-m)*(c*p-2/Math.sin(2*l))-p),l-=u,Math.abs(u)<=t.EPSLN){e=l;break}c=Math.sqrt(1-this.es*Math.pow(Math.sin(e),2))*Math.tan(e),i=t.adjust_lon(this.long0+Math.asin(a*c/this.a)/Math.sin(e))}return s.x=i,s.y=e,s}}}),define("proj4/projCode/nzmg",["../common"],function(t){return{iterations:1,init:function(){this.A=[],this.A[1]=.6399175073,this.A[2]=-.1358797613,this.A[3]=.063294409,this.A[4]=-.02526853,this.A[5]=.0117879,this.A[6]=-.0055161,this.A[7]=.0026906,this.A[8]=-.001333,this.A[9]=67e-5,this.A[10]=-34e-5,this.B_re=[],this.B_im=[],this.B_re[1]=.7557853228,this.B_im[1]=0,this.B_re[2]=.249204646,this.B_im[2]=.003371507,this.B_re[3]=-.001541739,this.B_im[3]=.04105856,this.B_re[4]=-.10162907,this.B_im[4]=.01727609,this.B_re[5]=-.26623489,this.B_im[5]=-.36249218,this.B_re[6]=-.6870983,this.B_im[6]=-1.1651967,this.C_re=[],this.C_im=[],this.C_re[1]=1.3231270439,this.C_im[1]=0,this.C_re[2]=-.577245789,this.C_im[2]=-.007809598,this.C_re[3]=.508307513,this.C_im[3]=-.112208952,this.C_re[4]=-.15094762,this.C_im[4]=.18200602,this.C_re[5]=1.01418179,this.C_im[5]=1.64497696,this.C_re[6]=1.9660549,this.C_im[6]=2.5127645,this.D=[],this.D[1]=1.5627014243,this.D[2]=.5185406398,this.D[3]=-.03333098,this.D[4]=-.1052906,this.D[5]=-.0368594,this.D[6]=.007317,this.D[7]=.0122,this.D[8]=.00394,this.D[9]=-.0013},forward:function(s){var i,e=s.x,a=s.y,n=a-this.lat0,r=e-this.long0,h=1e-5*(n/t.SEC_TO_RAD),o=r,l=1,u=0;for(i=1;10>=i;i++)l*=h,u+=this.A[i]*l;var f,c,d=u,p=o,m=1,M=0,g=0,_=0;for(i=1;6>=i;i++)f=m*d-M*p,c=M*d+m*p,m=f,M=c,g=g+this.B_re[i]*m-this.B_im[i]*M,_=_+this.B_im[i]*m+this.B_re[i]*M;return s.x=_*this.a+this.x0,s.y=g*this.a+this.y0,s},inverse:function(s){var i,e,a,n=s.x,r=s.y,h=n-this.x0,o=r-this.y0,l=o/this.a,u=h/this.a,f=1,c=0,d=0,p=0;for(i=1;6>=i;i++)e=f*l-c*u,a=c*l+f*u,f=e,c=a,d=d+this.C_re[i]*f-this.C_im[i]*c,p=p+this.C_im[i]*f+this.C_re[i]*c;for(var m=0;m<this.iterations;m++){var M,g,_=d,y=p,v=l,b=u;for(i=2;6>=i;i++)M=_*d-y*p,g=y*d+_*p,_=M,y=g,v+=(i-1)*(this.B_re[i]*_-this.B_im[i]*y),b+=(i-1)*(this.B_im[i]*_+this.B_re[i]*y);_=1,y=0;var x=this.B_re[1],C=this.B_im[1];for(i=2;6>=i;i++)M=_*d-y*p,g=y*d+_*p,_=M,y=g,x+=i*(this.B_re[i]*_-this.B_im[i]*y),C+=i*(this.B_im[i]*_+this.B_re[i]*y);var P=x*x+C*C;d=(v*x+b*C)/P,p=(b*x-v*C)/P}var S=d,A=p,I=1,w=0;for(i=1;9>=i;i++)I*=S,w+=this.D[i]*I;var E=this.lat0+1e5*w*t.SEC_TO_RAD,N=this.long0+A;return s.x=N,s.y=E,s}}}),define("proj4/projCode/mill",["../common"],function(t){return{init:function(){},forward:function(s){var i=s.x,e=s.y,a=t.adjust_lon(i-this.long0),n=this.x0+this.a*a,r=this.y0+1.25*this.a*Math.log(Math.tan(t.PI/4+e/2.5));return s.x=n,s.y=r,s},inverse:function(s){s.x-=this.x0,s.y-=this.y0;var i=t.adjust_lon(this.long0+s.x/this.a),e=2.5*(Math.atan(Math.exp(.8*s.y/this.a))-t.PI/4);return s.x=i,s.y=e,s}}}),define("proj4/projCode/sinu",["../common"],function(t){return{init:function(){this.sphere?(this.n=1,this.m=0,this.es=0,this.C_y=Math.sqrt((this.m+1)/this.n),this.C_x=this.C_y/(this.m+1)):this.en=t.pj_enfn(this.es)},forward:function(s){var i,e,a=s.x,n=s.y;if(a=t.adjust_lon(a-this.long0),this.sphere){if(this.m)for(var r=this.n*Math.sin(n),h=t.MAX_ITER;h;--h){var o=(this.m*n+Math.sin(n)-r)/(this.m+Math.cos(n));if(n-=o,Math.abs(o)<t.EPSLN)break}else n=1!==this.n?Math.asin(this.n*Math.sin(n)):n;i=this.a*this.C_x*a*(this.m+Math.cos(n)),e=this.a*this.C_y*n}else{var l=Math.sin(n),u=Math.cos(n);e=this.a*t.pj_mlfn(n,l,u,this.en),i=this.a*a*u/Math.sqrt(1-this.es*l*l)}return s.x=i,s.y=e,s},inverse:function(s){var i,e,a;if(s.x-=this.x0,s.y-=this.y0,i=s.y/this.a,this.sphere)s.y/=this.C_y,i=this.m?Math.asin((this.m*s.y+Math.sin(s.y))/this.n):1!==this.n?Math.asin(Math.sin(s.y)/this.n):s.y,a=s.x/(this.C_x*(this.m+Math.cos(s.y)));else{i=t.pj_inv_mlfn(s.y/this.a,this.es,this.en);var n=Math.abs(i);n<t.HALF_PI?(n=Math.sin(i),e=this.long0+s.x*Math.sqrt(1-this.es*n*n)/(this.a*Math.cos(i)),a=t.adjust_lon(e)):n-t.EPSLN<t.HALF_PI&&(a=this.long0)}return s.x=a,s.y=i,s}}}),define("proj4/projCode/moll",["../common"],function(t){return{init:function(){},forward:function(s){for(var i=s.x,e=s.y,a=t.adjust_lon(i-this.long0),n=e,r=t.PI*Math.sin(e),h=0;!0;h++){var o=-(n+Math.sin(n)-r)/(1+Math.cos(n));if(n+=o,Math.abs(o)<t.EPSLN)break}n/=2,t.PI/2-Math.abs(e)<t.EPSLN&&(a=0);var l=.900316316158*this.a*a*Math.cos(n)+this.x0,u=1.4142135623731*this.a*Math.sin(n)+this.y0;return s.x=l,s.y=u,s},inverse:function(s){var i,e;s.x-=this.x0,s.y-=this.y0,e=s.y/(1.4142135623731*this.a),Math.abs(e)>.999999999999&&(e=.999999999999),i=Math.asin(e);var a=t.adjust_lon(this.long0+s.x/(.900316316158*this.a*Math.cos(i)));a<-t.PI&&(a=-t.PI),a>t.PI&&(a=t.PI),e=(2*i+Math.sin(2*i))/t.PI,Math.abs(e)>1&&(e=1);var n=Math.asin(e);return s.x=a,s.y=n,s}}}),define("proj4/projCode/eqdc",["../common"],function(t){return{init:function(){return Math.abs(this.lat1+this.lat2)<t.EPSLN?(t.reportError("eqdc:init: Equal Latitudes"),void 0):(this.lat2=this.lat2||this.lat1,this.temp=this.b/this.a,this.es=1-Math.pow(this.temp,2),this.e=Math.sqrt(this.es),this.e0=t.e0fn(this.es),this.e1=t.e1fn(this.es),this.e2=t.e2fn(this.es),this.e3=t.e3fn(this.es),this.sinphi=Math.sin(this.lat1),this.cosphi=Math.cos(this.lat1),this.ms1=t.msfnz(this.e,this.sinphi,this.cosphi),this.ml1=t.mlfn(this.e0,this.e1,this.e2,this.e3,this.lat1),Math.abs(this.lat1-this.lat2)<t.EPSLN?this.ns=this.sinphi:(this.sinphi=Math.sin(this.lat2),this.cosphi=Math.cos(this.lat2),this.ms2=t.msfnz(this.e,this.sinphi,this.cosphi),this.ml2=t.mlfn(this.e0,this.e1,this.e2,this.e3,this.lat2),this.ns=(this.ms1-this.ms2)/(this.ml2-this.ml1)),this.g=this.ml1+this.ms1/this.ns,this.ml0=t.mlfn(this.e0,this.e1,this.e2,this.e3,this.lat0),this.rh=this.a*(this.g-this.ml0),void 0)},forward:function(s){var i,e=s.x,a=s.y;if(this.sphere)i=this.a*(this.g-a);else{var n=t.mlfn(this.e0,this.e1,this.e2,this.e3,a);i=this.a*(this.g-n)}var r=this.ns*t.adjust_lon(e-this.long0),h=this.x0+i*Math.sin(r),o=this.y0+this.rh-i*Math.cos(r);return s.x=h,s.y=o,s},inverse:function(s){s.x-=this.x0,s.y=this.rh-s.y+this.y0;var i,e,a,n;this.ns>=0?(e=Math.sqrt(s.x*s.x+s.y*s.y),i=1):(e=-Math.sqrt(s.x*s.x+s.y*s.y),i=-1);var r=0;if(0!==e&&(r=Math.atan2(i*s.x,i*s.y)),this.sphere)return n=t.adjust_lon(this.long0+r/this.ns),a=t.adjust_lat(this.g-e/this.a),s.x=n,s.y=a,s;var h=this.g-e/this.a;return a=t.imlfn(h,this.e0,this.e1,this.e2,this.e3),n=t.adjust_lon(this.long0+r/this.ns),s.x=n,s.y=a,s}}}),define("proj4/projCode/vandg",["../common"],function(t){return{init:function(){this.R=this.a},forward:function(s){var i,e,a=s.x,n=s.y,r=t.adjust_lon(a-this.long0);Math.abs(n)<=t.EPSLN&&(i=this.x0+this.R*r,e=this.y0);var h=t.asinz(2*Math.abs(n/t.PI));(Math.abs(r)<=t.EPSLN||Math.abs(Math.abs(n)-t.HALF_PI)<=t.EPSLN)&&(i=this.x0,e=n>=0?this.y0+t.PI*this.R*Math.tan(.5*h):this.y0+t.PI*this.R*-Math.tan(.5*h));var o=.5*Math.abs(t.PI/r-r/t.PI),l=o*o,u=Math.sin(h),f=Math.cos(h),c=f/(u+f-1),d=c*c,p=c*(2/u-1),m=p*p,M=t.PI*this.R*(o*(c-m)+Math.sqrt(l*(c-m)*(c-m)-(m+l)*(d-m)))/(m+l);0>r&&(M=-M),i=this.x0+M;var g=l+c;return M=t.PI*this.R*(p*g-o*Math.sqrt((m+l)*(l+1)-g*g))/(m+l),e=n>=0?this.y0+M:this.y0-M,s.x=i,s.y=e,s},inverse:function(s){var i,e,a,n,r,h,o,l,u,f,c,d,p;return s.x-=this.x0,s.y-=this.y0,c=t.PI*this.R,a=s.x/c,n=s.y/c,r=a*a+n*n,h=-Math.abs(n)*(1+r),o=h-2*n*n+a*a,l=-2*h+1+2*n*n+r*r,p=n*n/l+(2*o*o*o/l/l/l-9*h*o/l/l)/27,u=(h-o*o/3/l)/l,f=2*Math.sqrt(-u/3),c=3*p/u/f,Math.abs(c)>1&&(c=c>=0?1:-1),d=Math.acos(c)/3,e=s.y>=0?(-f*Math.cos(d+t.PI/3)-o/3/l)*t.PI:-(-f*Math.cos(d+t.PI/3)-o/3/l)*t.PI,i=Math.abs(a)<t.EPSLN?this.long0:t.adjust_lon(this.long0+t.PI*(r-1+Math.sqrt(1+2*(a*a-n*n)+r*r))/2/a),s.x=i,s.y=e,s}}}),define("proj4/projCode/aeqd",["../common"],function(t){return{init:function(){this.sin_p12=Math.sin(this.lat0),this.cos_p12=Math.cos(this.lat0)},forward:function(s){var i,e,a,n,r,h,o,l,u,f,c,d,p,m,M,g,_,y,v,b,x,C,P,S=s.x,A=s.y,I=Math.sin(s.y),w=Math.cos(s.y),E=t.adjust_lon(S-this.long0);return this.sphere?Math.abs(this.sin_p12-1)<=t.EPSLN?(s.x=this.x0+this.a*(t.HALF_PI-A)*Math.sin(E),s.y=this.y0-this.a*(t.HALF_PI-A)*Math.cos(E),s):Math.abs(this.sin_p12+1)<=t.EPSLN?(s.x=this.x0+this.a*(t.HALF_PI+A)*Math.sin(E),s.y=this.y0+this.a*(t.HALF_PI+A)*Math.cos(E),s):(y=this.sin_p12*I+this.cos_p12*w*Math.cos(E),g=Math.acos(y),_=g/Math.sin(g),s.x=this.x0+this.a*_*w*Math.sin(E),s.y=this.y0+this.a*_*(this.cos_p12*I-this.sin_p12*w*Math.cos(E)),s):(i=t.e0fn(this.es),e=t.e1fn(this.es),a=t.e2fn(this.es),n=t.e3fn(this.es),Math.abs(this.sin_p12-1)<=t.EPSLN?(r=this.a*t.mlfn(i,e,a,n,t.HALF_PI),h=this.a*t.mlfn(i,e,a,n,A),s.x=this.x0+(r-h)*Math.sin(E),s.y=this.y0-(r-h)*Math.cos(E),s):Math.abs(this.sin_p12+1)<=t.EPSLN?(r=this.a*t.mlfn(i,e,a,n,t.HALF_PI),h=this.a*t.mlfn(i,e,a,n,A),s.x=this.x0+(r+h)*Math.sin(E),s.y=this.y0+(r+h)*Math.cos(E),s):(o=I/w,l=t.gN(this.a,this.e,this.sin_p12),u=t.gN(this.a,this.e,I),f=Math.atan((1-this.es)*o+this.es*l*this.sin_p12/(u*w)),c=Math.atan2(Math.sin(E),this.cos_p12*Math.tan(f)-this.sin_p12*Math.cos(E)),v=0===c?Math.asin(this.cos_p12*Math.sin(f)-this.sin_p12*Math.cos(f)):Math.abs(Math.abs(c)-t.PI)<=t.EPSLN?-Math.asin(this.cos_p12*Math.sin(f)-this.sin_p12*Math.cos(f)):Math.asin(Math.sin(E)*Math.cos(f)/Math.sin(c)),d=this.e*this.sin_p12/Math.sqrt(1-this.es),p=this.e*this.cos_p12*Math.cos(c)/Math.sqrt(1-this.es),m=d*p,M=p*p,b=v*v,x=b*v,C=x*v,P=C*v,g=l*v*(1-b*M*(1-M)/6+x/8*m*(1-2*M)+C/120*(M*(4-7*M)-3*d*d*(1-7*M))-P/48*m),s.x=this.x0+g*Math.sin(c),s.y=this.y0+g*Math.cos(c),s))},inverse:function(s){s.x-=this.x0,s.y-=this.y0;var i,e,a,n,r,h,o,l,u,f,c,d,p,m,M,g,_,y,v,b,x,C,P;if(this.sphere){if(i=Math.sqrt(s.x*s.x+s.y*s.y),i>2*t.HALF_PI*this.a)return;return e=i/this.a,a=Math.sin(e),n=Math.cos(e),r=this.long0,Math.abs(i)<=t.EPSLN?h=this.lat0:(h=t.asinz(n*this.sin_p12+s.y*a*this.cos_p12/i),o=Math.abs(this.lat0)-t.HALF_PI,r=Math.abs(o)<=t.EPSLN?this.lat0>=0?t.adjust_lon(this.long0+Math.atan2(s.x,-s.y)):t.adjust_lon(this.long0-Math.atan2(-s.x,s.y)):t.adjust_lon(this.long0+Math.atan2(s.x*a,i*this.cos_p12*n-s.y*this.sin_p12*a))),s.x=r,s.y=h,s}return l=t.e0fn(this.es),u=t.e1fn(this.es),f=t.e2fn(this.es),c=t.e3fn(this.es),Math.abs(this.sin_p12-1)<=t.EPSLN?(d=this.a*t.mlfn(l,u,f,c,t.HALF_PI),i=Math.sqrt(s.x*s.x+s.y*s.y),p=d-i,h=t.imlfn(p/this.a,l,u,f,c),r=t.adjust_lon(this.long0+Math.atan2(s.x,-1*s.y)),s.x=r,s.y=h,s):Math.abs(this.sin_p12+1)<=t.EPSLN?(d=this.a*t.mlfn(l,u,f,c,t.HALF_PI),i=Math.sqrt(s.x*s.x+s.y*s.y),p=i-d,h=t.imlfn(p/this.a,l,u,f,c),r=t.adjust_lon(this.long0+Math.atan2(s.x,s.y)),s.x=r,s.y=h,s):(i=Math.sqrt(s.x*s.x+s.y*s.y),g=Math.atan2(s.x,s.y),m=t.gN(this.a,this.e,this.sin_p12),_=Math.cos(g),y=this.e*this.cos_p12*_,v=-y*y/(1-this.es),b=3*this.es*(1-v)*this.sin_p12*this.cos_p12*_/(1-this.es),x=i/m,C=x-v*(1+v)*Math.pow(x,3)/6-b*(1+3*v)*Math.pow(x,4)/24,P=1-v*C*C/2-x*C*C*C/6,M=Math.asin(this.sin_p12*Math.cos(C)+this.cos_p12*Math.sin(C)*_),r=t.adjust_lon(this.long0+Math.asin(Math.sin(g)*Math.sin(C)/Math.cos(M))),h=Math.atan((1-this.es*P*this.sin_p12/Math.sin(M))*Math.tan(M)/(1-this.es)),s.x=r,s.y=h,s)}}}),define("proj4/projections",["require","exports","module","./projCode/longlat","./projCode/tmerc","./projCode/utm","./projCode/sterea","./projCode/somerc","./projCode/omerc","./projCode/lcc","./projCode/krovak","./projCode/cass","./projCode/laea","./projCode/merc","./projCode/aea","./projCode/gnom","./projCode/cea","./projCode/eqc","./projCode/poly","./projCode/nzmg","./projCode/mill","./projCode/sinu","./projCode/moll","./projCode/eqdc","./projCode/vandg","./projCode/aeqd","./projCode/longlat"],function(t,s){s.longlat=t("./projCode/longlat"),s.identity=s.longlat,s.tmerc=t("./projCode/tmerc"),s.utm=t("./projCode/utm"),s.sterea=t("./projCode/sterea"),s.somerc=t("./projCode/somerc"),s.omerc=t("./projCode/omerc"),s.lcc=t("./projCode/lcc"),s.krovak=t("./projCode/krovak"),s.cass=t("./projCode/cass"),s.laea=t("./projCode/laea"),s.merc=t("./projCode/merc"),s.aea=t("./projCode/aea"),s.gnom=t("./projCode/gnom"),s.cea=t("./projCode/cea"),s.eqc=t("./projCode/eqc"),s.poly=t("./projCode/poly"),s.nzmg=t("./projCode/nzmg"),s.mill=t("./projCode/mill"),s.sinu=t("./projCode/sinu"),s.moll=t("./projCode/moll"),s.eqdc=t("./projCode/eqdc"),s.vandg=t("./projCode/vandg"),s.aeqd=t("./projCode/aeqd"),s.longlat=t("./projCode/longlat"),s.identity=s.longlat}),define("proj4/wkt",["./extend","./constants","./common"],function(t,s,i){function e(s,i,e){s[i]=e.map(function(t){var s={};return a(t,s),s}).reduce(function(s,i){return t(s,i)},{})}function a(t,s){var i;return Array.isArray(t)?(i=t.shift(),"PARAMETER"===i&&(i=t.shift()),1===t.length?Array.isArray(t[0])?(s[i]={},a(t[0],s[i])):s[i]=t[0]:t.length?"TOWGS84"===i?s[i]=t:(s[i]={},["UNIT","PRIMEM","VERT_DATUM"].indexOf(i)>-1?(s[i]={name:t[0].toLowerCase(),convert:t[1]},3===t.length&&(s[i].auth=t[2])):"SPHEROID"===i?(s[i]={name:t[0],a:t[1],rf:t[2]},4===t.length&&(s[i].auth=t[3])):["GEOGCS","GEOCCS","DATUM","VERT_CS","COMPD_CS","LOCAL_CS","FITTED_CS","LOCAL_DATUM"].indexOf(i)>-1?(t[0]=["name",t[0]],e(s,i,t)):t.every(function(t){return Array.isArray(t)})?e(s,i,t):a(t,s[i])):s[i]=!0,void 0):(s[t]=!0,void 0)}function n(t,s){var i=s[0],e=s[1];!(i in t)&&e in t&&(t[i]=t[e],3===s.length&&(t[i]=s[2](t[i])))}function r(t){return t*i.D2R}function h(t){function i(s){var i=t.to_meter||1;return parseFloat(s,10)*i}"GEOGCS"===t.type?t.projName="longlat":"LOCAL_CS"===t.type?(t.projName="identity",t.local=!0):t.projName=s.wktProjections[t.PROJECTION],t.UNIT&&(t.units=t.UNIT.name.toLowerCase(),"metre"===t.units&&(t.units="meter"),t.UNIT.convert&&(t.to_meter=parseFloat(t.UNIT.convert,10))),t.GEOGCS&&(t.datumCode=t.GEOGCS.DATUM?t.GEOGCS.DATUM.name.toLowerCase():t.GEOGCS.name.toLowerCase(),"d_"===t.datumCode.slice(0,2)&&(t.datumCode=t.datumCode.slice(2)),("new_zealand_geodetic_datum_1949"===t.datumCode||"new_zealand_1949"===t.datumCode)&&(t.datumCode="nzgd49"),"_ferro"===t.datumCode.slice(-6)&&(t.datumCode=t.datumCode.slice(0,-6)),"_jakarta"===t.datumCode.slice(-8)&&(t.datumCode=t.datumCode.slice(0,-8)),t.GEOGCS.DATUM&&t.GEOGCS.DATUM.SPHEROID&&(t.ellps=t.GEOGCS.DATUM.SPHEROID.name.replace("_19","").replace(/[Cc]larke\_18/,"clrk"),"international"===t.ellps.toLowerCase().slice(0,13)&&(t.ellps="intl"),t.a=t.GEOGCS.DATUM.SPHEROID.a,t.rf=parseFloat(t.GEOGCS.DATUM.SPHEROID.rf,10))),t.b&&!isFinite(t.b)&&(t.b=t.a);
-var e=n.bind(null,t),a=[["standard_parallel_1","Standard_Parallel_1"],["standard_parallel_2","Standard_Parallel_2"],["false_easting","False_Easting"],["false_northing","False_Northing"],["central_meridian","Central_Meridian"],["latitude_of_origin","Latitude_Of_Origin"],["scale_factor","Scale_Factor"],["k0","scale_factor"],["latitude_of_center","Latitude_of_center"],["lat0","latitude_of_center",r],["longitude_of_center","Longitude_Of_Center"],["longc","longitude_of_center",r],["x0","false_easting",i],["y0","false_northing",i],["long0","central_meridian",r],["lat0","latitude_of_origin",r],["lat0","standard_parallel_1",r],["lat1","standard_parallel_1",r],["lat2","standard_parallel_2",r],["alpha","azimuth",r],["srsCode","name"]];a.forEach(e),t.long0||!t.longc||"Albers_Conic_Equal_Area"!==t.PROJECTION&&"Lambert_Azimuthal_Equal_Area"!==t.PROJECTION||(t.long0=t.longc)}return function(s,i){var e=JSON.parse((","+s).replace(/\,([A-Z_0-9]+?)(\[)/g,',["$1",').slice(1).replace(/\,([A-Z_0-9]+?)\]/g,',"$1"]')),n=e.shift(),r=e.shift();e.unshift(["name",r]),e.unshift(["type",n]),e.unshift("output");var o={};return a(e,o),h(o.output),t(i,o.output)}}),define("proj4/Proj",["./extend","./common","./defs","./constants","./datum","./projections","./wkt","./projString"],function(t,s,i,e,a,n,r,h){var o=function l(s){if(!(this instanceof l))return new l(s);this.srsCodeInput=s;var e;"string"==typeof s?s in i?(this.deriveConstants(i[s]),t(this,i[s])):s.indexOf("GEOGCS")>=0||s.indexOf("GEOCCS")>=0||s.indexOf("PROJCS")>=0||s.indexOf("LOCAL_CS")>=0?(e=r(s),this.deriveConstants(e),t(this,e)):"+"===s[0]&&(e=h(s),this.deriveConstants(e),t(this,e)):(this.deriveConstants(s),t(this,s)),this.initTransforms(this.projName)};return o.prototype={initTransforms:function(s){if(!(s in o.projections))throw"unknown projection "+s;t(this,o.projections[s]),this.init()},deriveConstants:function(i){if(i.nadgrids&&0===i.nadgrids.length&&(i.nadgrids=null),i.nadgrids){i.grids=i.nadgrids.split(",");var n=null,r=i.grids.length;if(r>0)for(var h=0;r>h;h++){n=i.grids[h];var o=n.split("@");""!==o[o.length-1]&&(i.grids[h]={mandatory:1===o.length,name:o[o.length-1],grid:e.grids[o[o.length-1]]},i.grids[h].mandatory&&!i.grids[h].grid)}}if(i.datumCode&&"none"!==i.datumCode){var l=e.Datum[i.datumCode];l&&(i.datum_params=l.towgs84?l.towgs84.split(","):null,i.ellps=l.ellipse,i.datumName=l.datumName?l.datumName:i.datumCode)}if(!i.a){var u=e.Ellipsoid[i.ellps]?e.Ellipsoid[i.ellps]:e.Ellipsoid.WGS84;t(i,u)}i.rf&&!i.b&&(i.b=(1-1/i.rf)*i.a),(0===i.rf||Math.abs(i.a-i.b)<s.EPSLN)&&(i.sphere=!0,i.b=i.a),i.a2=i.a*i.a,i.b2=i.b*i.b,i.es=(i.a2-i.b2)/i.a2,i.e=Math.sqrt(i.es),i.R_A&&(i.a*=1-i.es*(s.SIXTH+i.es*(s.RA4+i.es*s.RA6)),i.a2=i.a*i.a,i.b2=i.b*i.b,i.es=0),i.ep2=(i.a2-i.b2)/i.b2,i.k0||(i.k0=1),i.axis||(i.axis="enu"),i.datum=a(i)}},o.projections=n,o}),define("proj4/datum_transform",["./common"],function(t){return function(s,i,e){function a(s){return s===t.PJD_3PARAM||s===t.PJD_7PARAM}var n,r,h;if(s.compare_datums(i))return e;if(s.datum_type===t.PJD_NODATUM||i.datum_type===t.PJD_NODATUM)return e;var o=s.a,l=s.es,u=i.a,f=i.es,c=s.datum_type;if(c===t.PJD_GRIDSHIFT)if(0===this.apply_gridshift(s,0,e))s.a=t.SRS_WGS84_SEMIMAJOR,s.es=t.SRS_WGS84_ESQUARED;else{if(!s.datum_params)return s.a=o,s.es=s.es,e;for(n=1,r=0,h=s.datum_params.length;h>r;r++)n*=s.datum_params[r];if(0===n)return s.a=o,s.es=s.es,e;c=s.datum_params.length>3?t.PJD_7PARAM:t.PJD_3PARAM}return i.datum_type===t.PJD_GRIDSHIFT&&(i.a=t.SRS_WGS84_SEMIMAJOR,i.es=t.SRS_WGS84_ESQUARED),(s.es!==i.es||s.a!==i.a||a(c)||a(i.datum_type))&&(s.geodetic_to_geocentric(e),a(s.datum_type)&&s.geocentric_to_wgs84(e),a(i.datum_type)&&i.geocentric_from_wgs84(e),i.geocentric_to_geodetic(e)),i.datum_type===t.PJD_GRIDSHIFT&&this.apply_gridshift(i,1,e),s.a=o,s.es=l,i.a=u,i.es=f,e}}),define("proj4/adjust_axis",[],function(){return function(t,s,i){var e,a,n,r=i.x,h=i.y,o=i.z||0;for(n=0;3>n;n++)if(!s||2!==n||void 0!==i.z)switch(0===n?(e=r,a="x"):1===n?(e=h,a="y"):(e=o,a="z"),t.axis[n]){case"e":i[a]=e;break;case"w":i[a]=-e;break;case"n":i[a]=e;break;case"s":i[a]=-e;break;case"u":void 0!==i[a]&&(i.z=e);break;case"d":void 0!==i[a]&&(i.z=-e);break;default:return null}return i}}),define("proj4/transform",["./common","./datum_transform","./adjust_axis","./Proj"],function(t,s,i,e){return function(a,n,r){function h(s,i){return(s.datum.datum_type===t.PJD_3PARAM||s.datum.datum_type===t.PJD_7PARAM)&&"WGS84"!==i.datumCode}var o;return a.datum&&n.datum&&(h(a,n)||h(n,a))&&(o=new e("WGS84"),this.transform(a,o,r),a=o),"enu"!==a.axis&&i(a,!1,r),"longlat"===a.projName?(r.x*=t.D2R,r.y*=t.D2R):(a.to_meter&&(r.x*=a.to_meter,r.y*=a.to_meter),a.inverse(r)),a.from_greenwich&&(r.x+=a.from_greenwich),r=s(a.datum,n.datum,r),n.from_greenwich&&(r.x-=n.from_greenwich),"longlat"===n.projName?(r.x*=t.R2D,r.y*=t.R2D):(n.forward(r),n.to_meter&&(r.x/=n.to_meter,r.y/=n.to_meter)),"enu"!==n.axis&&i(n,!0,r),r}}),define("proj4/core",["./Point","./Proj","./transform"],function(t,s,i){var e=s("WGS84");return function(a,n,r){var h=function(s,e,r){var h;return Array.isArray(r)?(h=i(s,e,t(r)),3===r.length?[h.x,h.y,h.z]:[h.x,h.y]):i(a,n,r)};return a=a instanceof s?a:s(a),"undefined"==typeof n?(n=a,a=e):"string"==typeof n?n=s(n):"x"in n||Array.isArray(n)?(r=n,n=a,a=e):n=n instanceof s?n:s(n),r?h(a,n,r):{forward:function(t){return h(a,n,t)},inverse:function(t){return h(n,a,t)}}}}),define("proj4",["proj4/core","proj4/Proj","proj4/Point","proj4/defs","proj4/transform","proj4/mgrs"],function(t,s,i,e,a,n){return t.defaultDatum="WGS84",t.Proj=s,t.WGS84=new t.Proj("WGS84"),t.Point=i,t.defs=e,t.transform=a,t.mgrs=n,t}),define("shp/unzip",[],function(){var t=function(t,s){this.files={},this.root="",t&&this.load(t,s)};t.signature={LOCAL_FILE_HEADER:"PK",CENTRAL_FILE_HEADER:"PK",CENTRAL_DIRECTORY_END:"PK",ZIP64_CENTRAL_DIRECTORY_LOCATOR:"PK",ZIP64_CENTRAL_DIRECTORY_END:"PK",DATA_DESCRIPTOR:"PK\b"},t.defaults={base64:!1,binary:!1,dir:!1,date:null,compression:null},t.prototype=function(){var i=function(t,s,i){this.name=t,this.data=s,this.options=i};i.prototype={asText:function(){var i=this.data;return null===i||"undefined"==typeof i?"":(this.options.base64&&(i=s.decode(i)),this.options.binary&&(i=t.prototype.utf8decode(i)),i)},asBinary:function(){var i=this.data;return null===i||"undefined"==typeof i?"":(this.options.base64&&(i=s.decode(i)),this.options.binary||(i=t.prototype.utf8encode(i)),i)},asUint8Array:function(){return t.utils.string2Uint8Array(this.asBinary())},asArrayBuffer:function(){return t.utils.string2Uint8Array(this.asBinary()).buffer}};var e=function(t,s){var i,e="";for(i=0;s>i;i++)e+=String.fromCharCode(255&t),t>>>=8;return e},a=function(){var t,s,i={};for(t=0;t<arguments.length;t++)for(s in arguments[t])arguments[t].hasOwnProperty(s)&&"undefined"==typeof i[s]&&(i[s]=arguments[t][s]);return i},n=function(s){return s=s||{},s.base64===!0&&null==s.binary&&(s.binary=!0),s=a(s,t.defaults),s.date=s.date||new Date,null!==s.compression&&(s.compression=s.compression.toUpperCase()),s},r=function(s,e,a){var r=h(s);if(r&&o.call(this,r),a=n(a),a.dir||null===e||"undefined"==typeof e)a.base64=!1,a.binary=!1,e=null;else if(t.support.uint8array&&e instanceof Uint8Array)a.base64=!1,a.binary=!0,e=t.utils.uint8Array2String(e);else if(t.support.arraybuffer&&e instanceof ArrayBuffer){a.base64=!1,a.binary=!0;var l=new Uint8Array(e);e=t.utils.uint8Array2String(l)}else a.binary&&!a.base64&&(a.optimizedBinaryString!==!0&&(e=t.utils.string2binary(e)),delete a.optimizedBinaryString);return this.files[s]=new i(s,e,a)},h=function(t){"/"==t.slice(-1)&&(t=t.substring(0,t.length-1));var s=t.lastIndexOf("/");return s>0?t.substring(0,s):""},o=function(t){if("/"!=t.slice(-1)&&(t+="/"),!this.files[t]){var s=h(t);s&&o.call(this,s),r.call(this,t,null,{dir:!0})}return this.files[t]},l=function(s,i,a){var n,r,h=i!==s.name,o=s.asBinary(),l=s.options;n=l.date.getHours(),n<<=6,n|=l.date.getMinutes(),n<<=5,n|=l.date.getSeconds()/2,r=l.date.getFullYear()-1980,r<<=4,r|=l.date.getMonth()+1,r<<=5,r|=l.date.getDate();var u=null!==o&&0!==o.length;if(a=l.compression||a,!t.compressions[a])throw a+" is not a valid compression method !";var f=t.compressions[a],c=u?f.compress(o):"",d="";return d+="\n\0",d+=h?"\0\b":"\0\0",d+=u?f.magic:t.compressions.STORE.magic,d+=e(n,2),d+=e(r,2),d+=u?e(this.crc32(o),4):"\0\0\0\0",d+=u?e(c.length,4):"\0\0\0\0",d+=u?e(o.length,4):"\0\0\0\0",d+=e(i.length,2),d+="\0\0",{header:d,compressedData:c}};return{load:function(){throw new Error("Load method is not defined. Is the file jszip-load.js included ?")},filter:function(t){var s,e,n,r,h=[];for(s in this.files)this.files.hasOwnProperty(s)&&(n=this.files[s],r=new i(n.name,n.data,a(n.options)),e=s.slice(this.root.length,s.length),s.slice(0,this.root.length)===this.root&&t(e,r)&&h.push(r));return h},file:function(t,s,i){if(1===arguments.length){if(t instanceof RegExp){var e=t;return this.filter(function(t,s){return!s.options.dir&&e.test(t)})}return this.filter(function(s,i){return!i.options.dir&&s===t})[0]||null}return t=this.root+t,r.call(this,t,s,i),this},folder:function(t){if(!t)return this;if(t instanceof RegExp)return this.filter(function(s,i){return i.options.dir&&t.test(s)});var s=this.root+t,i=o.call(this,s),e=this.clone();return e.root=i.name,e},remove:function(t){t=this.root+t;var s=this.files[t];if(s||("/"!=t.slice(-1)&&(t+="/"),s=this.files[t]),s)if(s.options.dir)for(var i=this.filter(function(s,i){return i.name.slice(0,t.length)===t}),e=0;e<i.length;e++)delete this.files[i[e].name];else delete this.files[t];return this},generate:function(i){i=a(i||{},{base64:!0,compression:"STORE",type:"base64"});var n=i.compression.toUpperCase();if(!t.compressions[n])throw n+" is not a valid compression method !";var r=[],h=[],o=0;for(var u in this.files)if(this.files.hasOwnProperty(u)){var f=this.files[u],c=this.utf8encode(f.name),d="",p="",m=l.call(this,f,c,n);d=t.signature.LOCAL_FILE_HEADER+m.header+c+m.compressedData,p=t.signature.CENTRAL_FILE_HEADER+"\0"+m.header+"\0\0"+"\0\0"+"\0\0"+(this.files[u].options.dir===!0?"\0\0\0":"\0\0\0\0")+e(o,4)+c,o+=d.length,h.push(d),r.push(p)}var M=h.join(""),g=r.join(""),_="";_=t.signature.CENTRAL_DIRECTORY_END+"\0\0"+"\0\0"+e(h.length,2)+e(h.length,2)+e(g.length,4)+e(M.length,4)+"\0\0";var y=M+g+_;switch(i.type.toLowerCase()){case"uint8array":return t.utils.string2Uint8Array(y);case"arraybuffer":return t.utils.string2Uint8Array(y).buffer;case"blob":return t.utils.string2Blob(y);case"base64":return i.base64?s.encode(y):y;default:return y}},crc32:function(t,s){if(""===t||"undefined"==typeof t)return 0;var i=[0,1996959894,3993919788,2567524794,124634137,1886057615,3915621685,2657392035,249268274,2044508324,3772115230,2547177864,162941995,2125561021,3887607047,2428444049,498536548,1789927666,4089016648,2227061214,450548861,1843258603,4107580753,2211677639,325883990,1684777152,4251122042,2321926636,335633487,1661365465,4195302755,2366115317,997073096,1281953886,3579855332,2724688242,1006888145,1258607687,3524101629,2768942443,901097722,1119000684,3686517206,2898065728,853044451,1172266101,3705015759,2882616665,651767980,1373503546,3369554304,3218104598,565507253,1454621731,3485111705,3099436303,671266974,1594198024,3322730930,2970347812,795835527,1483230225,3244367275,3060149565,1994146192,31158534,2563907772,4023717930,1907459465,112637215,2680153253,3904427059,2013776290,251722036,2517215374,3775830040,2137656763,141376813,2439277719,3865271297,1802195444,476864866,2238001368,4066508878,1812370925,453092731,2181625025,4111451223,1706088902,314042704,2344532202,4240017532,1658658271,366619977,2362670323,4224994405,1303535960,984961486,2747007092,3569037538,1256170817,1037604311,2765210733,3554079995,1131014506,879679996,2909243462,3663771856,1141124467,855842277,2852801631,3708648649,1342533948,654459306,3188396048,3373015174,1466479909,544179635,3110523913,3462522015,1591671054,702138776,2966460450,3352799412,1504918807,783551873,3082640443,3233442989,3988292384,2596254646,62317068,1957810842,3939845945,2647816111,81470997,1943803523,3814918930,2489596804,225274430,2053790376,3826175755,2466906013,167816743,2097651377,4027552580,2265490386,503444072,1762050814,4150417245,2154129355,426522225,1852507879,4275313526,2312317920,282753626,1742555852,4189708143,2394877945,397917763,1622183637,3604390888,2714866558,953729732,1340076626,3518719985,2797360999,1068828381,1219638859,3624741850,2936675148,906185462,1090812512,3747672003,2825379669,829329135,1181335161,3412177804,3160834842,628085408,1382605366,3423369109,3138078467,570562233,1426400815,3317316542,2998733608,733239954,1555261956,3268935591,3050360625,752459403,1541320221,2607071920,3965973030,1969922972,40735498,2617837225,3943577151,1913087877,83908371,2512341634,3803740692,2075208622,213261112,2463272603,3855990285,2094854071,198958881,2262029012,4057260610,1759359992,534414190,2176718541,4139329115,1873836001,414664567,2282248934,4279200368,1711684554,285281116,2405801727,4167216745,1634467795,376229701,2685067896,3608007406,1308918612,956543938,2808555105,3495958263,1231636301,1047427035,2932959818,3654703836,1088359270,936918e3,2847714899,3736837829,1202900863,817233897,3183342108,3401237130,1404277552,615818150,3134207493,3453421203,1423857449,601450431,3009837614,3294710456,1567103746,711928724,3020668471,3272380065,1510334235,755167117];"undefined"==typeof s&&(s=0);var e=0,a=0;s=-1^s;for(var n=0,r=t.length;r>n;n++)a=255&(s^t.charCodeAt(n)),e=i[a],s=s>>>8^e;return-1^s},clone:function(){var s=new t;for(var i in this)"function"!=typeof this[i]&&(s[i]=this[i]);return s},utf8encode:function(t){for(var s="",i=0;i<t.length;i++){var e=t.charCodeAt(i);128>e?s+=String.fromCharCode(e):e>127&&2048>e?(s+=String.fromCharCode(192|e>>6),s+=String.fromCharCode(128|63&e)):(s+=String.fromCharCode(224|e>>12),s+=String.fromCharCode(128|63&e>>6),s+=String.fromCharCode(128|63&e))}return s},utf8decode:function(t){for(var s="",i=0,e=0,a=0,n=0;i<t.length;)e=t.charCodeAt(i),128>e?(s+=String.fromCharCode(e),i++):e>191&&224>e?(a=t.charCodeAt(i+1),s+=String.fromCharCode((31&e)<<6|63&a),i+=2):(a=t.charCodeAt(i+1),n=t.charCodeAt(i+2),s+=String.fromCharCode((15&e)<<12|(63&a)<<6|63&n),i+=3);return s}}}(),t.compressions={STORE:{magic:"\0\0",compress:function(t){return t},uncompress:function(t){return t}}},t.support={arraybuffer:function(){return"undefined"!=typeof ArrayBuffer&&"undefined"!=typeof Uint8Array}(),uint8array:function(){return"undefined"!=typeof Uint8Array}(),blob:function(){if("undefined"==typeof ArrayBuffer)return!1;var t=new ArrayBuffer(0);try{return 0===new Blob([t],{type:"application/zip"}).size}catch(s){}try{var i=new(window.BlobBuilder||window.WebKitBlobBuilder||window.MozBlobBuilder||window.MSBlobBuilder);return i.append(t),0===i.getBlob("application/zip").size}catch(s){}return!1}()},t.utils={string2binary:function(t){for(var s="",i=0;i<t.length;i++)s+=String.fromCharCode(255&t.charCodeAt(i));return s},string2Uint8Array:function(s){if(!t.support.uint8array)throw new Error("Uint8Array is not supported by this browser");for(var i=new ArrayBuffer(s.length),e=new Uint8Array(i),a=0;a<s.length;a++)e[a]=s.charCodeAt(a);return e},uint8Array2String:function(s){if(!t.support.uint8array)throw new Error("Uint8Array is not supported by this browser");for(var i="",e=0;e<s.length;e++)i+=String.fromCharCode(s[e]);return i},string2Blob:function(s){if(!t.support.blob)throw new Error("Blob is not supported by this browser");var i=t.utils.string2Uint8Array(s).buffer;try{return new Blob([i],{type:"application/zip"})}catch(e){}try{var a=new(window.BlobBuilder||window.WebKitBlobBuilder||window.MozBlobBuilder||window.MSBlobBuilder);return a.append(i),a.getBlob("application/zip")}catch(e){}throw new Error("Bug : can't construct the Blob.")}};var s=function(){var t="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";return{encode:function(s){for(var i,e,a,n,r,h,o,l="",u=0;u<s.length;)i=s.charCodeAt(u++),e=s.charCodeAt(u++),a=s.charCodeAt(u++),n=i>>2,r=(3&i)<<4|e>>4,h=(15&e)<<2|a>>6,o=63&a,isNaN(e)?h=o=64:isNaN(a)&&(o=64),l=l+t.charAt(n)+t.charAt(r)+t.charAt(h)+t.charAt(o);return l},decode:function(s){var i,e,a,n,r,h,o,l="",u=0;for(s=s.replace(/[^A-Za-z0-9\+\/\=]/g,"");u<s.length;)n=t.indexOf(s.charAt(u++)),r=t.indexOf(s.charAt(u++)),h=t.indexOf(s.charAt(u++)),o=t.indexOf(s.charAt(u++)),i=n<<2|r>>4,e=(15&r)<<4|h>>2,a=(3&h)<<6|o,l+=String.fromCharCode(i),64!=h&&(l+=String.fromCharCode(e)),64!=o&&(l+=String.fromCharCode(a));return l}}}();if(function(){function i(s){if(this.stream="",t.support.uint8array&&s instanceof Uint8Array)this.stream=t.utils.uint8Array2String(s);else if(t.support.arraybuffer&&s instanceof ArrayBuffer){var i=new Uint8Array(s);this.stream=t.utils.uint8Array2String(i)}else this.stream=t.utils.string2binary(s);this.index=0}function e(t,s){this.options=t,this.loadOptions=s}function a(t,s){this.files=[],this.loadOptions=s,t&&this.load(t)}var n=65535,r=-1,h=function(t){var s,i,e="";for(i=0;i<(t||"").length;i++)s=t.charCodeAt(i),e+="\\x"+(16>s?"0":"")+s.toString(16).toUpperCase();return e},o=function(s){for(var i in t.compressions)if(t.compressions.hasOwnProperty(i)&&t.compressions[i].magic===s)return t.compressions[i];return null};i.prototype={checkOffset:function(t){this.checkIndex(this.index+t)},checkIndex:function(t){if(this.stream.length<t||0>t)throw new Error("End of stream reached (stream length = "+this.stream.length+", asked index = "+t+"). Corrupted zip ?")},setIndex:function(t){this.checkIndex(t),this.index=t},skip:function(t){this.setIndex(this.index+t)},byteAt:function(t){return this.stream.charCodeAt(t)},readInt:function(t){var s,i=0;for(this.checkOffset(t),s=this.index+t-1;s>=this.index;s--)i=(i<<8)+this.byteAt(s);return this.index+=t,i},readString:function(t){this.checkOffset(t);var s=this.stream.slice(this.index,this.index+t);return this.index+=t,s},readDate:function(){var t=this.readInt(4);return new Date((127&t>>25)+1980,(15&t>>21)-1,31&t>>16,31&t>>11,63&t>>5,(31&t)<<1)}},e.prototype={isEncrypted:function(){return 1===(1&this.bitFlag)},useUTF8:function(){return 2048===(2048&this.bitFlag)},readLocalPart:function(s){var i,e;if(s.skip(22),this.fileNameLength=s.readInt(2),e=s.readInt(2),this.fileName=s.readString(this.fileNameLength),s.skip(e),-1==this.compressedSize||-1==this.uncompressedSize)throw new Error("Bug or corrupted zip : didn't get enough informations from the central directory (compressedSize == -1 || uncompressedSize == -1)");if(this.compressedFileData=s.readString(this.compressedSize),i=o(this.compressionMethod),null===i)throw new Error("Corrupted zip : compression "+h(this.compressionMethod)+" unknown (inner file : "+this.fileName+")");if(this.uncompressedFileData=i.uncompress(this.compressedFileData),this.uncompressedFileData.length!==this.uncompressedSize)throw new Error("Bug : uncompressed data size mismatch");if(this.loadOptions.checkCRC32&&t.prototype.crc32(this.uncompressedFileData)!==this.crc32)throw new Error("Corrupted zip : CRC32 mismatch")},readCentralPart:function(t){if(this.versionMadeBy=t.readString(2),this.versionNeeded=t.readInt(2),this.bitFlag=t.readInt(2),this.compressionMethod=t.readString(2),this.date=t.readDate(),this.crc32=t.readInt(4),this.compressedSize=t.readInt(4),this.uncompressedSize=t.readInt(4),this.fileNameLength=t.readInt(2),this.extraFieldsLength=t.readInt(2),this.fileCommentLength=t.readInt(2),this.diskNumberStart=t.readInt(2),this.internalFileAttributes=t.readInt(2),this.externalFileAttributes=t.readInt(4),this.localHeaderOffset=t.readInt(4),this.isEncrypted())throw new Error("Encrypted zip are not supported");this.fileName=t.readString(this.fileNameLength),this.readExtraFields(t),this.parseZIP64ExtraField(t),this.fileComment=t.readString(this.fileCommentLength),this.dir=16&this.externalFileAttributes?!0:!1},parseZIP64ExtraField:function(){if(this.extraFields[1]){var t=new i(this.extraFields[1].value);this.uncompressedSize===r&&(this.uncompressedSize=t.readInt(8)),this.compressedSize===r&&(this.compressedSize=t.readInt(8)),this.localHeaderOffset===r&&(this.localHeaderOffset=t.readInt(8)),this.diskNumberStart===r&&(this.diskNumberStart=t.readInt(4))}},readExtraFields:function(t){var s,i,e,a=t.index;for(this.extraFields=this.extraFields||{};t.index<a+this.extraFieldsLength;)s=t.readInt(2),i=t.readInt(2),e=t.readString(i),this.extraFields[s]={id:s,length:i,value:e}},handleUTF8:function(){this.useUTF8()&&(this.fileName=t.prototype.utf8decode(this.fileName),this.fileComment=t.prototype.utf8decode(this.fileComment))}},a.prototype={checkSignature:function(t){var s=this.reader.readString(4);if(s!==t)throw new Error("Corrupted zip or bug : unexpected signature ("+h(s)+", expected "+h(t)+")")},readBlockEndOfCentral:function(){this.diskNumber=this.reader.readInt(2),this.diskWithCentralDirStart=this.reader.readInt(2),this.centralDirRecordsOnThisDisk=this.reader.readInt(2),this.centralDirRecords=this.reader.readInt(2),this.centralDirSize=this.reader.readInt(4),this.centralDirOffset=this.reader.readInt(4),this.zipCommentLength=this.reader.readInt(2),this.zipComment=this.reader.readString(this.zipCommentLength)},readBlockZip64EndOfCentral:function(){this.zip64EndOfCentralSize=this.reader.readInt(8),this.versionMadeBy=this.reader.readString(2),this.versionNeeded=this.reader.readInt(2),this.diskNumber=this.reader.readInt(4),this.diskWithCentralDirStart=this.reader.readInt(4),this.centralDirRecordsOnThisDisk=this.reader.readInt(8),this.centralDirRecords=this.reader.readInt(8),this.centralDirSize=this.reader.readInt(8),this.centralDirOffset=this.reader.readInt(8),this.zip64ExtensibleData={};for(var t,s,i,e=this.zip64EndOfCentralSize-44,a=0;e>a;)t=this.reader.readInt(2),s=this.reader.readInt(4),i=this.reader.readString(s),this.zip64ExtensibleData[t]={id:t,length:s,value:i}},readBlockZip64EndOfCentralLocator:function(){if(this.diskWithZip64CentralDirStart=this.reader.readInt(4),this.relativeOffsetEndOfZip64CentralDir=this.reader.readInt(8),this.disksCount=this.reader.readInt(4),this.disksCount>1)throw new Error("Multi-volumes zip are not supported")},readLocalFiles:function(){var s,i;for(s=0;s<this.files.length;s++)i=this.files[s],this.reader.setIndex(i.localHeaderOffset),this.checkSignature(t.signature.LOCAL_FILE_HEADER),i.readLocalPart(this.reader),i.handleUTF8()},readCentralDir:function(){var s;for(this.reader.setIndex(this.centralDirOffset);this.reader.readString(4)===t.signature.CENTRAL_FILE_HEADER;)s=new e({zip64:this.zip64},this.loadOptions),s.readCentralPart(this.reader),this.files.push(s)},readEndOfCentral:function(){var s=this.reader.stream.lastIndexOf(t.signature.CENTRAL_DIRECTORY_END);if(-1===s)throw new Error("Corrupted zip : can't find end of central directory");if(this.reader.setIndex(s),this.checkSignature(t.signature.CENTRAL_DIRECTORY_END),this.readBlockEndOfCentral(),this.diskNumber===n||this.diskWithCentralDirStart===n||this.centralDirRecordsOnThisDisk===n||this.centralDirRecords===n||this.centralDirSize===r||this.centralDirOffset===r){if(this.zip64=!0,s=this.reader.stream.lastIndexOf(t.signature.ZIP64_CENTRAL_DIRECTORY_LOCATOR),-1===s)throw new Error("Corrupted zip : can't find the ZIP64 end of central directory locator");this.reader.setIndex(s),this.checkSignature(t.signature.ZIP64_CENTRAL_DIRECTORY_LOCATOR),this.readBlockZip64EndOfCentralLocator(),this.reader.setIndex(this.relativeOffsetEndOfZip64CentralDir),this.checkSignature(t.signature.ZIP64_CENTRAL_DIRECTORY_END),this.readBlockZip64EndOfCentral()}},load:function(t){this.reader=new i(t),this.readEndOfCentral(),this.readCentralDir(),this.readLocalFiles()}},t.prototype.load=function(t,i){var e,n,r,h;for(i=i||{},i.base64&&(t=s.decode(t)),n=new a(t,i),e=n.files,r=0;r<e.length;r++)h=e[r],this.file(h.fileName,h.uncompressedFileData,{binary:!0,optimizedBinaryString:!0,date:h.date,dir:h.dir});return this}}(),!t)throw"JSZip not defined";return function(){function s(){this.next=null,this.list=null}function i(){this.e=0,this.b=0,this.n=0,this.t=null}function e(t,e,a,n,r,h){this.BMAX=16,this.N_MAX=288,this.status=0,this.root=null,this.m=0;var o,l,u,f,c,d,p,m,M,g,_,y,v,b,x,C,P,S=new Array(this.BMAX+1),A=new Array(this.BMAX+1),I=new i,w=new Array(this.BMAX),E=new Array(this.N_MAX),N=new Array(this.BMAX+1);for(P=this.root=null,d=0;d<S.length;d++)S[d]=0;for(d=0;d<A.length;d++)A[d]=0;for(d=0;d<w.length;d++)w[d]=null;for(d=0;d<E.length;d++)E[d]=0;for(d=0;d<N.length;d++)N[d]=0;l=e>256?t[256]:this.BMAX,M=t,g=0,d=e;do S[M[g]]++,g++;while(--d>0);if(S[0]==e)return this.root=null,this.m=0,this.status=0,void 0;for(p=1;p<=this.BMAX&&0==S[p];p++);for(m=p,p>h&&(h=p),d=this.BMAX;0!=d&&0==S[d];d--);for(f=d,h>d&&(h=d),b=1<<p;d>p;p++,b<<=1)if((b-=S[p])<0)return this.status=2,this.m=h,void 0;if((b-=S[d])<0)return this.status=2,this.m=h,void 0;for(S[d]+=b,N[1]=p=0,M=S,g=1,v=2;--d>0;)N[v++]=p+=M[g++];M=t,g=0,d=0;do 0!=(p=M[g++])&&(E[N[p]++]=d);while(++d<e);for(e=N[f],N[0]=d=0,M=E,g=0,c=-1,y=A[0]=0,_=null,x=0;f>=m;m++)for(o=S[m];o-->0;){for(;m>y+A[1+c];){if(y+=A[1+c],c++,x=(x=f-y)>h?h:x,(u=1<<(p=m-y))>o+1)for(u-=o+1,v=m;++p<x&&!((u<<=1)<=S[++v]);)u-=S[v];for(y+p>l&&l>y&&(p=l-y),x=1<<p,A[1+c]=p,_=new Array(x),C=0;x>C;C++)_[C]=new i;P=null==P?this.root=new s:P.next=new s,P.next=null,P.list=_,w[c]=_,c>0&&(N[c]=d,I.b=A[c],I.e=16+p,I.t=_,p=(d&(1<<y)-1)>>y-A[c],w[c-1][p].e=I.e,w[c-1][p].b=I.b,w[c-1][p].n=I.n,w[c-1][p].t=I.t)}for(I.b=m-y,g>=e?I.e=99:M[g]<a?(I.e=M[g]<256?16:15,I.n=M[g++]):(I.e=r[M[g]-a],I.n=n[M[g++]-a]),u=1<<m-y,p=d>>y;x>p;p+=u)_[p].e=I.e,_[p].b=I.b,_[p].n=I.n,_[p].t=I.t;for(p=1<<m-1;0!=(d&p);p>>=1)d^=p;for(d^=p;(d&(1<<y)-1)!=N[c];)y-=A[c],c--}this.m=A[1],this.status=0!=b&&1!=f?1:0}function a(){return N.length==j?-1:255&N.charCodeAt(j++)}function n(t){for(;t>b;)v|=a()<<b,b+=8}function r(t){return v&F[t]}function h(t){v>>=t,b-=t}function o(t,s,i){var e,a,o;if(0==i)return 0;for(o=0;;){for(n(w),a=A.list[r(w)],e=a.e;e>16;){if(99==e)return-1;h(a.b),e-=16,n(e),a=a.t[r(e)],e=a.e}if(h(a.b),16!=e){if(15==e)break;for(n(e),P=a.n+r(e),h(e),n(E),a=I.list[r(E)],e=a.e;e>16;){if(99==e)return-1;h(a.b),e-=16,n(e),a=a.t[r(e)],e=a.e}for(h(a.b),n(e),S=g-a.n-r(e),h(e);P>0&&i>o;)P--,S&=L-1,g&=L-1,t[s+o++]=M[g++]=M[S++];if(o==i)return i}else if(g&=L-1,t[s+o++]=M[g++]=a.n,o==i)return i}return x=-1,o}function l(t,s,i){var e;if(e=7&b,h(e),n(16),e=r(16),h(16),n(16),e!=(65535&~v))return-1;for(h(16),P=e,e=0;P>0&&i>e;)P--,g&=L-1,n(8),t[s+e++]=M[g++]=r(8),h(8);return 0==P&&(x=-1),e}function u(t,s,i){if(null==D){var a,n,r=new Array(288);for(a=0;144>a;a++)r[a]=8;for(;256>a;a++)r[a]=9;for(;280>a;a++)r[a]=7;for(;288>a;a++)r[a]=8;if(y=7,n=new e(r,288,257,q,z,y),0!=n.status)return alert("HufBuild error: "+n.status),-1;for(D=n.root,y=n.m,a=0;30>a;a++)r[a]=5;if(m=5,n=new e(r,30,0,T,B,m),n.status>1)return D=null,alert("HufBuild error: "+n.status),-1;_=n.root,m=n.m}return A=D,I=_,w=y,E=m,o(t,s,i)}function f(t,s,i){var a,l,u,f,c,d,p,m,M,g=new Array(316);for(a=0;a<g.length;a++)g[a]=0;if(n(5),p=257+r(5),h(5),n(5),m=1+r(5),h(5),n(4),d=4+r(4),h(4),p>286||m>30)return-1;for(l=0;d>l;l++)n(3),g[G[l]]=r(3),h(3);for(;19>l;l++)g[G[l]]=0;if(w=7,M=new e(g,19,19,null,null,w),0!=M.status)return-1;for(A=M.root,w=M.m,f=p+m,a=u=0;f>a;)if(n(w),c=A.list[r(w)],l=c.b,h(l),l=c.n,16>l)g[a++]=u=l;else if(16==l){if(n(2),l=3+r(2),h(2),a+l>f)return-1;for(;l-->0;)g[a++]=u}else if(17==l){if(n(3),l=3+r(3),h(3),a+l>f)return-1;for(;l-->0;)g[a++]=0;u=0}else{if(n(7),l=11+r(7),h(7),a+l>f)return-1;for(;l-->0;)g[a++]=0;u=0}if(w=R,M=new e(g,p,257,q,z,w),0==w&&(M.status=1),0!=M.status)return 1==M.status,-1;for(A=M.root,w=M.m,a=0;m>a;a++)g[a]=g[a+p];return E=O,M=new e(g,m,0,T,B,E),I=M.root,E=M.m,0==E&&p>257?-1:(1==M.status,0!=M.status?-1:o(t,s,i))}function c(){null==M&&(M=new Array(2*L)),g=0,v=0,b=0,x=-1,C=!1,P=S=0,A=null}function d(t,s,i){var e,a;for(e=0;i>e;){if(C&&-1==x)return e;if(P>0){if(x!=k)for(;P>0&&i>e;)P--,S&=L-1,g&=L-1,t[s+e++]=M[g++]=M[S++];else{for(;P>0&&i>e;)P--,g&=L-1,n(8),t[s+e++]=M[g++]=r(8),h(8);0==P&&(x=-1)}if(e==i)return e}if(-1==x){if(C)break;n(1),0!=r(1)&&(C=!0),h(1),n(2),x=r(2),h(2),A=null,P=0}switch(x){case 0:a=l(t,s+e,i-e);break;case 1:a=null!=A?o(t,s+e,i-e):u(t,s+e,i-e);break;case 2:a=null!=A?o(t,s+e,i-e):f(t,s+e,i-e);break;default:a=-1}if(-1==a)return C?0:-1;e+=a}return e}function p(t){var s,i,e,a;for(c(),N=t,j=0,i=new Array(1024),s="";(e=d(i,0,i.length))>0;)for(a=0;e>a;a++)s+=String.fromCharCode(i[a]);return N=null,s}var m,M,g,_,y,v,b,x,C,P,S,A,I,w,E,N,j,L=32768,k=0,R=9,O=6,D=null,F=new Array(0,1,3,7,15,31,63,127,255,511,1023,2047,4095,8191,16383,32767,65535),q=new Array(3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258,0,0),z=new Array(0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0,99,99),T=new Array(1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577),B=new Array(0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13),G=new Array(16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15);t.compressions.DEFLATE?t.compressions.DEFLATE.uncompress=p:t.compressions.DEFLATE={magic:"\b\0",uncompress:p}}(),t}),define("shp/jszip",["./unzip"],function(t){return function(s){var i=new t(s),e=i.file(/.+/),a={};return e.forEach(function(t){a[t.name]="geojson"===t.name.slice(-7).toLowerCase()?t.asText():t.asArrayBuffer()}),a}}),function(global,undefined){function canUseNextTick(){return"object"==typeof process&&"[object process]"===Object.prototype.toString.call(process)}function canUseMessageChannel(){return!!global.MessageChannel}function canUsePostMessage(){if(!global.postMessage||global.importScripts)return!1;var t=!0,s=global.onmessage;return global.onmessage=function(){t=!1},global.postMessage("","*"),global.onmessage=s,t}function canUseReadyStateChange(){return"document"in global&&"onreadystatechange"in global.document.createElement("script")}function installNextTickImplementation(t){t.setImmediate=function(){var t=tasks.addFromSetImmediateArguments(arguments);return process.nextTick(function(){tasks.runIfPresent(t)}),t}}function installMessageChannelImplementation(t){var s=new global.MessageChannel;s.port1.onmessage=function(t){var s=t.data;tasks.runIfPresent(s)},t.setImmediate=function(){var t=tasks.addFromSetImmediateArguments(arguments);return s.port2.postMessage(t),t}}function installPostMessageImplementation(t){function s(t,s){return"string"==typeof t&&t.substring(0,s.length)===s}function i(t){if(t.source===global&&s(t.data,e)){var i=t.data.substring(e.length);tasks.runIfPresent(i)}}var e="com.bn.NobleJS.setImmediate"+Math.random();global.addEventListener?global.addEventListener("message",i,!1):global.attachEvent("onmessage",i),t.setImmediate=function(){var t=tasks.addFromSetImmediateArguments(arguments);return global.postMessage(e+t,"*"),t}}function installReadyStateChangeImplementation(t){t.setImmediate=function(){var t=tasks.addFromSetImmediateArguments(arguments),s=global.document.createElement("script");return s.onreadystatechange=function(){tasks.runIfPresent(t),s.onreadystatechange=null,s.parentNode.removeChild(s),s=null},global.document.documentElement.appendChild(s),t}}function installSetTimeoutImplementation(t){t.setImmediate=function(){var t=tasks.addFromSetImmediateArguments(arguments);return global.setTimeout(function(){tasks.runIfPresent(t)},0),t}}var tasks=function(){function Task(t,s){this.handler=t,this.args=s}Task.prototype.run=function(){if("function"==typeof this.handler)this.handler.apply(undefined,this.args);else{var scriptSource=""+this.handler;eval(scriptSource)}};var nextHandle=1,tasksByHandle={},currentlyRunningATask=!1;return{addFromSetImmediateArguments:function(t){var s=t[0],i=Array.prototype.slice.call(t,1),e=new Task(s,i),a=nextHandle++;return tasksByHandle[a]=e,a},runIfPresent:function(t){if(currentlyRunningATask)global.setTimeout(function(){tasks.runIfPresent(t)},0);else{var s=tasksByHandle[t];if(s){currentlyRunningATask=!0;try{s.run()}finally{delete tasksByHandle[t],currentlyRunningATask=!1}}}},remove:function(t){delete tasksByHandle[t]}}}();if(!global.setImmediate){var attachTo="function"==typeof Object.getPrototypeOf&&"setTimeout"in Object.getPrototypeOf(global)?Object.getPrototypeOf(global):global;
-canUseNextTick()?installNextTickImplementation(attachTo):canUsePostMessage()?installPostMessageImplementation(attachTo):canUseMessageChannel()?installMessageChannelImplementation(attachTo):canUseReadyStateChange()?installReadyStateChangeImplementation(attachTo):installSetTimeoutImplementation(attachTo),attachTo.clearImmediate=tasks.remove}}("object"==typeof global&&global?global:this),define("shp/lie",[],function(){function t(){function t(){this.then=function(t,s){return n(t,s)}}var n=function(t,h,o){var l;if(t!==n)return l=s(),n.queue.push({deferred:l,resolve:t,reject:h}),l.promise;for(var u,f,c,d=h?"resolve":"reject",p=0,m=n.queue.length;m>p;p++)u=n.queue[p],f=u.deferred,c=u[d],typeof c!==a?f[d](o):e(c,o,f);n=i(r,o,h)},r=new t;this.promise=r,n.queue=[],this.resolve=function(t){n.queue&&n(n,!0,t)},this.fulfill=this.resolve,this.reject=function(t){n.queue&&n(n,!1,t)}}function s(){return new t}function i(t,i,n){return function(r,h){var o,l=n?r:h;return typeof l!==a?t:(e(l,i,o=s()),o.promise)}}function e(t,s,i){setImmediate(function(){var e;try{e=t(s),e&&typeof e.then===a?e.then(i.resolve,i.reject):i.resolve(e)}catch(n){i.reject(n)}})}var a="function";return s.resolve=function(t){var s={};return s.then=i(s,t,!0),s},s.reject=function(t){var s={};return s.then=i(s,t,!1),s},s.all=function(t){var i=s(),e=t.length,a=0,n=[],r=function(t){return function(s){n[t]=s,a++,a===e&&i.resolve(n)}};return t.forEach(function(t,s){t.then(r(s),function(t){i.reject(t)})}),i.promise},s}),define("shp/binaryajax",["./lie"],function(t){return function(s){var i=t(),e=s.slice(-3),a=new XMLHttpRequest;return a.open("GET",s,!0),"prj"!==e&&(a.responseType="arraybuffer"),a.addEventListener("load",function(){return a.status>399?"prj"===e?i.resolve(!1):i.reject(a.status):(i.resolve(a.response),void 0)},!1),a.send(),i.promise}}),define("shp/parseShp",[],function(){function t(t){for(var s,i,e=0,a=1,n=t.length;n>a;)s=i||t[0],i=t[a],e+=(i[0]-s[0])*(i[1]+s[1]),a++;return e>0}function s(s,i){return t(i)?s.push([i]):s[s.length-1].push(i),s}function i(t,s){return{type:"Point",coordinates:s(t,0)}}function e(t,s){var e=i(t,s);return e.coordinates.push(s(t,16)),e}function a(t,s,i,e){for(var a=[],n=0;i>n;)a.push(e(t,s)),s+=16,n++;return a}function n(t,s,i,e){for(var a=0;i>a;)e[a].push(t.getFloat64(s,!0)),a++,s+=8;return e}function r(t,s,i,e,n,r){for(var h,o,l=[],u=0,f=0;e>u;)u++,i+=4,h=f,f=u===e?n:t.getInt32(i,!0),o=f-h,o&&(l.push(a(t,s,o,r)),s+=o<<4);return l}function h(t,s,i,e){for(var a=0;i>a;)e[a]=n(t,s,e[a].length,e[a]),s+=e[a].length<<3,a++;return e}function o(t,s){var i={};i.bbox=[t.getFloat64(0,!0),t.getFloat64(8,!0),t.getFloat64(16,!0),t.getFloat64(24,!0)];var e=t.getInt32(32,!0),n=36;return 1===e?(i.type="Point",i.coordinates=s(t,n)):(i.type="MultiPoint",i.coordinates=a(t,n,e,s)),i}function l(t,s){var i,e=o(t,s);if("Point"===e.type)return e.coordinates.push(t.getFloat64(72,!0)),e;i=e.coordinates.length;var a=56+(i<<4);return e.coordinates=n(t,a,i,e.coordinates),e}function u(t,s){var i={};i.bbox=[t.getFloat64(0,!0),t.getFloat64(8,!0),t.getFloat64(16,!0),t.getFloat64(24,!0)];var e,n,h=t.getInt32(32,!0),o=t.getInt32(36,!0);return 1===h?(i.type="LineString",e=44,i.coordinates=a(t,e,o,s)):(i.type="MultiLineString",e=40+(h<<2),n=40,i.coordinates=r(t,e,n,h,o,s)),i}function f(t,s){var i=u(t,s),e=i.coordinates.length,a=60+(e<<4);return"LineString"===i.type?(i.coordinates=n(t,a,e,i.coordinates),i):(i.coordinates=h(t,a,e,i.coordinates),i)}function c(t){return"LineString"===t.type?(t.type="Polygon",t.coordinates=[t.coordinates],t):(t.coordinates=t.coordinates.reduce(s,[]),1===t.coordinates.length?(t.type="Polygon",t.coordinates=t.coordinates[0],t):(t.type="MultiPolygon",t))}function d(t,s){return c(u(t,s))}function p(t,s){return c(f(t,s))}function m(t,s){if(t>20&&(t-=20),!(t in _))return console.log("I don't know that shp type"),function(){return function(){}};var i=_[t],e=M(s);return function(t){return i(t,e)}}function M(t){return t?function(s,i){return t.inverse([s.getFloat64(i,!0),s.getFloat64(i+8,!0)])}:function(t,s){return[t.getFloat64(s,!0),t.getFloat64(s+8,!0)]}}var g=function(t){var s=new DataView(t,0,100);return{length:s.getInt32(24,!1),version:s.getInt32(28,!0),shpCode:s.getInt32(32,!0),bbox:[s.getFloat64(36,!0),s.getFloat64(44,!0),s.getFloat64(52,!0),s.getFloat64(52,!0)]}},_={1:i,3:u,5:d,8:o,11:e,13:f,15:p,18:l},y=function(t,s){var i=new DataView(t,s,12),e=i.getInt32(4,!1)<<1,a=new DataView(t,s+12,e-4);return{id:i.getInt32(0,!1),len:e,data:a,type:i.getInt32(8,!0)}},v=function(t,s){for(var i,e=100,a=t.byteLength,n=[];a>e;)i=y(t,e),e+=8,e+=i.len,i.type&&n.push(s(i.data));return n};return function(t,s){var i=g(t);return v(t,m(i.shpCode,s))}}),define("shp/dbf",[],function(){function t(t){var s=new DataView(t),i={};return i.lastUpdated=new Date(s.getUint8(1,!0)+1900,s.getUint8(2,!0),s.getUint8(3,!0)),i.records=s.getUint32(4,!0),i.headerLen=s.getUint16(8,!0),i.recLen=s.getUint16(10,!0),i}function s(t){for(var s=new DataView(t),i=[],e=32;;){if(i.push({name:String.fromCharCode.apply(this,new Uint8Array(t,e,10)).replace(/\0|\s+$/g,""),dataType:String.fromCharCode(s.getUint8(e+11)),len:s.getUint8(e+16),decimal:s.getUint8(e+17)}),13===s.getUint8(e+32))break;e+=32}return i}function i(t,s,i){for(var a,n,r={},h=0,o=i.length;o>h;)n=i[h],a=e(t,s,n.len,n.dataType),s+=n.len,"undefined"!=typeof a&&(r[n.name]=a),h++;return r}var e=function(t,s,i,e){var a=new Uint8Array(t,s,i),n=String.fromCharCode.apply(this,a).replace(/\0|\s+$/g,"");return"N"===e?parseFloat(n,10):"D"===e?new Date(n.slice(0,4),parseInt(n.slice(4,6),10)-1,n.slice(6,8)):n};return function(e){var a=s(e),n=t(e),r=(a.length+1<<5)+2,h=n.recLen,o=n.records;new DataView(e);for(var l=[];o;)l.push(i(e,r,a)),r+=h,o--;return l}}),define("shp",["proj4","shp/jszip","shp/binaryajax","shp/parseShp","shp/dbf","shp/lie"],function(t,s,i,e,a,n){function r(t){return r.getShapefile(t)}function h(t){return i(t).then(r.parseZip)}return r.combine=function(t){var s={};s.type="FeatureCollection",s.features=[];for(var i=0,e=t[0].length;e>i;)s.features.push({type:"Feature",geometry:t[0][i],properties:t[1][i]}),i++;return s},r.parseZip=function(i){var n,h=s(i),o=[];for(n in h)"shp"===n.slice(-3).toLowerCase()?o.push(n.slice(0,-4)):"dbf"===n.slice(-3).toLowerCase()?h[n]=a(h[n]):"prj"===n.slice(-3).toLowerCase()?h[n]=t(String.fromCharCode.apply(null,new Uint8Array(h[n]))):"geojson"===n.slice(-7).toLowerCase()&&o.push(n);var l=o.map(function(t){var s;return"geojson"===t.slice(-7).toLowerCase()?(s=JSON.parse(h[t]),s.fileName=t.slice(0,-8)):(s=r.combine([e(h[t+".shp"],h[t+".prj"]),h[t+".dbf"]]),s.fileName=t),s});return 1===l.length?l[0]:l},r.getShapefile=function(s){return"string"==typeof s?".zip"===s.slice(-4)?h(s):n.all([n.all([i(s+".shp"),i(s+".prj")]).then(function(s){return e(s[0],s[1]?t(s[1]):!1)}),i(s+".dbf").then(a)]).then(r.combine):n.resolve(r.parseZip(s))},r}),require("shp")});
+(function (root, factory) {
+  /* global module: false */
+  if (typeof define === 'function' && define.amd) {
+    define(factory);
+  } else if(typeof module !== 'undefined'){
+    module.exports = factory();
+  }else {
+    root.shp = factory();
+  }
+}(this, function () {
+
+
+/**
+ * almond 0.2.6 Copyright (c) 2011-2012, The Dojo Foundation All Rights Reserved.
+ * Available via the MIT or new BSD license.
+ * see: http://github.com/jrburke/almond for details
+ */
+//Going sloppy to avoid 'use strict' string cost, but strict practices should
+//be followed.
+/*jslint sloppy: true */
+/*global setTimeout: false */
+
+var requirejs, require, define;
+(function (undef) {
+    var main, req, makeMap, handlers,
+        defined = {},
+        waiting = {},
+        config = {},
+        defining = {},
+        hasOwn = Object.prototype.hasOwnProperty,
+        aps = [].slice;
+
+    function hasProp(obj, prop) {
+        return hasOwn.call(obj, prop);
+    }
+
+    /**
+     * Given a relative module name, like ./something, normalize it to
+     * a real name that can be mapped to a path.
+     * @param {String} name the relative name
+     * @param {String} baseName a real name that the name arg is relative
+     * to.
+     * @returns {String} normalized name
+     */
+    function normalize(name, baseName) {
+        var nameParts, nameSegment, mapValue, foundMap,
+            foundI, foundStarMap, starI, i, j, part,
+            baseParts = baseName && baseName.split("/"),
+            map = config.map,
+            starMap = (map && map['*']) || {};
+
+        //Adjust any relative paths.
+        if (name && name.charAt(0) === ".") {
+            //If have a base name, try to normalize against it,
+            //otherwise, assume it is a top-level require that will
+            //be relative to baseUrl in the end.
+            if (baseName) {
+                //Convert baseName to array, and lop off the last part,
+                //so that . matches that "directory" and not name of the baseName's
+                //module. For instance, baseName of "one/two/three", maps to
+                //"one/two/three.js", but we want the directory, "one/two" for
+                //this normalization.
+                baseParts = baseParts.slice(0, baseParts.length - 1);
+
+                name = baseParts.concat(name.split("/"));
+
+                //start trimDots
+                for (i = 0; i < name.length; i += 1) {
+                    part = name[i];
+                    if (part === ".") {
+                        name.splice(i, 1);
+                        i -= 1;
+                    } else if (part === "..") {
+                        if (i === 1 && (name[2] === '..' || name[0] === '..')) {
+                            //End of the line. Keep at least one non-dot
+                            //path segment at the front so it can be mapped
+                            //correctly to disk. Otherwise, there is likely
+                            //no path mapping for a path starting with '..'.
+                            //This can still fail, but catches the most reasonable
+                            //uses of ..
+                            break;
+                        } else if (i > 0) {
+                            name.splice(i - 1, 2);
+                            i -= 2;
+                        }
+                    }
+                }
+                //end trimDots
+
+                name = name.join("/");
+            } else if (name.indexOf('./') === 0) {
+                // No baseName, so this is ID is resolved relative
+                // to baseUrl, pull off the leading dot.
+                name = name.substring(2);
+            }
+        }
+
+        //Apply map config if available.
+        if ((baseParts || starMap) && map) {
+            nameParts = name.split('/');
+
+            for (i = nameParts.length; i > 0; i -= 1) {
+                nameSegment = nameParts.slice(0, i).join("/");
+
+                if (baseParts) {
+                    //Find the longest baseName segment match in the config.
+                    //So, do joins on the biggest to smallest lengths of baseParts.
+                    for (j = baseParts.length; j > 0; j -= 1) {
+                        mapValue = map[baseParts.slice(0, j).join('/')];
+
+                        //baseName segment has  config, find if it has one for
+                        //this name.
+                        if (mapValue) {
+                            mapValue = mapValue[nameSegment];
+                            if (mapValue) {
+                                //Match, update name to the new value.
+                                foundMap = mapValue;
+                                foundI = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (foundMap) {
+                    break;
+                }
+
+                //Check for a star map match, but just hold on to it,
+                //if there is a shorter segment match later in a matching
+                //config, then favor over this star map.
+                if (!foundStarMap && starMap && starMap[nameSegment]) {
+                    foundStarMap = starMap[nameSegment];
+                    starI = i;
+                }
+            }
+
+            if (!foundMap && foundStarMap) {
+                foundMap = foundStarMap;
+                foundI = starI;
+            }
+
+            if (foundMap) {
+                nameParts.splice(0, foundI, foundMap);
+                name = nameParts.join('/');
+            }
+        }
+
+        return name;
+    }
+
+    function makeRequire(relName, forceSync) {
+        return function () {
+            //A version of a require function that passes a moduleName
+            //value for items that may need to
+            //look up paths relative to the moduleName
+            return req.apply(undef, aps.call(arguments, 0).concat([relName, forceSync]));
+        };
+    }
+
+    function makeNormalize(relName) {
+        return function (name) {
+            return normalize(name, relName);
+        };
+    }
+
+    function makeLoad(depName) {
+        return function (value) {
+            defined[depName] = value;
+        };
+    }
+
+    function callDep(name) {
+        if (hasProp(waiting, name)) {
+            var args = waiting[name];
+            delete waiting[name];
+            defining[name] = true;
+            main.apply(undef, args);
+        }
+
+        if (!hasProp(defined, name) && !hasProp(defining, name)) {
+            throw new Error('No ' + name);
+        }
+        return defined[name];
+    }
+
+    //Turns a plugin!resource to [plugin, resource]
+    //with the plugin being undefined if the name
+    //did not have a plugin prefix.
+    function splitPrefix(name) {
+        var prefix,
+            index = name ? name.indexOf('!') : -1;
+        if (index > -1) {
+            prefix = name.substring(0, index);
+            name = name.substring(index + 1, name.length);
+        }
+        return [prefix, name];
+    }
+
+    /**
+     * Makes a name map, normalizing the name, and using a plugin
+     * for normalization if necessary. Grabs a ref to plugin
+     * too, as an optimization.
+     */
+    makeMap = function (name, relName) {
+        var plugin,
+            parts = splitPrefix(name),
+            prefix = parts[0];
+
+        name = parts[1];
+
+        if (prefix) {
+            prefix = normalize(prefix, relName);
+            plugin = callDep(prefix);
+        }
+
+        //Normalize according
+        if (prefix) {
+            if (plugin && plugin.normalize) {
+                name = plugin.normalize(name, makeNormalize(relName));
+            } else {
+                name = normalize(name, relName);
+            }
+        } else {
+            name = normalize(name, relName);
+            parts = splitPrefix(name);
+            prefix = parts[0];
+            name = parts[1];
+            if (prefix) {
+                plugin = callDep(prefix);
+            }
+        }
+
+        //Using ridiculous property names for space reasons
+        return {
+            f: prefix ? prefix + '!' + name : name, //fullName
+            n: name,
+            pr: prefix,
+            p: plugin
+        };
+    };
+
+    function makeConfig(name) {
+        return function () {
+            return (config && config.config && config.config[name]) || {};
+        };
+    }
+
+    handlers = {
+        require: function (name) {
+            return makeRequire(name);
+        },
+        exports: function (name) {
+            var e = defined[name];
+            if (typeof e !== 'undefined') {
+                return e;
+            } else {
+                return (defined[name] = {});
+            }
+        },
+        module: function (name) {
+            return {
+                id: name,
+                uri: '',
+                exports: defined[name],
+                config: makeConfig(name)
+            };
+        }
+    };
+
+    main = function (name, deps, callback, relName) {
+        var cjsModule, depName, ret, map, i,
+            args = [],
+            usingExports;
+
+        //Use name if no relName
+        relName = relName || name;
+
+        //Call the callback to define the module, if necessary.
+        if (typeof callback === 'function') {
+
+            //Pull out the defined dependencies and pass the ordered
+            //values to the callback.
+            //Default to [require, exports, module] if no deps
+            deps = !deps.length && callback.length ? ['require', 'exports', 'module'] : deps;
+            for (i = 0; i < deps.length; i += 1) {
+                map = makeMap(deps[i], relName);
+                depName = map.f;
+
+                //Fast path CommonJS standard dependencies.
+                if (depName === "require") {
+                    args[i] = handlers.require(name);
+                } else if (depName === "exports") {
+                    //CommonJS module spec 1.1
+                    args[i] = handlers.exports(name);
+                    usingExports = true;
+                } else if (depName === "module") {
+                    //CommonJS module spec 1.1
+                    cjsModule = args[i] = handlers.module(name);
+                } else if (hasProp(defined, depName) ||
+                           hasProp(waiting, depName) ||
+                           hasProp(defining, depName)) {
+                    args[i] = callDep(depName);
+                } else if (map.p) {
+                    map.p.load(map.n, makeRequire(relName, true), makeLoad(depName), {});
+                    args[i] = defined[depName];
+                } else {
+                    throw new Error(name + ' missing ' + depName);
+                }
+            }
+
+            ret = callback.apply(defined[name], args);
+
+            if (name) {
+                //If setting exports via "module" is in play,
+                //favor that over return value and exports. After that,
+                //favor a non-undefined return value over exports use.
+                if (cjsModule && cjsModule.exports !== undef &&
+                        cjsModule.exports !== defined[name]) {
+                    defined[name] = cjsModule.exports;
+                } else if (ret !== undef || !usingExports) {
+                    //Use the return value from the function.
+                    defined[name] = ret;
+                }
+            }
+        } else if (name) {
+            //May just be an object definition for the module. Only
+            //worry about defining if have a module name.
+            defined[name] = callback;
+        }
+    };
+
+    requirejs = require = req = function (deps, callback, relName, forceSync, alt) {
+        if (typeof deps === "string") {
+            if (handlers[deps]) {
+                //callback in this case is really relName
+                return handlers[deps](callback);
+            }
+            //Just return the module wanted. In this scenario, the
+            //deps arg is the module name, and second arg (if passed)
+            //is just the relName.
+            //Normalize module name, if it contains . or ..
+            return callDep(makeMap(deps, callback).f);
+        } else if (!deps.splice) {
+            //deps is a config object, not an array.
+            config = deps;
+            if (callback.splice) {
+                //callback is an array, which means it is a dependency list.
+                //Adjust args if there are dependencies
+                deps = callback;
+                callback = relName;
+                relName = null;
+            } else {
+                deps = undef;
+            }
+        }
+
+        //Support require(['a'])
+        callback = callback || function () {};
+
+        //If relName is a function, it is an errback handler,
+        //so remove it.
+        if (typeof relName === 'function') {
+            relName = forceSync;
+            forceSync = alt;
+        }
+
+        //Simulate async callback;
+        if (forceSync) {
+            main(undef, deps, callback, relName);
+        } else {
+            //Using a non-zero value because of concern for what old browsers
+            //do, and latest browsers "upgrade" to 4 if lower value is used:
+            //http://www.whatwg.org/specs/web-apps/current-work/multipage/timers.html#dom-windowtimers-settimeout:
+            //If want a value immediately, use require('id') instead -- something
+            //that works in almond on the global level, but not guaranteed and
+            //unlikely to work in other AMD implementations.
+            setTimeout(function () {
+                main(undef, deps, callback, relName);
+            }, 4);
+        }
+
+        return req;
+    };
+
+    /**
+     * Just drops the config on the floor, but returns req in case
+     * the config return value is used.
+     */
+    req.config = function (cfg) {
+        config = cfg;
+        if (config.deps) {
+            req(config.deps, config.callback);
+        }
+        return req;
+    };
+
+    /**
+     * Expose module registry for debugging and tooling
+     */
+    requirejs._defined = defined;
+
+    define = function (name, deps, callback) {
+
+        //This module may not have dependencies
+        if (!deps.splice) {
+            //deps is not an array, so probably means
+            //an object literal or factory function for
+            //the value. Adjust args.
+            callback = deps;
+            deps = [];
+        }
+
+        if (!hasProp(defined, name) && !hasProp(waiting, name)) {
+            waiting[name] = [name, deps, callback];
+        }
+    };
+
+    define.amd = {
+        jQuery: true
+    };
+}());
+
+define("node_modules/almond/almond", function(){});
+
+
+define('proj4/mgrs',['require','exports','module'],function(require, exports) {
+  /*
+Portions of this software are based on a port of components from the OpenMap
+com.bbn.openmap.proj.coords Java package. An initial port was initially created
+by Patrice G. Cappelaere and included in Community Mapbuilder
+(http://svn.codehaus.org/mapbuilder/), which is licensed under the LGPL license
+as per http://www.gnu.org/copyleft/lesser.html. OpenMap is licensed under the
+following license agreement:
+
+
+               OpenMap Software License Agreement
+               ----------------------------------
+
+This Agreement sets forth the terms and conditions under which
+the software known as OpenMap(tm) will be licensed by BBN
+Technologies ("BBN") to you ("Licensee"), and by which Derivative 
+Works (as hereafter defined) of OpenMap will be licensed by you to BBN.
+
+Definitions:
+
+ "Derivative Work(s)" shall mean any revision, enhancement,
+ modification, translation, abridgement, condensation or
+ expansion created by Licensee or BBN that is based upon the
+ Software or a portion thereof that would be a copyright
+ infringement if prepared without the authorization of the
+ copyright owners of the Software or portion thereof.
+
+ "OpenMap" shall mean a programmer's toolkit for building map
+ based applications as originally created by BBN, and any
+ Derivative Works thereof as created by either BBN or Licensee,
+ but shall include only those Derivative Works BBN has approved
+ for inclusion into, and BBN has integrated into OpenMap.
+
+ "Standard Version" shall mean OpenMap, as originally created by
+ BBN.
+
+ "Software" shall mean OpenMap and the Derivative Works created
+ by Licensee and the collection of files distributed by the
+ Licensee with OpenMap, and the collection of files created
+ through textual modifications.
+
+ "Copyright Holder" is whoever is named in the copyright or
+ copyrights for the Derivative Works.
+
+ "Licensee" is you, only if you agree to be bound by the terms
+ and conditions set forth in this Agreement.
+
+ "Reasonable copying fee" is whatever you can justify on the
+ basis of media cost, duplication charges, time of people
+ involved.
+
+ "Freely Available" means that no fee is charged for the item
+ itself, though there may be fees involved in handling the item.
+ It also means that recipients of the item may redistribute it
+ under the same conditions that they received it.
+
+1. BBN maintains all rights, title and interest in and to
+OpenMap, including all applicable copyrights, trade secrets,
+patents and other intellectual rights therein.  Licensee hereby
+grants to BBN all right, title and interest into the compilation
+of OpenMap.  Licensee shall own all rights, title and interest
+into the Derivative Works created by Licensee (subject to the
+compilation ownership by BBN).
+
+2. BBN hereby grants to Licensee a royalty free, worldwide right
+and license to use, copy, distribute and make Derivative Works of
+OpenMap, and sublicensing rights of any of the foregoing in
+accordance with the terms and conditions of this Agreement,
+provided that you duplicate all of the original copyright notices
+and associated disclaimers.
+
+3. Licensee hereby grants to BBN a royalty free, worldwide right
+and license to use, copy, distribute and make Derivative Works of
+Derivative Works created by Licensee and sublicensing rights of
+any of the foregoing.
+
+4. Licensee's right to create Derivative Works in the Software is
+subject to Licensee agreement to insert a prominent notice in
+each changed file stating how and when you changed that file, and
+provided that you do at least ONE of the following:
+
+    a) place your modifications in the Public Domain or otherwise
+       make them Freely Available, such as by posting said
+       modifications to Usenet or an equivalent medium, or
+       placing the modifications on a major archive site and by
+       providing your modifications to the Copyright Holder.
+
+    b) use the modified Package only within your corporation or
+       organization.
+
+    c) rename any non-standard executables so the names do not
+       conflict with standard executables, which must also be
+       provided, and provide a separate manual page for each
+       non-standard executable that clearly documents how it
+       differs from OpenMap.
+
+    d) make other distribution arrangements with the Copyright
+       Holder.
+
+5. Licensee may distribute the programs of this Software in
+object code or executable form, provided that you do at least ONE
+of the following:
+
+    a) distribute an OpenMap version of the executables and
+       library files, together with instructions (in the manual
+       page or equivalent) on where to get OpenMap.
+
+    b) accompany the distribution with the machine-readable
+       source code with your modifications.
+
+    c) accompany any non-standard executables with their
+       corresponding OpenMap executables, giving the non-standard
+       executables non-standard names, and clearly documenting
+       the differences in manual pages (or equivalent), together
+       with instructions on where to get OpenMap.
+
+    d) make other distribution arrangements with the Copyright
+       Holder.
+
+6. You may charge a reasonable copying fee for any distribution
+of this Software.  You may charge any fee you choose for support
+of this Software.  You may not charge a fee for this Software
+itself.  However, you may distribute this Software in aggregate
+with other (possibly commercial) programs as part of a larger
+(possibly commercial) software distribution provided that you do
+not advertise this Software as a product of your own.
+
+7. The data and images supplied as input to or produced as output
+from the Software do not automatically fall under the copyright
+of this Software, but belong to whomever generated them, and may
+be sold commercially, and may be aggregated with this Software.
+
+8. BBN makes no representation about the suitability of OpenMap
+for any purposes.  BBN shall have no duty or requirement to
+include any Derivative Works into OpenMap.
+
+9. Each party hereto represents and warrants that they have the
+full unrestricted right to grant all rights and licenses granted
+to the other party herein.
+
+10. THIS PACKAGE IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY
+KIND, WHETHER EXPRESS OR IMPLIED, INCLUDING (BUT NOT LIMITED TO)
+ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, AND
+WITHOUT ANY WARRANTIES AS TO NONINFRINGEMENT.
+
+11. IN NO EVENT SHALL COPYRIGHT HOLDER BE LIABLE FOR ANY DIRECT,
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES WHATSOEVER RESULTING
+FROM LOSS OF USE OF DATA OR PROFITS, WHETHER IN AN ACTION OF
+CONTRACT, NEGLIGENCE OR OTHER TORTIOUS CONDUCT, ARISING OUT OF OR
+IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS PACKAGE.
+
+12. Without limitation of the foregoing, You agree to commit no
+act which, directly or indirectly, would violate any U.S. law,
+regulation, or treaty, or any other international treaty or
+agreement to which the United States adheres or with which the
+United States complies, relating to the export or re-export of
+any commodities, software, or technical data.
+*/
+
+
+
+  /**
+   * Converts between lat/lon and MGRS coordinates. Note that this static class
+   * is restricted to the WGS84 ellipsoid and does not support MGRS notations
+   * for polar regions (i.e. above 84° North and below 80° South).
+   *
+   * If proj4 is loaded, this will be referenced as util.MGRS. If used
+   * standalone, it will be referenced as window.MGRS.
+   *
+   * @static
+   */
+
+
+  /**
+   * UTM zones are grouped, and assigned to one of a group of 6
+   * sets.
+   *
+   * {int} @private
+   */
+  var NUM_100K_SETS = 6;
+
+  /**
+   * The column letters (for easting) of the lower left value, per
+   * set.
+   *
+   * {string} @private
+   */
+  var SET_ORIGIN_COLUMN_LETTERS = 'AJSAJS';
+
+  /**
+   * The row letters (for northing) of the lower left value, per
+   * set.
+   *
+   * {string} @private
+   */
+  var SET_ORIGIN_ROW_LETTERS = 'AFAFAF';
+
+  var A = 65; // A
+  var I = 73; // I
+  var O = 79; // O
+  var V = 86; // V
+  var Z = 90; // Z
+
+  /**
+   * Conversion of lat/lon to MGRS.
+   *
+   * @param {object} ll Object literal with lat and lon properties on a
+   *     WGS84 ellipsoid.
+   * @param {int} accuracy Accuracy in digits (5 for 1 m, 4 for 10 m, 3 for
+   *      100 m, 4 for 1000 m or 5 for 10000 m). Optional, default is 5.
+   * @return {string} the MGRS string for the given location and accuracy.
+   */
+  exports.forward = function(ll, accuracy) {
+    accuracy = accuracy || 5; // default accuracy 1m
+    return encode(LLtoUTM({
+      lat: ll.lat,
+      lon: ll.lon
+    }), accuracy);
+  };
+
+  /**
+   * Conversion of MGRS to lat/lon.
+   *
+   * @param {string} mgrs MGRS string.
+   * @return {array} An array with left (longitude), bottom (latitude), right
+   *     (longitude) and top (latitude) values in WGS84, representing the
+   *     bounding box for the provided MGRS reference.
+   */
+  exports.inverse = function(mgrs) {
+    var bbox = UTMtoLL(decode(mgrs.toUpperCase()));
+    return [bbox.left, bbox.bottom, bbox.right, bbox.top];
+  };
+
+  /**
+   * Conversion from degrees to radians.
+   *
+   * @private
+   * @param {number} deg the angle in degrees.
+   * @return {number} the angle in radians.
+   */
+  function degToRad(deg) {
+    return (deg * (Math.PI / 180.0));
+  }
+
+  /**
+   * Conversion from radians to degrees.
+   *
+   * @private
+   * @param {number} rad the angle in radians.
+   * @return {number} the angle in degrees.
+   */
+  function radToDeg(rad) {
+    return (180.0 * (rad / Math.PI));
+  }
+
+  /**
+   * Converts a set of Longitude and Latitude co-ordinates to UTM
+   * using the WGS84 ellipsoid.
+   *
+   * @private
+   * @param {object} ll Object literal with lat and lon properties
+   *     representing the WGS84 coordinate to be converted.
+   * @return {object} Object literal containing the UTM value with easting,
+   *     northing, zoneNumber and zoneLetter properties, and an optional
+   *     accuracy property in digits. Returns null if the conversion failed.
+   */
+  function LLtoUTM(ll) {
+    var Lat = ll.lat;
+    var Long = ll.lon;
+    var a = 6378137.0; //ellip.radius;
+    var eccSquared = 0.00669438; //ellip.eccsq;
+    var k0 = 0.9996;
+    var LongOrigin;
+    var eccPrimeSquared;
+    var N, T, C, A, M;
+    var LatRad = degToRad(Lat);
+    var LongRad = degToRad(Long);
+    var LongOriginRad;
+    var ZoneNumber;
+    // (int)
+    ZoneNumber = Math.floor((Long + 180) / 6) + 1;
+
+    //Make sure the longitude 180.00 is in Zone 60
+    if (Long === 180) {
+      ZoneNumber = 60;
+    }
+
+    // Special zone for Norway
+    if (Lat >= 56.0 && Lat < 64.0 && Long >= 3.0 && Long < 12.0) {
+      ZoneNumber = 32;
+    }
+
+    // Special zones for Svalbard
+    if (Lat >= 72.0 && Lat < 84.0) {
+      if (Long >= 0.0 && Long < 9.0) {
+        ZoneNumber = 31;
+      }
+      else if (Long >= 9.0 && Long < 21.0) {
+        ZoneNumber = 33;
+      }
+      else if (Long >= 21.0 && Long < 33.0) {
+        ZoneNumber = 35;
+      }
+      else if (Long >= 33.0 && Long < 42.0) {
+        ZoneNumber = 37;
+      }
+    }
+
+    LongOrigin = (ZoneNumber - 1) * 6 - 180 + 3; //+3 puts origin
+    // in middle of
+    // zone
+    LongOriginRad = degToRad(LongOrigin);
+
+    eccPrimeSquared = (eccSquared) / (1 - eccSquared);
+
+    N = a / Math.sqrt(1 - eccSquared * Math.sin(LatRad) * Math.sin(LatRad));
+    T = Math.tan(LatRad) * Math.tan(LatRad);
+    C = eccPrimeSquared * Math.cos(LatRad) * Math.cos(LatRad);
+    A = Math.cos(LatRad) * (LongRad - LongOriginRad);
+
+    M = a * ((1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256) * LatRad - (3 * eccSquared / 8 + 3 * eccSquared * eccSquared / 32 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(2 * LatRad) + (15 * eccSquared * eccSquared / 256 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(4 * LatRad) - (35 * eccSquared * eccSquared * eccSquared / 3072) * Math.sin(6 * LatRad));
+
+    var UTMEasting = (k0 * N * (A + (1 - T + C) * A * A * A / 6.0 + (5 - 18 * T + T * T + 72 * C - 58 * eccPrimeSquared) * A * A * A * A * A / 120.0) + 500000.0);
+
+    var UTMNorthing = (k0 * (M + N * Math.tan(LatRad) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24.0 + (61 - 58 * T + T * T + 600 * C - 330 * eccPrimeSquared) * A * A * A * A * A * A / 720.0)));
+    if (Lat < 0.0) {
+      UTMNorthing += 10000000.0; //10000000 meter offset for
+      // southern hemisphere
+    }
+
+    return {
+      northing: Math.round(UTMNorthing),
+      easting: Math.round(UTMEasting),
+      zoneNumber: ZoneNumber,
+      zoneLetter: getLetterDesignator(Lat)
+    };
+  }
+
+  /**
+   * Converts UTM coords to lat/long, using the WGS84 ellipsoid. This is a convenience
+   * class where the Zone can be specified as a single string eg."60N" which
+   * is then broken down into the ZoneNumber and ZoneLetter.
+   *
+   * @private
+   * @param {object} utm An object literal with northing, easting, zoneNumber
+   *     and zoneLetter properties. If an optional accuracy property is
+   *     provided (in meters), a bounding box will be returned instead of
+   *     latitude and longitude.
+   * @return {object} An object literal containing either lat and lon values
+   *     (if no accuracy was provided), or top, right, bottom and left values
+   *     for the bounding box calculated according to the provided accuracy.
+   *     Returns null if the conversion failed.
+   */
+  function UTMtoLL(utm) {
+
+    var UTMNorthing = utm.northing;
+    var UTMEasting = utm.easting;
+    var zoneLetter = utm.zoneLetter;
+    var zoneNumber = utm.zoneNumber;
+    // check the ZoneNummber is valid
+    if (zoneNumber < 0 || zoneNumber > 60) {
+      return null;
+    }
+
+    var k0 = 0.9996;
+    var a = 6378137.0; //ellip.radius;
+    var eccSquared = 0.00669438; //ellip.eccsq;
+    var eccPrimeSquared;
+    var e1 = (1 - Math.sqrt(1 - eccSquared)) / (1 + Math.sqrt(1 - eccSquared));
+    var N1, T1, C1, R1, D, M;
+    var LongOrigin;
+    var mu, phi1Rad;
+
+    // remove 500,000 meter offset for longitude
+    var x = UTMEasting - 500000.0;
+    var y = UTMNorthing;
+
+    // We must know somehow if we are in the Northern or Southern
+    // hemisphere, this is the only time we use the letter So even
+    // if the Zone letter isn't exactly correct it should indicate
+    // the hemisphere correctly
+    if (zoneLetter < 'N') {
+      y -= 10000000.0; // remove 10,000,000 meter offset used
+      // for southern hemisphere
+    }
+
+    // There are 60 zones with zone 1 being at West -180 to -174
+    LongOrigin = (zoneNumber - 1) * 6 - 180 + 3; // +3 puts origin
+    // in middle of
+    // zone
+
+    eccPrimeSquared = (eccSquared) / (1 - eccSquared);
+
+    M = y / k0;
+    mu = M / (a * (1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256));
+
+    phi1Rad = mu + (3 * e1 / 2 - 27 * e1 * e1 * e1 / 32) * Math.sin(2 * mu) + (21 * e1 * e1 / 16 - 55 * e1 * e1 * e1 * e1 / 32) * Math.sin(4 * mu) + (151 * e1 * e1 * e1 / 96) * Math.sin(6 * mu);
+    // double phi1 = ProjMath.radToDeg(phi1Rad);
+
+    N1 = a / Math.sqrt(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad));
+    T1 = Math.tan(phi1Rad) * Math.tan(phi1Rad);
+    C1 = eccPrimeSquared * Math.cos(phi1Rad) * Math.cos(phi1Rad);
+    R1 = a * (1 - eccSquared) / Math.pow(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad), 1.5);
+    D = x / (N1 * k0);
+
+    var lat = phi1Rad - (N1 * Math.tan(phi1Rad) / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * eccPrimeSquared) * D * D * D * D / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * eccPrimeSquared - 3 * C1 * C1) * D * D * D * D * D * D / 720);
+    lat = radToDeg(lat);
+
+    var lon = (D - (1 + 2 * T1 + C1) * D * D * D / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * eccPrimeSquared + 24 * T1 * T1) * D * D * D * D * D / 120) / Math.cos(phi1Rad);
+    lon = LongOrigin + radToDeg(lon);
+
+    var result;
+    if (utm.accuracy) {
+      var topRight = UTMtoLL({
+        northing: utm.northing + utm.accuracy,
+        easting: utm.easting + utm.accuracy,
+        zoneLetter: utm.zoneLetter,
+        zoneNumber: utm.zoneNumber
+      });
+      result = {
+        top: topRight.lat,
+        right: topRight.lon,
+        bottom: lat,
+        left: lon
+      };
+    }
+    else {
+      result = {
+        lat: lat,
+        lon: lon
+      };
+    }
+    return result;
+  }
+
+  /**
+   * Calculates the MGRS letter designator for the given latitude.
+   *
+   * @private
+   * @param {number} lat The latitude in WGS84 to get the letter designator
+   *     for.
+   * @return {char} The letter designator.
+   */
+  function getLetterDesignator(lat) {
+    //This is here as an error flag to show that the Latitude is
+    //outside MGRS limits
+    var LetterDesignator = 'Z';
+
+    if ((84 >= lat) && (lat >= 72)) {
+      LetterDesignator = 'X';
+    }
+    else if ((72 > lat) && (lat >= 64)) {
+      LetterDesignator = 'W';
+    }
+    else if ((64 > lat) && (lat >= 56)) {
+      LetterDesignator = 'V';
+    }
+    else if ((56 > lat) && (lat >= 48)) {
+      LetterDesignator = 'U';
+    }
+    else if ((48 > lat) && (lat >= 40)) {
+      LetterDesignator = 'T';
+    }
+    else if ((40 > lat) && (lat >= 32)) {
+      LetterDesignator = 'S';
+    }
+    else if ((32 > lat) && (lat >= 24)) {
+      LetterDesignator = 'R';
+    }
+    else if ((24 > lat) && (lat >= 16)) {
+      LetterDesignator = 'Q';
+    }
+    else if ((16 > lat) && (lat >= 8)) {
+      LetterDesignator = 'P';
+    }
+    else if ((8 > lat) && (lat >= 0)) {
+      LetterDesignator = 'N';
+    }
+    else if ((0 > lat) && (lat >= -8)) {
+      LetterDesignator = 'M';
+    }
+    else if ((-8 > lat) && (lat >= -16)) {
+      LetterDesignator = 'L';
+    }
+    else if ((-16 > lat) && (lat >= -24)) {
+      LetterDesignator = 'K';
+    }
+    else if ((-24 > lat) && (lat >= -32)) {
+      LetterDesignator = 'J';
+    }
+    else if ((-32 > lat) && (lat >= -40)) {
+      LetterDesignator = 'H';
+    }
+    else if ((-40 > lat) && (lat >= -48)) {
+      LetterDesignator = 'G';
+    }
+    else if ((-48 > lat) && (lat >= -56)) {
+      LetterDesignator = 'F';
+    }
+    else if ((-56 > lat) && (lat >= -64)) {
+      LetterDesignator = 'E';
+    }
+    else if ((-64 > lat) && (lat >= -72)) {
+      LetterDesignator = 'D';
+    }
+    else if ((-72 > lat) && (lat >= -80)) {
+      LetterDesignator = 'C';
+    }
+    return LetterDesignator;
+  }
+
+  /**
+   * Encodes a UTM location as MGRS string.
+   *
+   * @private
+   * @param {object} utm An object literal with easting, northing,
+   *     zoneLetter, zoneNumber
+   * @param {number} accuracy Accuracy in digits (1-5).
+   * @return {string} MGRS string for the given UTM location.
+   */
+  function encode(utm, accuracy) {
+    var seasting = "" + utm.easting,
+      snorthing = "" + utm.northing;
+
+    return utm.zoneNumber + utm.zoneLetter + get100kID(utm.easting, utm.northing, utm.zoneNumber) + seasting.substr(seasting.length - 5, accuracy) + snorthing.substr(snorthing.length - 5, accuracy);
+  }
+
+  /**
+   * Get the two letter 100k designator for a given UTM easting,
+   * northing and zone number value.
+   *
+   * @private
+   * @param {number} easting
+   * @param {number} northing
+   * @param {number} zoneNumber
+   * @return the two letter 100k designator for the given UTM location.
+   */
+  function get100kID(easting, northing, zoneNumber) {
+    var setParm = get100kSetForZone(zoneNumber);
+    var setColumn = Math.floor(easting / 100000);
+    var setRow = Math.floor(northing / 100000) % 20;
+    return getLetter100kID(setColumn, setRow, setParm);
+  }
+
+  /**
+   * Given a UTM zone number, figure out the MGRS 100K set it is in.
+   *
+   * @private
+   * @param {number} i An UTM zone number.
+   * @return {number} the 100k set the UTM zone is in.
+   */
+  function get100kSetForZone(i) {
+    var setParm = i % NUM_100K_SETS;
+    if (setParm === 0) {
+      setParm = NUM_100K_SETS;
+    }
+
+    return setParm;
+  }
+
+  /**
+   * Get the two-letter MGRS 100k designator given information
+   * translated from the UTM northing, easting and zone number.
+   *
+   * @private
+   * @param {number} column the column index as it relates to the MGRS
+   *        100k set spreadsheet, created from the UTM easting.
+   *        Values are 1-8.
+   * @param {number} row the row index as it relates to the MGRS 100k set
+   *        spreadsheet, created from the UTM northing value. Values
+   *        are from 0-19.
+   * @param {number} parm the set block, as it relates to the MGRS 100k set
+   *        spreadsheet, created from the UTM zone. Values are from
+   *        1-60.
+   * @return two letter MGRS 100k code.
+   */
+  function getLetter100kID(column, row, parm) {
+    // colOrigin and rowOrigin are the letters at the origin of the set
+    var index = parm - 1;
+    var colOrigin = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(index);
+    var rowOrigin = SET_ORIGIN_ROW_LETTERS.charCodeAt(index);
+
+    // colInt and rowInt are the letters to build to return
+    var colInt = colOrigin + column - 1;
+    var rowInt = rowOrigin + row;
+    var rollover = false;
+
+    if (colInt > Z) {
+      colInt = colInt - Z + A - 1;
+      rollover = true;
+    }
+
+    if (colInt === I || (colOrigin < I && colInt > I) || ((colInt > I || colOrigin < I) && rollover)) {
+      colInt++;
+    }
+
+    if (colInt === O || (colOrigin < O && colInt > O) || ((colInt > O || colOrigin < O) && rollover)) {
+      colInt++;
+
+      if (colInt === I) {
+        colInt++;
+      }
+    }
+
+    if (colInt > Z) {
+      colInt = colInt - Z + A - 1;
+    }
+
+    if (rowInt > V) {
+      rowInt = rowInt - V + A - 1;
+      rollover = true;
+    }
+    else {
+      rollover = false;
+    }
+
+    if (((rowInt === I) || ((rowOrigin < I) && (rowInt > I))) || (((rowInt > I) || (rowOrigin < I)) && rollover)) {
+      rowInt++;
+    }
+
+    if (((rowInt === O) || ((rowOrigin < O) && (rowInt > O))) || (((rowInt > O) || (rowOrigin < O)) && rollover)) {
+      rowInt++;
+
+      if (rowInt === I) {
+        rowInt++;
+      }
+    }
+
+    if (rowInt > V) {
+      rowInt = rowInt - V + A - 1;
+    }
+
+    var twoLetter = String.fromCharCode(colInt) + String.fromCharCode(rowInt);
+    return twoLetter;
+  }
+
+  /**
+   * Decode the UTM parameters from a MGRS string.
+   *
+   * @private
+   * @param {string} mgrsString an UPPERCASE coordinate string is expected.
+   * @return {object} An object literal with easting, northing, zoneLetter,
+   *     zoneNumber and accuracy (in meters) properties.
+   */
+  function decode(mgrsString) {
+
+    if (mgrsString && mgrsString.length === 0) {
+      throw ("MGRSPoint coverting from nothing");
+    }
+
+    var length = mgrsString.length;
+
+    var hunK = null;
+    var sb = "";
+    var testChar;
+    var i = 0;
+
+    // get Zone number
+    while (!(/[A-Z]/).test(testChar = mgrsString.charAt(i))) {
+      if (i >= 2) {
+        throw ("MGRSPoint bad conversion from: " + mgrsString);
+      }
+      sb += testChar;
+      i++;
+    }
+
+    var zoneNumber = parseInt(sb, 10);
+
+    if (i === 0 || i + 3 > length) {
+      // A good MGRS string has to be 4-5 digits long,
+      // ##AAA/#AAA at least.
+      throw ("MGRSPoint bad conversion from: " + mgrsString);
+    }
+
+    var zoneLetter = mgrsString.charAt(i++);
+
+    // Should we check the zone letter here? Why not.
+    if (zoneLetter <= 'A' || zoneLetter === 'B' || zoneLetter === 'Y' || zoneLetter >= 'Z' || zoneLetter === 'I' || zoneLetter === 'O') {
+      throw ("MGRSPoint zone letter " + zoneLetter + " not handled: " + mgrsString);
+    }
+
+    hunK = mgrsString.substring(i, i += 2);
+
+    var set = get100kSetForZone(zoneNumber);
+
+    var east100k = getEastingFromChar(hunK.charAt(0), set);
+    var north100k = getNorthingFromChar(hunK.charAt(1), set);
+
+    // We have a bug where the northing may be 2000000 too low.
+    // How
+    // do we know when to roll over?
+
+    while (north100k < getMinNorthing(zoneLetter)) {
+      north100k += 2000000;
+    }
+
+    // calculate the char index for easting/northing separator
+    var remainder = length - i;
+
+    if (remainder % 2 !== 0) {
+      throw ("MGRSPoint has to have an even number \nof digits after the zone letter and two 100km letters - front \nhalf for easting meters, second half for \nnorthing meters" + mgrsString);
+    }
+
+    var sep = remainder / 2;
+
+    var sepEasting = 0.0;
+    var sepNorthing = 0.0;
+    var accuracyBonus, sepEastingString, sepNorthingString, easting, northing;
+    if (sep > 0) {
+      accuracyBonus = 100000.0 / Math.pow(10, sep);
+      sepEastingString = mgrsString.substring(i, i + sep);
+      sepEasting = parseFloat(sepEastingString) * accuracyBonus;
+      sepNorthingString = mgrsString.substring(i + sep);
+      sepNorthing = parseFloat(sepNorthingString) * accuracyBonus;
+    }
+
+    easting = sepEasting + east100k;
+    northing = sepNorthing + north100k;
+
+    return {
+      easting: easting,
+      northing: northing,
+      zoneLetter: zoneLetter,
+      zoneNumber: zoneNumber,
+      accuracy: accuracyBonus
+    };
+  }
+
+  /**
+   * Given the first letter from a two-letter MGRS 100k zone, and given the
+   * MGRS table set for the zone number, figure out the easting value that
+   * should be added to the other, secondary easting value.
+   *
+   * @private
+   * @param {char} e The first letter from a two-letter MGRS 100´k zone.
+   * @param {number} set The MGRS table set for the zone number.
+   * @return {number} The easting value for the given letter and set.
+   */
+  function getEastingFromChar(e, set) {
+    // colOrigin is the letter at the origin of the set for the
+    // column
+    var curCol = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(set - 1);
+    var eastingValue = 100000.0;
+    var rewindMarker = false;
+
+    while (curCol !== e.charCodeAt(0)) {
+      curCol++;
+      if (curCol === I) {
+        curCol++;
+      }
+      if (curCol === O) {
+        curCol++;
+      }
+      if (curCol > Z) {
+        if (rewindMarker) {
+          throw ("Bad character: " + e);
+        }
+        curCol = A;
+        rewindMarker = true;
+      }
+      eastingValue += 100000.0;
+    }
+
+    return eastingValue;
+  }
+
+  /**
+   * Given the second letter from a two-letter MGRS 100k zone, and given the
+   * MGRS table set for the zone number, figure out the northing value that
+   * should be added to the other, secondary northing value. You have to
+   * remember that Northings are determined from the equator, and the vertical
+   * cycle of letters mean a 2000000 additional northing meters. This happens
+   * approx. every 18 degrees of latitude. This method does *NOT* count any
+   * additional northings. You have to figure out how many 2000000 meters need
+   * to be added for the zone letter of the MGRS coordinate.
+   *
+   * @private
+   * @param {char} n Second letter of the MGRS 100k zone
+   * @param {number} set The MGRS table set number, which is dependent on the
+   *     UTM zone number.
+   * @return {number} The northing value for the given letter and set.
+   */
+  function getNorthingFromChar(n, set) {
+
+    if (n > 'V') {
+      throw ("MGRSPoint given invalid Northing " + n);
+    }
+
+    // rowOrigin is the letter at the origin of the set for the
+    // column
+    var curRow = SET_ORIGIN_ROW_LETTERS.charCodeAt(set - 1);
+    var northingValue = 0.0;
+    var rewindMarker = false;
+
+    while (curRow !== n.charCodeAt(0)) {
+      curRow++;
+      if (curRow === I) {
+        curRow++;
+      }
+      if (curRow === O) {
+        curRow++;
+      }
+      // fixing a bug making whole application hang in this loop
+      // when 'n' is a wrong character
+      if (curRow > V) {
+        if (rewindMarker) { // making sure that this loop ends
+          throw ("Bad character: " + n);
+        }
+        curRow = A;
+        rewindMarker = true;
+      }
+      northingValue += 100000.0;
+    }
+
+    return northingValue;
+  }
+
+  /**
+   * The function getMinNorthing returns the minimum northing value of a MGRS
+   * zone.
+   *
+   * Ported from Geotrans' c Lattitude_Band_Value structure table.
+   *
+   * @private
+   * @param {char} zoneLetter The MGRS zone to get the min northing for.
+   * @return {number}
+   */
+  function getMinNorthing(zoneLetter) {
+    var northing;
+    switch (zoneLetter) {
+    case 'C':
+      northing = 1100000.0;
+      break;
+    case 'D':
+      northing = 2000000.0;
+      break;
+    case 'E':
+      northing = 2800000.0;
+      break;
+    case 'F':
+      northing = 3700000.0;
+      break;
+    case 'G':
+      northing = 4600000.0;
+      break;
+    case 'H':
+      northing = 5500000.0;
+      break;
+    case 'J':
+      northing = 6400000.0;
+      break;
+    case 'K':
+      northing = 7300000.0;
+      break;
+    case 'L':
+      northing = 8200000.0;
+      break;
+    case 'M':
+      northing = 9100000.0;
+      break;
+    case 'N':
+      northing = 0.0;
+      break;
+    case 'P':
+      northing = 800000.0;
+      break;
+    case 'Q':
+      northing = 1700000.0;
+      break;
+    case 'R':
+      northing = 2600000.0;
+      break;
+    case 'S':
+      northing = 3500000.0;
+      break;
+    case 'T':
+      northing = 4400000.0;
+      break;
+    case 'U':
+      northing = 5300000.0;
+      break;
+    case 'V':
+      northing = 6200000.0;
+      break;
+    case 'W':
+      northing = 7000000.0;
+      break;
+    case 'X':
+      northing = 7900000.0;
+      break;
+    default:
+      northing = -1.0;
+    }
+    if (northing >= 0.0) {
+      return northing;
+    }
+    else {
+      throw ("Invalid zone letter: " + zoneLetter);
+    }
+
+  }
+
+});
+
+define('proj4/Point',['proj4/mgrs'],function(mgrs) {
+  function Point(x, y, z) {
+    if (!(this instanceof Point)) {
+      return new Point(x, y, z);
+    }
+    if (typeof x === 'object') {
+      this.x = x[0];
+      this.y = x[1];
+      this.z = x[2] || 0.0;
+    }
+    else if (typeof x === 'string' && typeof y === 'undefined') {
+      var coords = x.split(',');
+      this.x = parseFloat(coords[0]);
+      this.y = parseFloat(coords[1]);
+      this.z = parseFloat(coords[2]) || 0.0;
+    }
+    else {
+      this.x = x;
+      this.y = y;
+      this.z = z || 0.0;
+    }
+    this.clone = function() {
+      return new Point(this.x, this.y, this.z);
+    };
+    this.toString = function() {
+      return ("x=" + this.x + ",y=" + this.y);
+    };
+    /** 
+     * APIMethod: toShortString
+     * Return a short string version of the point.
+     *
+     * Return:
+     * {String} Shortened String representation of proj4.Point object. 
+     *         (ex. <i>"5, 42"</i>)
+     */
+    this.toShortString = function() {
+      return (this.x + ", " + this.y);
+    };
+  }
+
+  Point.fromMGRS = function(mgrsStr) {
+    var llbbox = mgrs.inverse(mgrsStr);
+    return new Point((llbbox[2] + llbbox[0]) / 2, (llbbox[3] + llbbox[1]) / 2);
+  };
+  Point.prototype.toMGRS = function(accuracy) {
+      return mgrs.forward({
+        lon: this.x,
+        lat: this.y
+      }, accuracy);
+    };
+  return Point;
+});
+
+define('proj4/extend',[],function() {
+  return function(destination, source) {
+    destination = destination || {};
+    var value, property;
+    if (!source) {
+      return destination;
+    }
+    for (property in source) {
+      value = source[property];
+      if (value !== undefined) {
+        destination[property] = value;
+      }
+    }
+    return destination;
+  };
+});
+
+define('proj4/common',[],function() {
+  var common = {
+    PI: 3.141592653589793238, //Math.PI,
+    HALF_PI: 1.570796326794896619, //Math.PI*0.5,
+    TWO_PI: 6.283185307179586477, //Math.PI*2,
+    FORTPI: 0.78539816339744833,
+    R2D: 57.29577951308232088,
+    D2R: 0.01745329251994329577,
+    SEC_TO_RAD: 4.84813681109535993589914102357e-6,
+    /* SEC_TO_RAD = Pi/180/3600 */
+    EPSLN: 1.0e-10,
+    MAX_ITER: 20,
+    // following constants from geocent.c
+    COS_67P5: 0.38268343236508977,
+    /* cosine of 67.5 degrees */
+    AD_C: 1.0026000,
+    /* Toms region 1 constant */
+
+    /* datum_type values */
+    PJD_UNKNOWN: 0,
+    PJD_3PARAM: 1,
+    PJD_7PARAM: 2,
+    PJD_GRIDSHIFT: 3,
+    PJD_WGS84: 4, // WGS84 or equivalent
+    PJD_NODATUM: 5, // WGS84 or equivalent
+    SRS_WGS84_SEMIMAJOR: 6378137, // only used in grid shift transforms
+    SRS_WGS84_ESQUARED: 0.006694379990141316, //DGR: 2012-07-29
+
+    // ellipoid pj_set_ell.c
+    SIXTH: 0.1666666666666666667,
+    /* 1/6 */
+    RA4: 0.04722222222222222222,
+    /* 17/360 */
+    RA6: 0.02215608465608465608,
+    /* 67/3024 */
+    RV4: 0.06944444444444444444,
+    /* 5/72 */
+    RV6: 0.04243827160493827160,
+    /* 55/1296 */
+
+    // Function to compute the constant small m which is the radius of
+    //   a parallel of latitude, phi, divided by the semimajor axis.
+    // -----------------------------------------------------------------
+    msfnz: function(eccent, sinphi, cosphi) {
+      var con = eccent * sinphi;
+      return cosphi / (Math.sqrt(1 - con * con));
+    },
+
+    // Function to compute the constant small t for use in the forward
+    //   computations in the Lambert Conformal Conic and the Polar
+    //   Stereographic projections.
+    // -----------------------------------------------------------------
+    tsfnz: function(eccent, phi, sinphi) {
+      var con = eccent * sinphi;
+      var com = 0.5 * eccent;
+      con = Math.pow(((1 - con) / (1 + con)), com);
+      return (Math.tan(0.5 * (this.HALF_PI - phi)) / con);
+    },
+
+    // Function to compute the latitude angle, phi2, for the inverse of the
+    //   Lambert Conformal Conic and Polar Stereographic projections.
+    // ----------------------------------------------------------------
+    phi2z: function(eccent, ts) {
+      var eccnth = 0.5 * eccent;
+      var con, dphi;
+      var phi = this.HALF_PI - 2 * Math.atan(ts);
+      for (var i = 0; i <= 15; i++) {
+        con = eccent * Math.sin(phi);
+        dphi = this.HALF_PI - 2 * Math.atan(ts * (Math.pow(((1 - con) / (1 + con)), eccnth))) - phi;
+        phi += dphi;
+        if (Math.abs(dphi) <= 0.0000000001) {
+          return phi;
+        }
+      }
+      //console.log("phi2z has NoConvergence");
+      return -9999;
+    },
+
+    /* Function to compute constant small q which is the radius of a 
+   parallel of latitude, phi, divided by the semimajor axis. 
+------------------------------------------------------------*/
+    qsfnz: function(eccent, sinphi) {
+      var con;
+      if (eccent > 1.0e-7) {
+        con = eccent * sinphi;
+        return ((1 - eccent * eccent) * (sinphi / (1 - con * con) - (0.5 / eccent) * Math.log((1 - con) / (1 + con))));
+      }
+      else {
+        return (2 * sinphi);
+      }
+    },
+
+    /* Function to compute the inverse of qsfnz
+------------------------------------------------------------*/
+    iqsfnz: function(eccent, q) {
+      var temp = 1 - (1 - eccent * eccent) / (2 * eccent) * Math.log((1 - eccent) / (1 + eccent));
+      if (Math.abs(Math.abs(q) - temp) < 1.0E-6) {
+        if (q < 0) {
+          return (-1 * common.HALF_PI);
+        }
+        else {
+          return common.HALF_PI;
+        }
+      }
+      //var phi = 0.5* q/(1-eccent*eccent);
+      var phi = Math.asin(0.5 * q);
+      var dphi;
+      var sin_phi;
+      var cos_phi;
+      var con;
+      for (var i = 0; i < 30; i++) {
+        sin_phi = Math.sin(phi);
+        cos_phi = Math.cos(phi);
+        con = eccent * sin_phi;
+        dphi = Math.pow(1 - con * con, 2) / (2 * cos_phi) * (q / (1 - eccent * eccent) - sin_phi / (1 - con * con) + 0.5 / eccent * Math.log((1 - con) / (1 + con)));
+        phi += dphi;
+        if (Math.abs(dphi) <= 0.0000000001) {
+          return phi;
+        }
+      }
+
+      //console.log("IQSFN-CONV:Latitude failed to converge after 30 iterations");
+      return NaN;
+    },
+
+    /* Function to eliminate roundoff errors in asin
+----------------------------------------------*/
+    asinz: function(x) {
+      if (Math.abs(x) > 1) {
+        x = (x > 1) ? 1 : -1;
+      }
+      return Math.asin(x);
+    },
+
+    // following functions from gctpc cproj.c for transverse mercator projections
+    e0fn: function(x) {
+      return (1 - 0.25 * x * (1 + x / 16 * (3 + 1.25 * x)));
+    },
+    e1fn: function(x) {
+      return (0.375 * x * (1 + 0.25 * x * (1 + 0.46875 * x)));
+    },
+    e2fn: function(x) {
+      return (0.05859375 * x * x * (1 + 0.75 * x));
+    },
+    e3fn: function(x) {
+      return (x * x * x * (35 / 3072));
+    },
+    mlfn: function(e0, e1, e2, e3, phi) {
+      return (e0 * phi - e1 * Math.sin(2 * phi) + e2 * Math.sin(4 * phi) - e3 * Math.sin(6 * phi));
+    },
+    imlfn: function(ml, e0, e1, e2, e3) {
+      var phi;
+      var dphi;
+
+      phi = ml / e0;
+      for (var i = 0; i < 15; i++) {
+        dphi = (ml - (e0 * phi - e1 * Math.sin(2 * phi) + e2 * Math.sin(4 * phi) - e3 * Math.sin(6 * phi))) / (e0 - 2 * e1 * Math.cos(2 * phi) + 4 * e2 * Math.cos(4 * phi) - 6 * e3 * Math.cos(6 * phi));
+        phi += dphi;
+        if (Math.abs(dphi) <= 0.0000000001) {
+          return phi;
+        }
+      }
+
+      //proj4.reportError("IMLFN-CONV:Latitude failed to converge after 15 iterations");
+      return NaN;
+    },
+
+    srat: function(esinp, exp) {
+      return (Math.pow((1 - esinp) / (1 + esinp), exp));
+    },
+
+    // Function to return the sign of an argument
+    sign: function(x) {
+      if (x < 0) {
+        return (-1);
+      }
+      else {
+        return (1);
+      }
+    },
+
+    // Function to adjust longitude to -180 to 180; input in radians
+    adjust_lon: function(x) {
+      x = (Math.abs(x) < this.PI) ? x : (x - (this.sign(x) * this.TWO_PI));
+      return x;
+    },
+
+    // IGNF - DGR : algorithms used by IGN France
+
+    // Function to adjust latitude to -90 to 90; input in radians
+    adjust_lat: function(x) {
+      x = (Math.abs(x) < this.HALF_PI) ? x : (x - (this.sign(x) * this.PI));
+      return x;
+    },
+
+    // Latitude Isometrique - close to tsfnz ...
+    latiso: function(eccent, phi, sinphi) {
+      if (Math.abs(phi) > this.HALF_PI) {
+        return Number.NaN;
+      }
+      if (phi === this.HALF_PI) {
+        return Number.POSITIVE_INFINITY;
+      }
+      if (phi === -1 * this.HALF_PI) {
+        return Number.NEGATIVE_INFINITY;
+      }
+
+      var con = eccent * sinphi;
+      return Math.log(Math.tan((this.HALF_PI + phi) / 2)) + eccent * Math.log((1 - con) / (1 + con)) / 2;
+    },
+
+    fL: function(x, L) {
+      return 2 * Math.atan(x * Math.exp(L)) - this.HALF_PI;
+    },
+
+    // Inverse Latitude Isometrique - close to ph2z
+    invlatiso: function(eccent, ts) {
+      var phi = this.fL(1, ts);
+      var Iphi = 0;
+      var con = 0;
+      do {
+        Iphi = phi;
+        con = eccent * Math.sin(Iphi);
+        phi = this.fL(Math.exp(eccent * Math.log((1 + con) / (1 - con)) / 2), ts);
+      } while (Math.abs(phi - Iphi) > 1.0e-12);
+      return phi;
+    },
+
+    // Needed for Gauss Schreiber
+    // Original:  Denis Makarov (info@binarythings.com)
+    // Web Site:  http://www.binarythings.com
+    sinh: function(x) {
+      var r = Math.exp(x);
+      r = (r - 1 / r) / 2;
+      return r;
+    },
+
+    cosh: function(x) {
+      var r = Math.exp(x);
+      r = (r + 1 / r) / 2;
+      return r;
+    },
+
+    tanh: function(x) {
+      var r = Math.exp(x);
+      r = (r - 1 / r) / (r + 1 / r);
+      return r;
+    },
+
+    asinh: function(x) {
+      var s = (x >= 0 ? 1 : -1);
+      return s * (Math.log(Math.abs(x) + Math.sqrt(x * x + 1)));
+    },
+
+    acosh: function(x) {
+      return 2 * Math.log(Math.sqrt((x + 1) / 2) + Math.sqrt((x - 1) / 2));
+    },
+
+    atanh: function(x) {
+      return Math.log((x - 1) / (x + 1)) / 2;
+    },
+
+    // Grande Normale
+    gN: function(a, e, sinphi) {
+      var temp = e * sinphi;
+      return a / Math.sqrt(1 - temp * temp);
+    },
+
+    //code from the PROJ.4 pj_mlfn.c file;  this may be useful for other projections
+    pj_enfn: function(es) {
+      var en = [];
+      en[0] = this.C00 - es * (this.C02 + es * (this.C04 + es * (this.C06 + es * this.C08)));
+      en[1] = es * (this.C22 - es * (this.C04 + es * (this.C06 + es * this.C08)));
+      var t = es * es;
+      en[2] = t * (this.C44 - es * (this.C46 + es * this.C48));
+      t *= es;
+      en[3] = t * (this.C66 - es * this.C68);
+      en[4] = t * es * this.C88;
+      return en;
+    },
+
+    pj_mlfn: function(phi, sphi, cphi, en) {
+      cphi *= sphi;
+      sphi *= sphi;
+      return (en[0] * phi - cphi * (en[1] + sphi * (en[2] + sphi * (en[3] + sphi * en[4]))));
+    },
+
+    pj_inv_mlfn: function(arg, es, en) {
+      var k = 1 / (1 - es);
+      var phi = arg;
+      for (var i = common.MAX_ITER; i; --i) { /* rarely goes over 2 iterations */
+        var s = Math.sin(phi);
+        var t = 1 - es * s * s;
+        //t = this.pj_mlfn(phi, s, Math.cos(phi), en) - arg;
+        //phi -= t * (t * Math.sqrt(t)) * k;
+        t = (this.pj_mlfn(phi, s, Math.cos(phi), en) - arg) * (t * Math.sqrt(t)) * k;
+        phi -= t;
+        if (Math.abs(t) < common.EPSLN) {
+          return phi;
+        }
+      }
+      //proj4.reportError("cass:pj_inv_mlfn: Convergence error");
+      return phi;
+    },
+
+    /**
+     * Determine correction values
+     * source: nad_intr.c (DGR: 2012-07-29)
+     */
+    nad_intr: function(pin, ct) {
+      // force computation by decreasing by 1e-7 to be as closed as possible
+      // from computation under C:C++ by leveraging rounding problems ...
+      var t = {
+        x: (pin.x - 1e-7) / ct.del[0],
+        y: (pin.y - 1e-7) / ct.del[1]
+      };
+      var indx = {
+        x: Math.floor(t.x),
+        y: Math.floor(t.y)
+      };
+      var frct = {
+        x: t.x - 1 * indx.x,
+        y: t.y - 1 * indx.y
+      };
+      var val = {
+        x: Number.NaN,
+        y: Number.NaN
+      };
+      var inx;
+      if (indx.x < 0) {
+        if (!(indx.x === -1 && frct.x > 0.99999999999)) {
+          return val;
+        }
+        indx.x++;
+        frct.x = 0;
+      }
+      else {
+        inx = indx.x + 1;
+        if (inx >= ct.lim[0]) {
+          if (!(inx === ct.lim[0] && frct.x < 1e-11)) {
+            return val;
+          }
+          indx.x--;
+          frct.x = 1;
+        }
+      }
+      if (indx.y < 0) {
+        if (!(indx.y === -1 && frct.y > 0.99999999999)) {
+          return val;
+        }
+        indx.y++;
+        frct.y = 0;
+      }
+      else {
+        inx = indx.y + 1;
+        if (inx >= ct.lim[1]) {
+          if (!(inx === ct.lim[1] && frct.y < 1e-11)) {
+            return val;
+          }
+          indx.y++;
+          frct.y = 1;
+        }
+      }
+      inx = (indx.y * ct.lim[0]) + indx.x;
+      var f00 = {
+        x: ct.cvs[inx][0],
+        y: ct.cvs[inx][1]
+      };
+      inx++;
+      var f10 = {
+        x: ct.cvs[inx][0],
+        y: ct.cvs[inx][1]
+      };
+      inx += ct.lim[0];
+      var f11 = {
+        x: ct.cvs[inx][0],
+        y: ct.cvs[inx][1]
+      };
+      inx--;
+      var f01 = {
+        x: ct.cvs[inx][0],
+        y: ct.cvs[inx][1]
+      };
+      var m11 = frct.x * frct.y,
+        m10 = frct.x * (1 - frct.y),
+        m00 = (1 - frct.x) * (1 - frct.y),
+        m01 = (1 - frct.x) * frct.y;
+      val.x = (m00 * f00.x + m10 * f10.x + m01 * f01.x + m11 * f11.x);
+      val.y = (m00 * f00.y + m10 * f10.y + m01 * f01.y + m11 * f11.y);
+      return val;
+    },
+
+    /**
+     * Correct value
+     * source: nad_cvt.c (DGR: 2012-07-29)
+     */
+    nad_cvt: function(pin, inverse, ct) {
+      var val = {
+        "x": Number.NaN,
+        "y": Number.NaN
+      };
+      if (isNaN(pin.x)) {
+        return val;
+      }
+      var tb = {
+        "x": pin.x,
+        "y": pin.y
+      };
+      tb.x -= ct.ll[0];
+      tb.y -= ct.ll[1];
+      tb.x = common.adjust_lon(tb.x - common.PI) + common.PI;
+      var t = common.nad_intr(tb, ct);
+      if (inverse) {
+        if (isNaN(t.x)) {
+          return val;
+        }
+        t.x = tb.x + t.x;
+        t.y = tb.y - t.y;
+        var i = 9,
+          tol = 1e-12;
+        var dif, del;
+        do {
+          del = common.nad_intr(t, ct);
+          if (isNaN(del.x)) {
+            this.reportError("Inverse grid shift iteration failed, presumably at grid edge.  Using first approximation.");
+            break;
+          }
+          dif = {
+            "x": t.x - del.x - tb.x,
+            "y": t.y + del.y - tb.y
+          };
+          t.x -= dif.x;
+          t.y -= dif.y;
+        } while (i-- && Math.abs(dif.x) > tol && Math.abs(dif.y) > tol);
+        if (i < 0) {
+          this.reportError("Inverse grid shift iterator failed to converge.");
+          return val;
+        }
+        val.x = common.adjust_lon(t.x + ct.ll[0]);
+        val.y = t.y + ct.ll[1];
+      }
+      else {
+        if (!isNaN(t.x)) {
+          val.x = pin.x - t.x;
+          val.y = pin.y + t.y;
+        }
+      }
+      return val;
+    },
+
+    /* meridinal distance for ellipsoid and inverse
+     **    8th degree - accurate to < 1e-5 meters when used in conjuction
+     **		with typical major axis values.
+     **	Inverse determines phi to EPS (1e-11) radians, about 1e-6 seconds.
+     */
+    C00: 1,
+    C02: 0.25,
+    C04: 0.046875,
+    C06: 0.01953125,
+    C08: 0.01068115234375,
+    C22: 0.75,
+    C44: 0.46875,
+    C46: 0.01302083333333333333,
+    C48: 0.00712076822916666666,
+    C66: 0.36458333333333333333,
+    C68: 0.00569661458333333333,
+    C88: 0.3076171875
+
+  };
+  return common;
+});
+
+define('proj4/constants',[],function() {
+  var proj4 = {};
+  //var Proj = require('./Proj');
+  proj4.PrimeMeridian = {
+    "greenwich": 0.0, //"0dE",
+    "lisbon": -9.131906111111, //"9d07'54.862\"W",
+    "paris": 2.337229166667, //"2d20'14.025\"E",
+    "bogota": -74.080916666667, //"74d04'51.3\"W",
+    "madrid": -3.687938888889, //"3d41'16.58\"W",
+    "rome": 12.452333333333, //"12d27'8.4\"E",
+    "bern": 7.439583333333, //"7d26'22.5\"E",
+    "jakarta": 106.807719444444, //"106d48'27.79\"E",
+    "ferro": -17.666666666667, //"17d40'W",
+    "brussels": 4.367975, //"4d22'4.71\"E",
+    "stockholm": 18.058277777778, //"18d3'29.8\"E",
+    "athens": 23.7163375, //"23d42'58.815\"E",
+    "oslo": 10.722916666667 //"10d43'22.5\"E"
+  };
+
+  proj4.Ellipsoid = {
+    "MERIT": {
+      a: 6378137.0,
+      rf: 298.257,
+      ellipseName: "MERIT 1983"
+    },
+    "SGS85": {
+      a: 6378136.0,
+      rf: 298.257,
+      ellipseName: "Soviet Geodetic System 85"
+    },
+    "GRS80": {
+      a: 6378137.0,
+      rf: 298.257222101,
+      ellipseName: "GRS 1980(IUGG, 1980)"
+    },
+    "IAU76": {
+      a: 6378140.0,
+      rf: 298.257,
+      ellipseName: "IAU 1976"
+    },
+    "airy": {
+      a: 6377563.396,
+      b: 6356256.910,
+      ellipseName: "Airy 1830"
+    },
+    "APL4.": {
+      a: 6378137,
+      rf: 298.25,
+      ellipseName: "Appl. Physics. 1965"
+    },
+    "NWL9D": {
+      a: 6378145.0,
+      rf: 298.25,
+      ellipseName: "Naval Weapons Lab., 1965"
+    },
+    "mod_airy": {
+      a: 6377340.189,
+      b: 6356034.446,
+      ellipseName: "Modified Airy"
+    },
+    "andrae": {
+      a: 6377104.43,
+      rf: 300.0,
+      ellipseName: "Andrae 1876 (Den., Iclnd.)"
+    },
+    "aust_SA": {
+      a: 6378160.0,
+      rf: 298.25,
+      ellipseName: "Australian Natl & S. Amer. 1969"
+    },
+    "GRS67": {
+      a: 6378160.0,
+      rf: 298.2471674270,
+      ellipseName: "GRS 67(IUGG 1967)"
+    },
+    "bessel": {
+      a: 6377397.155,
+      rf: 299.1528128,
+      ellipseName: "Bessel 1841"
+    },
+    "bess_nam": {
+      a: 6377483.865,
+      rf: 299.1528128,
+      ellipseName: "Bessel 1841 (Namibia)"
+    },
+    "clrk66": {
+      a: 6378206.4,
+      b: 6356583.8,
+      ellipseName: "Clarke 1866"
+    },
+    "clrk80": {
+      a: 6378249.145,
+      rf: 293.4663,
+      ellipseName: "Clarke 1880 mod."
+    },
+    "clrk58": {
+      a: 6378293.645208759,
+      rf: 294.2606763692654,
+      ellipseName: "Clarke 1858"
+    },
+    "CPM": {
+      a: 6375738.7,
+      rf: 334.29,
+      ellipseName: "Comm. des Poids et Mesures 1799"
+    },
+    "delmbr": {
+      a: 6376428.0,
+      rf: 311.5,
+      ellipseName: "Delambre 1810 (Belgium)"
+    },
+    "engelis": {
+      a: 6378136.05,
+      rf: 298.2566,
+      ellipseName: "Engelis 1985"
+    },
+    "evrst30": {
+      a: 6377276.345,
+      rf: 300.8017,
+      ellipseName: "Everest 1830"
+    },
+    "evrst48": {
+      a: 6377304.063,
+      rf: 300.8017,
+      ellipseName: "Everest 1948"
+    },
+    "evrst56": {
+      a: 6377301.243,
+      rf: 300.8017,
+      ellipseName: "Everest 1956"
+    },
+    "evrst69": {
+      a: 6377295.664,
+      rf: 300.8017,
+      ellipseName: "Everest 1969"
+    },
+    "evrstSS": {
+      a: 6377298.556,
+      rf: 300.8017,
+      ellipseName: "Everest (Sabah & Sarawak)"
+    },
+    "fschr60": {
+      a: 6378166.0,
+      rf: 298.3,
+      ellipseName: "Fischer (Mercury Datum) 1960"
+    },
+    "fschr60m": {
+      a: 6378155.0,
+      rf: 298.3,
+      ellipseName: "Fischer 1960"
+    },
+    "fschr68": {
+      a: 6378150.0,
+      rf: 298.3,
+      ellipseName: "Fischer 1968"
+    },
+    "helmert": {
+      a: 6378200.0,
+      rf: 298.3,
+      ellipseName: "Helmert 1906"
+    },
+    "hough": {
+      a: 6378270.0,
+      rf: 297.0,
+      ellipseName: "Hough"
+    },
+    "intl": {
+      a: 6378388.0,
+      rf: 297.0,
+      ellipseName: "International 1909 (Hayford)"
+    },
+    "kaula": {
+      a: 6378163.0,
+      rf: 298.24,
+      ellipseName: "Kaula 1961"
+    },
+    "lerch": {
+      a: 6378139.0,
+      rf: 298.257,
+      ellipseName: "Lerch 1979"
+    },
+    "mprts": {
+      a: 6397300.0,
+      rf: 191.0,
+      ellipseName: "Maupertius 1738"
+    },
+    "new_intl": {
+      a: 6378157.5,
+      b: 6356772.2,
+      ellipseName: "New International 1967"
+    },
+    "plessis": {
+      a: 6376523.0,
+      rf: 6355863.0,
+      ellipseName: "Plessis 1817 (France)"
+    },
+    "krass": {
+      a: 6378245.0,
+      rf: 298.3,
+      ellipseName: "Krassovsky, 1942"
+    },
+    "SEasia": {
+      a: 6378155.0,
+      b: 6356773.3205,
+      ellipseName: "Southeast Asia"
+    },
+    "walbeck": {
+      a: 6376896.0,
+      b: 6355834.8467,
+      ellipseName: "Walbeck"
+    },
+    "WGS60": {
+      a: 6378165.0,
+      rf: 298.3,
+      ellipseName: "WGS 60"
+    },
+    "WGS66": {
+      a: 6378145.0,
+      rf: 298.25,
+      ellipseName: "WGS 66"
+    },
+    "WGS72": {
+      a: 6378135.0,
+      rf: 298.26,
+      ellipseName: "WGS 72"
+    },
+    "WGS84": {
+      a: 6378137.0,
+      rf: 298.257223563,
+      ellipseName: "WGS 84"
+    },
+    "sphere": {
+      a: 6370997.0,
+      b: 6370997.0,
+      ellipseName: "Normal Sphere (r=6370997)"
+    }
+  };
+
+  proj4.Datum = {
+    "wgs84": {
+      towgs84: "0,0,0",
+      ellipse: "WGS84",
+      datumName: "WGS84"
+    },
+    "ch1903":{
+      towgs84:"674.374,15.056,405.346",
+      ellipse:"bessel",
+      datumName:"swiss"
+    },
+    "ggrs87": {
+      towgs84: "-199.87,74.79,246.62",
+      ellipse: "GRS80",
+      datumName: "Greek_Geodetic_Reference_System_1987"
+    },
+    "nad83": {
+      towgs84: "0,0,0",
+      ellipse: "GRS80",
+      datumName: "North_American_Datum_1983"
+    },
+    "nad27": {
+      nadgrids: "@conus,@alaska,@ntv2_0.gsb,@ntv1_can.dat",
+      ellipse: "clrk66",
+      datumName: "North_American_Datum_1927"
+    },
+    "potsdam": {
+      towgs84: "606.0,23.0,413.0",
+      ellipse: "bessel",
+      datumName: "Potsdam Rauenberg 1950 DHDN"
+    },
+    "carthage": {
+      towgs84: "-263.0,6.0,431.0",
+      ellipse: "clark80",
+      datumName: "Carthage 1934 Tunisia"
+    },
+    "hermannskogel": {
+      towgs84: "653.0,-212.0,449.0",
+      ellipse: "bessel",
+      datumName: "Hermannskogel"
+    },
+    "ire65": {
+      towgs84: "482.530,-130.596,564.557,-1.042,-0.214,-0.631,8.15",
+      ellipse: "mod_airy",
+      datumName: "Ireland 1965"
+    },
+    "rassadiran": {
+      towgs84: "-133.63,-157.5,-158.62",
+      ellipse: "intl",
+      datumName: "Rassadiran"
+    },
+    "nzgd49": {
+      towgs84: "59.47,-5.04,187.44,0.47,-0.1,1.024,-4.5993",
+      ellipse: "intl",
+      datumName: "New Zealand Geodetic Datum 1949"
+    },
+    "osgb36": {
+      towgs84: "446.448,-125.157,542.060,0.1502,0.2470,0.8421,-20.4894",
+      ellipse: "airy",
+      datumName: "Airy 1830"
+    },
+    "s_jtsk":{
+      towgs84:"589,76,480",
+      ellipse:'bessel',
+      datumName:'S-JTSK (Ferro)'
+    },
+    'beduaram':{
+      towgs84:'-106,-87,188',
+      ellipse:'clrk80',
+      datumName:'Beduaram'
+    },
+    'gunung_segara':{
+      towgs84:'-403,684,41',
+      ellipse:'bessel',
+      datumName:'Gunung Segara Jakarta'
+    }
+  };
+
+  //proj4.WGS84 = Proj('WGS84');
+  proj4.Datum.OSB36 = proj4.Datum.OSGB36; //as returned from spatialreference.org
+
+  //lookup table to go from the projection name in WKT to the proj4 projection name
+  //build this out as required
+  proj4.wktProjections = {
+    "Lambert Tangential Conformal Conic Projection": "lcc",
+    "Lambert_Conformal_Conic": "lcc",
+    "Lambert_Conformal_Conic_2SP":"lcc",
+    "Mercator": "merc",
+    "Popular Visualisation Pseudo Mercator": "merc",
+    "Mercator_1SP": "merc",
+    "Transverse_Mercator": "tmerc",
+    "Transverse Mercator": "tmerc",
+    "Lambert Azimuthal Equal Area": "laea",
+    "Universal Transverse Mercator System": "utm",
+    "Hotine_Oblique_Mercator":"omerc",
+    "Hotine Oblique Mercator":"omerc",
+    "Hotine_Oblique_Mercator_Azimuth_Natural_Origin":"omerc",
+    'Hotine_Oblique_Mercator_Azimuth_Center':'omerc',
+    "Van_der_Grinten_I":"vandg",
+    "VanDerGrinten":"vandg",
+    "Stereographic_North_Pole":"sterea",
+    "Oblique_Stereographic":"sterea",
+    'Polar_Stereographic':"sterea",
+    "Polyconic":"poly",
+    'New_Zealand_Map_Grid':'nzmg',
+    'Miller_Cylindrical':'mill',
+    'Krovak':'krovak',
+    'Equirectangular':'eqc',
+    'Equidistant_Cylindrical':'eqc',
+    'Cassini':'cass',
+    'Cassini_Soldner':'cass',
+    'Azimuthal_Equidistant':'aeqd',
+    'Albers_Conic_Equal_Area':'aea',
+    'Albers':'aea',
+    'Mollweide':'moll',
+    'Lambert_Azimuthal_Equal_Area':'laea',
+    'Sinusoidal':"sinu",
+    "Equidistant_Conic":'eqdc',
+    'Mercator_Auxiliary_Sphere':'merc'
+  };
+
+  // Based on proj4 CTABLE  structure :
+  // FIXME: better to have array instead of object holding longitudes, latitudes members
+  //        In the former case, one has to document index 0 is longitude and
+  //        1 is latitude ...
+  //        In the later case, grid object gets bigger !!!!
+  //        Solution 1 is chosen based on pj_gridinfo.c
+  proj4.grids = {
+    "null": { // name of grid's file
+      "ll": [-3.14159265, - 1.57079633], // lower-left coordinates in radians (longitude, latitude):
+      "del": [3.14159265, 1.57079633], // cell's size in radians (longitude, latitude):
+      "lim": [3, 3], // number of nodes in longitude, latitude (including edges):
+      "count": 9, // total number of nodes
+      "cvs": [ // shifts : in ntv2 reverse order : lon, lat in radians ...
+        [0.0, 0.0],
+        [0.0, 0.0],
+        [0.0, 0.0], // for (lon= 0; lon<lim[0]; lon++) {
+        [0.0, 0.0],
+        [0.0, 0.0],
+        [0.0, 0.0], //   for (lat= 0; lat<lim[1]; lat++) { p= cvs[lat*lim[0]+lon]; }
+        [0.0, 0.0],
+        [0.0, 0.0],
+        [0.0, 0.0] // }
+      ]
+    }
+  };
+  return proj4;
+});
+
+define('proj4/global',[],function() {
+  return function(defs) {
+    defs('WGS84', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
+    defs('EPSG:4326', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
+    defs('EPSG:4269', "+title=NAD83 (long/lat) +proj=longlat +a=6378137.0 +b=6356752.31414036 +ellps=GRS80 +datum=NAD83 +units=degrees");
+    defs('EPSG:3857', "+title=WGS 84 / Pseudo-Mercator +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +no_defs");
+
+    defs['EPSG:3785'] = defs['EPSG:3857']; // maintain backward compat, official code is 3857
+    defs.GOOGLE = defs['EPSG:3857'];
+    defs['EPSG:900913'] = defs['EPSG:3857'];
+    defs['EPSG:102113'] = defs['EPSG:3857'];
+  };
+});
+
+define('proj4/projString',['proj4/common', 'proj4/constants'], function(common, constants) {
+  return function(defData) {
+    var self = {};
+
+    var paramObj = {};
+    defData.split("+").map(function(v) {
+      return v.trim();
+    }).filter(function(a) {
+      return a;
+    }).forEach(function(a) {
+      var split = a.split("=");
+      if (split[1] === "@null") {
+        return;
+      }
+      split.push(true);
+      paramObj[split[0].toLowerCase()] = split[1];
+    });
+    var paramName, paramVal, paramOutname;
+    var params = {
+      proj: 'projName',
+      datum: 'datumCode',
+      rf: function(v) {
+        self.rf = parseFloat(v, 10);
+      },
+      lat_0: function(v) {
+        self.lat0 = v * common.D2R;
+      },
+      lat_1: function(v) {
+        self.lat1 = v * common.D2R;
+      },
+      lat_2: function(v) {
+        self.lat2 = v * common.D2R;
+      },
+      lat_ts: function(v) {
+        self.lat_ts = v * common.D2R;
+      },
+      lon_0: function(v) {
+        self.long0 = v * common.D2R;
+      },
+      lon_1: function(v) {
+        self.long1 = v * common.D2R;
+      },
+      lon_2: function(v) {
+        self.long2 = v * common.D2R;
+      },
+      alpha: function(v) {
+        self.alpha = parseFloat(v) * common.D2R;
+      },
+      lonc: function(v) {
+        self.longc = v * common.D2R;
+      },
+      x_0: function(v) {
+        self.x0 = parseFloat(v, 10);
+      },
+      y_0: function(v) {
+        self.y0 = parseFloat(v, 10);
+      },
+      k_0: function(v) {
+        self.k0 = parseFloat(v, 10);
+      },
+      k: function(v) {
+        self.k0 = parseFloat(v, 10);
+      },
+      r_a: function() {
+        self.R_A = true;
+      },
+      zone: function(v) {
+        self.zone = parseInt(v, 10);
+      },
+      south: function() {
+        self.utmSouth = true;
+      },
+      towgs84: function(v) {
+        self.datum_params = v.split(",").map(function(a) {
+          return parseFloat(a, 10);
+        });
+      },
+      to_meter: function(v) {
+        self.to_meter = parseFloat(v, 10);
+      },
+      from_greenwich: function(v) {
+        self.from_greenwich = v * common.D2R;
+      },
+      pm: function(v) {
+        self.from_greenwich = (constants.PrimeMeridian[v] ? constants.PrimeMeridian[v] : parseFloat(v, 10)) * common.D2R;
+      },
+      axis: function(v) {
+        var legalAxis = "ewnsud";
+        if (v.length === 3 && legalAxis.indexOf(v.substr(0, 1)) !== -1 && legalAxis.indexOf(v.substr(1, 1)) !== -1 && legalAxis.indexOf(v.substr(2, 1)) !== -1) {
+          self.axis = v;
+        }
+      }
+    };
+    for (paramName in paramObj) {
+      paramVal = paramObj[paramName];
+      if (paramName in params) {
+        paramOutname = params[paramName];
+        if (typeof paramOutname === 'function') {
+          paramOutname(paramVal);
+        }
+        else {
+          self[paramOutname] = paramVal;
+        }
+      }
+      else {
+        self[paramName] = paramVal;
+      }
+    }
+    return self;
+  };
+});
+define('proj4/wkt',['proj4/extend','proj4/constants','proj4/common'],function(extend,constants,common) {
+  function mapit(obj, key, v) {
+    obj[key] = v.map(function(aa) {
+      var o = {};
+      sExpr(aa, o);
+      return o;
+    }).reduce(function(a, b) {
+      return extend(a, b);
+    }, {});
+  }
+
+  function sExpr(v, obj) {
+    var key;
+    if (!Array.isArray(v)) {
+      obj[v] = true;
+      return;
+    }
+    else {
+      key = v.shift();
+      if (key === 'PARAMETER') {
+        key = v.shift();
+      }
+      if (v.length === 1) {
+        if (Array.isArray(v[0])) {
+          obj[key] = {};
+          sExpr(v[0], obj[key]);
+        }
+        else {
+          obj[key] = v[0];
+        }
+      }
+      else if (!v.length) {
+        obj[key] = true;
+      }
+      else if (key === 'TOWGS84') {
+        obj[key] = v;
+      }
+      else {
+        obj[key] = {};
+        if (['UNIT', 'PRIMEM', 'VERT_DATUM'].indexOf(key) > -1) {
+          obj[key] = {
+            name: v[0].toLowerCase(),
+            convert: v[1]
+          };
+          if (v.length === 3) {
+            obj[key].auth = v[2];
+          }
+        }
+        else if (key === 'SPHEROID') {
+          obj[key] = {
+            name: v[0],
+            a: v[1],
+            rf: v[2]
+          };
+          if (v.length === 4) {
+            obj[key].auth = v[3];
+          }
+        }
+        else if (['GEOGCS', 'GEOCCS', 'DATUM', 'VERT_CS', 'COMPD_CS', 'LOCAL_CS', 'FITTED_CS', 'LOCAL_DATUM'].indexOf(key) > -1) {
+          v[0] = ['name', v[0]];
+          mapit(obj, key, v);
+        }
+        else if (v.every(function(aa) {
+          return Array.isArray(aa);
+        })) {
+          mapit(obj, key, v);
+        }
+        else {
+          sExpr(v, obj[key]);
+        }
+      }
+    }
+  }
+  function rename(obj, params){
+    var outName=params[0];
+    var inName = params[1];
+    if(!(outName in obj)&&(inName in obj)){
+      obj[outName]=obj[inName];
+      if(params.length===3){
+        obj[outName]=params[2](obj[outName]);
+      }
+    }
+  }
+  function d2r(input){
+    return input*common.D2R;
+  }
+  function cleanWKT(wkt){
+    if(wkt.type === 'GEOGCS'){
+      wkt.projName = 'longlat';
+    }else if(wkt.type === 'LOCAL_CS'){
+      wkt.projName = 'identity';
+      wkt.local=true;
+    }else{
+      wkt.projName = constants.wktProjections[wkt.PROJECTION];
+    }
+    if(wkt.UNIT){
+      wkt.units=wkt.UNIT.name.toLowerCase();
+      if(wkt.units === 'metre'){
+        wkt.units = 'meter';
+      }
+      if(wkt.UNIT.convert){
+        wkt.to_meter=parseFloat(wkt.UNIT.convert,10);
+      }
+    }
+    
+    if(wkt.GEOGCS){
+      //if(wkt.GEOGCS.PRIMEM&&wkt.GEOGCS.PRIMEM.convert){
+      //  wkt.from_greenwich=wkt.GEOGCS.PRIMEM.convert*common.D2R;
+      //}
+      if(wkt.GEOGCS.DATUM){
+        wkt.datumCode=wkt.GEOGCS.DATUM.name.toLowerCase();
+      }else{
+        wkt.datumCode=wkt.GEOGCS.name.toLowerCase();
+      }
+      if(wkt.datumCode.slice(0,2)==='d_'){
+        wkt.datumCode=wkt.datumCode.slice(2);
+      }
+      if(wkt.datumCode==='new_zealand_geodetic_datum_1949' || wkt.datumCode === 'new_zealand_1949'){
+        wkt.datumCode='nzgd49';
+      }
+      if(wkt.datumCode === "wgs_1984"){
+        if(wkt.PROJECTION==='Mercator_Auxiliary_Sphere'){
+          wkt.sphere = true;
+        }
+        wkt.datumCode = 'wgs84';
+      }
+      if(wkt.datumCode.slice(-6)==='_ferro'){
+        wkt.datumCode=wkt.datumCode.slice(0,-6);
+      }
+      if(wkt.datumCode.slice(-8)==='_jakarta'){
+        wkt.datumCode=wkt.datumCode.slice(0,-8);
+      }
+      if(wkt.GEOGCS.DATUM && wkt.GEOGCS.DATUM.SPHEROID){
+        wkt.ellps=wkt.GEOGCS.DATUM.SPHEROID.name.replace('_19','').replace(/[Cc]larke\_18/,'clrk');
+        if(wkt.ellps.toLowerCase().slice(0,13)==="international"){
+          wkt.ellps='intl';
+        }
+
+        wkt.a = wkt.GEOGCS.DATUM.SPHEROID.a;
+        wkt.rf = parseFloat(wkt.GEOGCS.DATUM.SPHEROID.rf,10);
+      }
+    }
+    if(wkt.b && !isFinite(wkt.b)){
+      wkt.b=wkt.a;
+    }
+    function toMeter(input){
+      var ratio = wkt.to_meter||1;
+      return parseFloat(input,10)*ratio;
+    }
+    var renamer = function(a){
+      return rename(wkt,a);
+    };
+    var list = [
+      ['standard_parallel_1','Standard_Parallel_1'],
+      ['standard_parallel_2','Standard_Parallel_2'],
+      ['false_easting','False_Easting'],
+      ['false_northing','False_Northing'],
+      ['central_meridian','Central_Meridian'],
+      ['latitude_of_origin','Latitude_Of_Origin'],
+      ['scale_factor','Scale_Factor'],
+      ['k0','scale_factor'],
+      ['latitude_of_center','Latitude_of_center'],
+      ['lat0','latitude_of_center',d2r],
+      ['longitude_of_center','Longitude_Of_Center'],
+      ['longc','longitude_of_center',d2r],
+      ['x0','false_easting',toMeter],
+      ['y0','false_northing',toMeter],
+      ['long0','central_meridian',d2r],
+      ['lat0','latitude_of_origin',d2r],
+      ['lat0','standard_parallel_1',d2r],
+      ['lat1','standard_parallel_1',d2r],
+      ['lat2','standard_parallel_2',d2r],
+      ['alpha','azimuth',d2r],
+      ['srsCode','name']
+    ];
+    list.forEach(renamer);
+    if(!wkt.long0&&wkt.longc&&(wkt.PROJECTION==='Albers_Conic_Equal_Area'||wkt.PROJECTION==="Lambert_Azimuthal_Equal_Area")){
+      wkt.long0=wkt.longc;
+    }
+  }
+  return function(wkt, self) {
+    var lisp = JSON.parse(("," + wkt).replace(/\,([A-Z_0-9]+?)(\[)/g, ',["$1",').slice(1).replace(/\,([A-Z_0-9]+?)\]/g, ',"$1"]'));
+    var type = lisp.shift();
+    var name = lisp.shift();
+    lisp.unshift(['name', name]);
+    lisp.unshift(['type', type]);
+    lisp.unshift('output');
+    var obj = {};
+    sExpr(lisp, obj);
+    cleanWKT(obj.output);
+    return extend(self,obj.output);
+  };
+});
+
+define('proj4/defs',['proj4/common','proj4/constants','proj4/global','proj4/projString','proj4/wkt'],function(common, constants,globals,parseProj,wkt) {
+
+  function defs(name) {
+    /*global console*/
+    var that = this;
+    if (arguments.length === 2) {
+      if(arguments[1][0]==='+'){
+        defs[name] = parseProj(arguments[1]);
+      }else{
+        defs[name] = wkt(arguments[1]);
+      }
+    }
+    else if (arguments.length === 1) {
+      if (Array.isArray(name)) {
+        return name.map(function(v) {
+          if (Array.isArray(v)) {
+            defs.apply(that, v);
+          }
+          else {
+            defs(v);
+          }
+        });
+      }
+      else if (typeof name === 'string') {
+       
+      }
+      else if ('EPSG' in name) {
+        defs['EPSG:' + name.EPSG] = name;
+      }
+      else if ('ESRI' in name) {
+        defs['ESRI:' + name.ESRI] = name;
+      }
+      else if ('IAU2000' in name) {
+        defs['IAU2000:' + name.IAU2000] = name;
+      }
+      else {
+        console.log(name);
+      }
+      return;
+    }
+    
+  
+  }
+  globals(defs);
+  return defs;
+});
+
+define('proj4/datum',['proj4/common'],function(common) {
+  var datum = function(proj) {
+    if (!(this instanceof datum)) {
+      return new datum(proj);
+    }
+    this.datum_type = common.PJD_WGS84; //default setting
+    if (!proj) {
+      return;
+    }
+    if (proj.datumCode && proj.datumCode === 'none') {
+      this.datum_type = common.PJD_NODATUM;
+    }
+    if (proj.datum_params) {
+      for (var i = 0; i < proj.datum_params.length; i++) {
+        proj.datum_params[i] = parseFloat(proj.datum_params[i]);
+      }
+      if (proj.datum_params[0] !== 0 || proj.datum_params[1] !== 0 || proj.datum_params[2] !== 0) {
+        this.datum_type = common.PJD_3PARAM;
+      }
+      if (proj.datum_params.length > 3) {
+        if (proj.datum_params[3] !== 0 || proj.datum_params[4] !== 0 || proj.datum_params[5] !== 0 || proj.datum_params[6] !== 0) {
+          this.datum_type = common.PJD_7PARAM;
+          proj.datum_params[3] *= common.SEC_TO_RAD;
+          proj.datum_params[4] *= common.SEC_TO_RAD;
+          proj.datum_params[5] *= common.SEC_TO_RAD;
+          proj.datum_params[6] = (proj.datum_params[6] / 1000000.0) + 1.0;
+        }
+      }
+    }
+    // DGR 2011-03-21 : nadgrids support
+    this.datum_type = proj.grids ? common.PJD_GRIDSHIFT : this.datum_type;
+
+    this.a = proj.a; //datum object also uses these values
+    this.b = proj.b;
+    this.es = proj.es;
+    this.ep2 = proj.ep2;
+    this.datum_params = proj.datum_params;
+    if (this.datum_type === common.PJD_GRIDSHIFT) {
+      this.grids = proj.grids;
+    }
+  };
+  datum.prototype = {
+
+
+    /****************************************************************/
+    // cs_compare_datums()
+    //   Returns TRUE if the two datums match, otherwise FALSE.
+    compare_datums: function(dest) {
+      if (this.datum_type !== dest.datum_type) {
+        return false; // false, datums are not equal
+      }
+      else if (this.a !== dest.a || Math.abs(this.es - dest.es) > 0.000000000050) {
+        // the tolerence for es is to ensure that GRS80 and WGS84
+        // are considered identical
+        return false;
+      }
+      else if (this.datum_type === common.PJD_3PARAM) {
+        return (this.datum_params[0] === dest.datum_params[0] && this.datum_params[1] === dest.datum_params[1] && this.datum_params[2] === dest.datum_params[2]);
+      }
+      else if (this.datum_type === common.PJD_7PARAM) {
+        return (this.datum_params[0] === dest.datum_params[0] && this.datum_params[1] === dest.datum_params[1] && this.datum_params[2] === dest.datum_params[2] && this.datum_params[3] === dest.datum_params[3] && this.datum_params[4] === dest.datum_params[4] && this.datum_params[5] === dest.datum_params[5] && this.datum_params[6] === dest.datum_params[6]);
+      }
+      else if (this.datum_type === common.PJD_GRIDSHIFT || dest.datum_type === common.PJD_GRIDSHIFT) {
+        //alert("ERROR: Grid shift transformations are not implemented.");
+        //return false
+        //DGR 2012-07-29 lazy ...
+        return this.nadgrids === dest.nadgrids;
+      }
+      else {
+        return true; // datums are equal
+      }
+    }, // cs_compare_datums()
+
+    /*
+     * The function Convert_Geodetic_To_Geocentric converts geodetic coordinates
+     * (latitude, longitude, and height) to geocentric coordinates (X, Y, Z),
+     * according to the current ellipsoid parameters.
+     *
+     *    Latitude  : Geodetic latitude in radians                     (input)
+     *    Longitude : Geodetic longitude in radians                    (input)
+     *    Height    : Geodetic height, in meters                       (input)
+     *    X         : Calculated Geocentric X coordinate, in meters    (output)
+     *    Y         : Calculated Geocentric Y coordinate, in meters    (output)
+     *    Z         : Calculated Geocentric Z coordinate, in meters    (output)
+     *
+     */
+    geodetic_to_geocentric: function(p) {
+      var Longitude = p.x;
+      var Latitude = p.y;
+      var Height = p.z ? p.z : 0; //Z value not always supplied
+      var X; // output
+      var Y;
+      var Z;
+
+      var Error_Code = 0; //  GEOCENT_NO_ERROR;
+      var Rn; /*  Earth radius at location  */
+      var Sin_Lat; /*  Math.sin(Latitude)  */
+      var Sin2_Lat; /*  Square of Math.sin(Latitude)  */
+      var Cos_Lat; /*  Math.cos(Latitude)  */
+
+      /*
+       ** Don't blow up if Latitude is just a little out of the value
+       ** range as it may just be a rounding issue.  Also removed longitude
+       ** test, it should be wrapped by Math.cos() and Math.sin().  NFW for PROJ.4, Sep/2001.
+       */
+      if (Latitude < -common.HALF_PI && Latitude > -1.001 * common.HALF_PI) {
+        Latitude = -common.HALF_PI;
+      }
+      else if (Latitude > common.HALF_PI && Latitude < 1.001 * common.HALF_PI) {
+        Latitude = common.HALF_PI;
+      }
+      else if ((Latitude < -common.HALF_PI) || (Latitude > common.HALF_PI)) {
+        /* Latitude out of range */
+        //proj4.reportError('geocent:lat out of range:' + Latitude);
+        return null;
+      }
+
+      if (Longitude > common.PI) {
+        Longitude -= (2 * common.PI);
+      }
+      Sin_Lat = Math.sin(Latitude);
+      Cos_Lat = Math.cos(Latitude);
+      Sin2_Lat = Sin_Lat * Sin_Lat;
+      Rn = this.a / (Math.sqrt(1.0e0 - this.es * Sin2_Lat));
+      X = (Rn + Height) * Cos_Lat * Math.cos(Longitude);
+      Y = (Rn + Height) * Cos_Lat * Math.sin(Longitude);
+      Z = ((Rn * (1 - this.es)) + Height) * Sin_Lat;
+
+      p.x = X;
+      p.y = Y;
+      p.z = Z;
+      return Error_Code;
+    }, // cs_geodetic_to_geocentric()
+
+
+    geocentric_to_geodetic: function(p) {
+      /* local defintions and variables */
+      /* end-criterium of loop, accuracy of sin(Latitude) */
+      var genau = 1e-12;
+      var genau2 = (genau * genau);
+      var maxiter = 30;
+
+      var P; /* distance between semi-minor axis and location */
+      var RR; /* distance between center and location */
+      var CT; /* sin of geocentric latitude */
+      var ST; /* cos of geocentric latitude */
+      var RX;
+      var RK;
+      var RN; /* Earth radius at location */
+      var CPHI0; /* cos of start or old geodetic latitude in iterations */
+      var SPHI0; /* sin of start or old geodetic latitude in iterations */
+      var CPHI; /* cos of searched geodetic latitude */
+      var SPHI; /* sin of searched geodetic latitude */
+      var SDPHI; /* end-criterium: addition-theorem of sin(Latitude(iter)-Latitude(iter-1)) */
+      var At_Pole; /* indicates location is in polar region */
+      var iter; /* # of continous iteration, max. 30 is always enough (s.a.) */
+
+      var X = p.x;
+      var Y = p.y;
+      var Z = p.z ? p.z : 0.0; //Z value not always supplied
+      var Longitude;
+      var Latitude;
+      var Height;
+
+      At_Pole = false;
+      P = Math.sqrt(X * X + Y * Y);
+      RR = Math.sqrt(X * X + Y * Y + Z * Z);
+
+      /*      special cases for latitude and longitude */
+      if (P / this.a < genau) {
+
+        /*  special case, if P=0. (X=0., Y=0.) */
+        At_Pole = true;
+        Longitude = 0.0;
+
+        /*  if (X,Y,Z)=(0.,0.,0.) then Height becomes semi-minor axis
+         *  of ellipsoid (=center of mass), Latitude becomes PI/2 */
+        if (RR / this.a < genau) {
+          Latitude = common.HALF_PI;
+          Height = -this.b;
+          return;
+        }
+      }
+      else {
+        /*  ellipsoidal (geodetic) longitude
+         *  interval: -PI < Longitude <= +PI */
+        Longitude = Math.atan2(Y, X);
+      }
+
+      /* --------------------------------------------------------------
+       * Following iterative algorithm was developped by
+       * "Institut for Erdmessung", University of Hannover, July 1988.
+       * Internet: www.ife.uni-hannover.de
+       * Iterative computation of CPHI,SPHI and Height.
+       * Iteration of CPHI and SPHI to 10**-12 radian resp.
+       * 2*10**-7 arcsec.
+       * --------------------------------------------------------------
+       */
+      CT = Z / RR;
+      ST = P / RR;
+      RX = 1.0 / Math.sqrt(1.0 - this.es * (2.0 - this.es) * ST * ST);
+      CPHI0 = ST * (1.0 - this.es) * RX;
+      SPHI0 = CT * RX;
+      iter = 0;
+
+      /* loop to find sin(Latitude) resp. Latitude
+       * until |sin(Latitude(iter)-Latitude(iter-1))| < genau */
+      do {
+        iter++;
+        RN = this.a / Math.sqrt(1.0 - this.es * SPHI0 * SPHI0);
+
+        /*  ellipsoidal (geodetic) height */
+        Height = P * CPHI0 + Z * SPHI0 - RN * (1.0 - this.es * SPHI0 * SPHI0);
+
+        RK = this.es * RN / (RN + Height);
+        RX = 1.0 / Math.sqrt(1.0 - RK * (2.0 - RK) * ST * ST);
+        CPHI = ST * (1.0 - RK) * RX;
+        SPHI = CT * RX;
+        SDPHI = SPHI * CPHI0 - CPHI * SPHI0;
+        CPHI0 = CPHI;
+        SPHI0 = SPHI;
+      }
+      while (SDPHI * SDPHI > genau2 && iter < maxiter);
+
+      /*      ellipsoidal (geodetic) latitude */
+      Latitude = Math.atan(SPHI / Math.abs(CPHI));
+
+      p.x = Longitude;
+      p.y = Latitude;
+      p.z = Height;
+      return p;
+    }, // cs_geocentric_to_geodetic()
+
+    /** Convert_Geocentric_To_Geodetic
+     * The method used here is derived from 'An Improved Algorithm for
+     * Geocentric to Geodetic Coordinate Conversion', by Ralph Toms, Feb 1996
+     */
+    geocentric_to_geodetic_noniter: function(p) {
+      var X = p.x;
+      var Y = p.y;
+      var Z = p.z ? p.z : 0; //Z value not always supplied
+      var Longitude;
+      var Latitude;
+      var Height;
+
+      var W; /* distance from Z axis */
+      var W2; /* square of distance from Z axis */
+      var T0; /* initial estimate of vertical component */
+      var T1; /* corrected estimate of vertical component */
+      var S0; /* initial estimate of horizontal component */
+      var S1; /* corrected estimate of horizontal component */
+      var Sin_B0; /* Math.sin(B0), B0 is estimate of Bowring aux variable */
+      var Sin3_B0; /* cube of Math.sin(B0) */
+      var Cos_B0; /* Math.cos(B0) */
+      var Sin_p1; /* Math.sin(phi1), phi1 is estimated latitude */
+      var Cos_p1; /* Math.cos(phi1) */
+      var Rn; /* Earth radius at location */
+      var Sum; /* numerator of Math.cos(phi1) */
+      var At_Pole; /* indicates location is in polar region */
+
+      X = parseFloat(X); // cast from string to float
+      Y = parseFloat(Y);
+      Z = parseFloat(Z);
+
+      At_Pole = false;
+      if (X !== 0.0) {
+        Longitude = Math.atan2(Y, X);
+      }
+      else {
+        if (Y > 0) {
+          Longitude = common.HALF_PI;
+        }
+        else if (Y < 0) {
+          Longitude = -common.HALF_PI;
+        }
+        else {
+          At_Pole = true;
+          Longitude = 0.0;
+          if (Z > 0.0) { /* north pole */
+            Latitude = common.HALF_PI;
+          }
+          else if (Z < 0.0) { /* south pole */
+            Latitude = -common.HALF_PI;
+          }
+          else { /* center of earth */
+            Latitude = common.HALF_PI;
+            Height = -this.b;
+            return;
+          }
+        }
+      }
+      W2 = X * X + Y * Y;
+      W = Math.sqrt(W2);
+      T0 = Z * common.AD_C;
+      S0 = Math.sqrt(T0 * T0 + W2);
+      Sin_B0 = T0 / S0;
+      Cos_B0 = W / S0;
+      Sin3_B0 = Sin_B0 * Sin_B0 * Sin_B0;
+      T1 = Z + this.b * this.ep2 * Sin3_B0;
+      Sum = W - this.a * this.es * Cos_B0 * Cos_B0 * Cos_B0;
+      S1 = Math.sqrt(T1 * T1 + Sum * Sum);
+      Sin_p1 = T1 / S1;
+      Cos_p1 = Sum / S1;
+      Rn = this.a / Math.sqrt(1.0 - this.es * Sin_p1 * Sin_p1);
+      if (Cos_p1 >= common.COS_67P5) {
+        Height = W / Cos_p1 - Rn;
+      }
+      else if (Cos_p1 <= -common.COS_67P5) {
+        Height = W / -Cos_p1 - Rn;
+      }
+      else {
+        Height = Z / Sin_p1 + Rn * (this.es - 1.0);
+      }
+      if (At_Pole === false) {
+        Latitude = Math.atan(Sin_p1 / Cos_p1);
+      }
+
+      p.x = Longitude;
+      p.y = Latitude;
+      p.z = Height;
+      return p;
+    }, // geocentric_to_geodetic_noniter()
+
+    /****************************************************************/
+    // pj_geocentic_to_wgs84( p )
+    //  p = point to transform in geocentric coordinates (x,y,z)
+    geocentric_to_wgs84: function(p) {
+
+      if (this.datum_type === common.PJD_3PARAM) {
+        // if( x[io] === HUGE_VAL )
+        //    continue;
+        p.x += this.datum_params[0];
+        p.y += this.datum_params[1];
+        p.z += this.datum_params[2];
+
+      }
+      else if (this.datum_type === common.PJD_7PARAM) {
+        var Dx_BF = this.datum_params[0];
+        var Dy_BF = this.datum_params[1];
+        var Dz_BF = this.datum_params[2];
+        var Rx_BF = this.datum_params[3];
+        var Ry_BF = this.datum_params[4];
+        var Rz_BF = this.datum_params[5];
+        var M_BF = this.datum_params[6];
+        // if( x[io] === HUGE_VAL )
+        //    continue;
+        var x_out = M_BF * (p.x - Rz_BF * p.y + Ry_BF * p.z) + Dx_BF;
+        var y_out = M_BF * (Rz_BF * p.x + p.y - Rx_BF * p.z) + Dy_BF;
+        var z_out = M_BF * (-Ry_BF * p.x + Rx_BF * p.y + p.z) + Dz_BF;
+        p.x = x_out;
+        p.y = y_out;
+        p.z = z_out;
+      }
+    }, // cs_geocentric_to_wgs84
+
+    /****************************************************************/
+    // pj_geocentic_from_wgs84()
+    //  coordinate system definition,
+    //  point to transform in geocentric coordinates (x,y,z)
+    geocentric_from_wgs84: function(p) {
+
+      if (this.datum_type === common.PJD_3PARAM) {
+        //if( x[io] === HUGE_VAL )
+        //    continue;
+        p.x -= this.datum_params[0];
+        p.y -= this.datum_params[1];
+        p.z -= this.datum_params[2];
+
+      }
+      else if (this.datum_type === common.PJD_7PARAM) {
+        var Dx_BF = this.datum_params[0];
+        var Dy_BF = this.datum_params[1];
+        var Dz_BF = this.datum_params[2];
+        var Rx_BF = this.datum_params[3];
+        var Ry_BF = this.datum_params[4];
+        var Rz_BF = this.datum_params[5];
+        var M_BF = this.datum_params[6];
+        var x_tmp = (p.x - Dx_BF) / M_BF;
+        var y_tmp = (p.y - Dy_BF) / M_BF;
+        var z_tmp = (p.z - Dz_BF) / M_BF;
+        //if( x[io] === HUGE_VAL )
+        //    continue;
+
+        p.x = x_tmp + Rz_BF * y_tmp - Ry_BF * z_tmp;
+        p.y = -Rz_BF * x_tmp + y_tmp + Rx_BF * z_tmp;
+        p.z = Ry_BF * x_tmp - Rx_BF * y_tmp + z_tmp;
+      } //cs_geocentric_from_wgs84()
+    }
+  };
+
+  /** point object, nothing fancy, just allows values to be
+    passed back and forth by reference rather than by value.
+    Other point classes may be used as long as they have
+    x and y properties, which will get modified in the transform method.
+*/
+  return datum;
+});
+
+define('proj4/projCode/longlat',['require','exports','module'],function(require, exports) {
+  exports.init = function() {
+    //no-op for longlat
+  };
+  function identity(pt){
+    return pt;
+  }
+  exports.forward = identity;
+  exports.inverse = identity;
+});
+define('proj4/projCode/tmerc',['proj4/common'],function(common) {
+  return {
+    init: function() {
+      this.e0 = common.e0fn(this.es);
+      this.e1 = common.e1fn(this.es);
+      this.e2 = common.e2fn(this.es);
+      this.e3 = common.e3fn(this.es);
+      this.ml0 = this.a * common.mlfn(this.e0, this.e1, this.e2, this.e3, this.lat0);
+    },
+
+    /**
+    Transverse Mercator Forward  - long/lat to x/y
+    long/lat in radians
+  */
+    forward: function(p) {
+      var lon = p.x;
+      var lat = p.y;
+
+      var delta_lon = common.adjust_lon(lon - this.long0); // Delta longitude
+      var con; // cone constant
+      var x, y;
+      var sin_phi = Math.sin(lat);
+      var cos_phi = Math.cos(lat);
+
+      if (this.sphere) { /* spherical form */
+        var b = cos_phi * Math.sin(delta_lon);
+        if ((Math.abs(Math.abs(b) - 1)) < 0.0000000001) {
+          //proj4.reportError("tmerc:forward: Point projects into infinity");
+          return (93);
+        }
+        else {
+          x = 0.5 * this.a * this.k0 * Math.log((1 + b) / (1 - b));
+          con = Math.acos(cos_phi * Math.cos(delta_lon) / Math.sqrt(1 - b * b));
+          if (lat < 0) {
+            con = -con;
+          }
+          y = this.a * this.k0 * (con - this.lat0);
+        }
+      }
+      else {
+        var al = cos_phi * delta_lon;
+        var als = Math.pow(al, 2);
+        var c = this.ep2 * Math.pow(cos_phi, 2);
+        var tq = Math.tan(lat);
+        var t = Math.pow(tq, 2);
+        con = 1 - this.es * Math.pow(sin_phi, 2);
+        var n = this.a / Math.sqrt(con);
+        var ml = this.a * common.mlfn(this.e0, this.e1, this.e2, this.e3, lat);
+
+        x = this.k0 * n * al * (1 + als / 6 * (1 - t + c + als / 20 * (5 - 18 * t + Math.pow(t, 2) + 72 * c - 58 * this.ep2))) + this.x0;
+        y = this.k0 * (ml - this.ml0 + n * tq * (als * (0.5 + als / 24 * (5 - t + 9 * c + 4 * Math.pow(c, 2) + als / 30 * (61 - 58 * t + Math.pow(t, 2) + 600 * c - 330 * this.ep2))))) + this.y0;
+
+      }
+      p.x = x;
+      p.y = y;
+      return p;
+    }, // tmercFwd()
+
+    /**
+    Transverse Mercator Inverse  -  x/y to long/lat
+  */
+    inverse: function(p) {
+      var con, phi; /* temporary angles       */
+      var delta_phi; /* difference between longitudes    */
+      var i;
+      var max_iter = 6; /* maximun number of iterations */
+      var lat, lon;
+
+      if (this.sphere) { /* spherical form */
+        var f = Math.exp(p.x / (this.a * this.k0));
+        var g = 0.5 * (f - 1 / f);
+        var temp = this.lat0 + p.y / (this.a * this.k0);
+        var h = Math.cos(temp);
+        con = Math.sqrt((1 - h * h) / (1 + g * g));
+        lat = common.asinz(con);
+        if (temp < 0) {
+          lat = -lat;
+        }
+        if ((g === 0) && (h === 0)) {
+          lon = this.long0;
+        }
+        else {
+          lon = common.adjust_lon(Math.atan2(g, h) + this.long0);
+        }
+      }
+      else { // ellipsoidal form
+        var x = p.x - this.x0;
+        var y = p.y - this.y0;
+
+        con = (this.ml0 + y / this.k0) / this.a;
+        phi = con;
+        for (i = 0; true; i++) {
+          delta_phi = ((con + this.e1 * Math.sin(2 * phi) - this.e2 * Math.sin(4 * phi) + this.e3 * Math.sin(6 * phi)) / this.e0) - phi;
+          phi += delta_phi;
+          if (Math.abs(delta_phi) <= common.EPSLN) {
+            break;
+          }
+          if (i >= max_iter) {
+            //proj4.reportError("tmerc:inverse: Latitude failed to converge");
+            return (95);
+          }
+        } // for()
+        if (Math.abs(phi) < common.HALF_PI) {
+          // sincos(phi, &sin_phi, &cos_phi);
+          var sin_phi = Math.sin(phi);
+          var cos_phi = Math.cos(phi);
+          var tan_phi = Math.tan(phi);
+          var c = this.ep2 * Math.pow(cos_phi, 2);
+          var cs = Math.pow(c, 2);
+          var t = Math.pow(tan_phi, 2);
+          var ts = Math.pow(t, 2);
+          con = 1 - this.es * Math.pow(sin_phi, 2);
+          var n = this.a / Math.sqrt(con);
+          var r = n * (1 - this.es) / con;
+          var d = x / (n * this.k0);
+          var ds = Math.pow(d, 2);
+          lat = phi - (n * tan_phi * ds / r) * (0.5 - ds / 24 * (5 + 3 * t + 10 * c - 4 * cs - 9 * this.ep2 - ds / 30 * (61 + 90 * t + 298 * c + 45 * ts - 252 * this.ep2 - 3 * cs)));
+          lon = common.adjust_lon(this.long0 + (d * (1 - ds / 6 * (1 + 2 * t + c - ds / 20 * (5 - 2 * c + 28 * t - 3 * cs + 8 * this.ep2 + 24 * ts))) / cos_phi));
+        }
+        else {
+          lat = common.HALF_PI * common.sign(y);
+          lon = this.long0;
+        }
+      }
+      p.x = lon;
+      p.y = lat;
+      return p;
+    } // tmercInv()
+  };
+});
+
+define('proj4/projCode/utm',['proj4/common','proj4/projCode/tmerc'],function(common,tmerc) {
+  return {
+
+    dependsOn: 'tmerc',
+
+    init: function() {
+      if (!this.zone) {
+        //proj4.reportError("utm:init: zone must be specified for UTM");
+        return;
+      }
+      this.lat0 = 0;
+      this.long0 = ((6 * Math.abs(this.zone)) - 183) * common.D2R;
+      this.x0 = 500000;
+      this.y0 = this.utmSouth ? 10000000 : 0;
+      this.k0 = 0.9996;
+
+      tmerc.init.apply(this);
+      this.forward = tmerc.forward;
+      this.inverse = tmerc.inverse;
+    }
+  };
+});
+
+define('proj4/projCode/gauss',['proj4/common'],function(common) {
+  return {
+
+    init: function() {
+      var sphi = Math.sin(this.lat0);
+      var cphi = Math.cos(this.lat0);
+      cphi *= cphi;
+      this.rc = Math.sqrt(1 - this.es) / (1 - this.es * sphi * sphi);
+      this.C = Math.sqrt(1 + this.es * cphi * cphi / (1 - this.es));
+      this.phic0 = Math.asin(sphi / this.C);
+      this.ratexp = 0.5 * this.C * this.e;
+      this.K = Math.tan(0.5 * this.phic0 + common.FORTPI) / (Math.pow(Math.tan(0.5 * this.lat0 + common.FORTPI), this.C) * common.srat(this.e * sphi, this.ratexp));
+    },
+
+    forward: function(p) {
+      var lon = p.x;
+      var lat = p.y;
+
+      p.y = 2 * Math.atan(this.K * Math.pow(Math.tan(0.5 * lat + common.FORTPI), this.C) * common.srat(this.e * Math.sin(lat), this.ratexp)) - common.HALF_PI;
+      p.x = this.C * lon;
+      return p;
+    },
+
+    inverse: function(p) {
+      var DEL_TOL = 1e-14;
+      var lon = p.x / this.C;
+      var lat = p.y;
+      var num = Math.pow(Math.tan(0.5 * lat + common.FORTPI) / this.K, 1 / this.C);
+      for (var i = common.MAX_ITER; i > 0; --i) {
+        lat = 2 * Math.atan(num * common.srat(this.e * Math.sin(p.y), - 0.5 * this.e)) - common.HALF_PI;
+        if (Math.abs(lat - p.y) < DEL_TOL) {
+          break;
+        }
+        p.y = lat;
+      }
+      /* convergence failed */
+      if (!i) {
+        //proj4.reportError("gauss:inverse:convergence failed");
+        return null;
+      }
+      p.x = lon;
+      p.y = lat;
+      return p;
+    }
+  };
+
+});
+
+define('proj4/projCode/sterea',['proj4/common','proj4/projCode/gauss'],function(common,gauss) {
+  return {
+
+    init: function() {
+      gauss.init.apply(this);
+      if (!this.rc) {
+        //proj4.reportError("sterea:init:E_ERROR_0");
+        return;
+      }
+      this.sinc0 = Math.sin(this.phic0);
+      this.cosc0 = Math.cos(this.phic0);
+      this.R2 = 2 * this.rc;
+      if (!this.title) {
+        this.title = "Oblique Stereographic Alternative";
+      }
+    },
+
+    forward: function(p) {
+      var sinc, cosc, cosl, k;
+      p.x = common.adjust_lon(p.x - this.long0); /* adjust del longitude */
+      gauss.forward.apply(this, [p]);
+      sinc = Math.sin(p.y);
+      cosc = Math.cos(p.y);
+      cosl = Math.cos(p.x);
+      k = this.k0 * this.R2 / (1 + this.sinc0 * sinc + this.cosc0 * cosc * cosl);
+      p.x = k * cosc * Math.sin(p.x);
+      p.y = k * (this.cosc0 * sinc - this.sinc0 * cosc * cosl);
+      p.x = this.a * p.x + this.x0;
+      p.y = this.a * p.y + this.y0;
+      return p;
+    },
+
+    inverse: function(p) {
+      var sinc, cosc, lon, lat, rho;
+      p.x = (p.x - this.x0) / this.a; /* descale and de-offset */
+      p.y = (p.y - this.y0) / this.a;
+
+      p.x /= this.k0;
+      p.y /= this.k0;
+      if ((rho = Math.sqrt(p.x * p.x + p.y * p.y))) {
+        var c = 2 * Math.atan2(rho, this.R2);
+        sinc = Math.sin(c);
+        cosc = Math.cos(c);
+        lat = Math.asin(cosc * this.sinc0 + p.y * sinc * this.cosc0 / rho);
+        lon = Math.atan2(p.x * sinc, rho * this.cosc0 * cosc - p.y * this.sinc0 * sinc);
+      }
+      else {
+        lat = this.phic0;
+        lon = 0;
+      }
+
+      p.x = lon;
+      p.y = lat;
+      gauss.inverse.apply(this, [p]);
+      p.x = common.adjust_lon(p.x + this.long0); /* adjust longitude to CM */
+      return p;
+    }
+  };
+
+
+});
+
+define('proj4/projCode/somerc',[],function() {
+  /*
+  references:
+    Formules et constantes pour le Calcul pour la
+    projection cylindrique conforme à axe oblique et pour la transformation entre
+    des systèmes de référence.
+    http://www.swisstopo.admin.ch/internet/swisstopo/fr/home/topics/survey/sys/refsys/switzerland.parsysrelated1.31216.downloadList.77004.DownloadFile.tmp/swissprojectionfr.pdf
+  */
+  return {
+
+    init: function() {
+      var phy0 = this.lat0;
+      this.lambda0 = this.long0;
+      var sinPhy0 = Math.sin(phy0);
+      var semiMajorAxis = this.a;
+      var invF = this.rf;
+      var flattening = 1 / invF;
+      var e2 = 2 * flattening - Math.pow(flattening, 2);
+      var e = this.e = Math.sqrt(e2);
+      this.R = this.k0 * semiMajorAxis * Math.sqrt(1 - e2) / (1 - e2 * Math.pow(sinPhy0, 2));
+      this.alpha = Math.sqrt(1 + e2 / (1 - e2) * Math.pow(Math.cos(phy0), 4));
+      this.b0 = Math.asin(sinPhy0 / this.alpha);
+      var k1 = Math.log(Math.tan(Math.PI / 4 + this.b0 / 2));
+      var k2 = Math.log(Math.tan(Math.PI / 4 + phy0 / 2));
+      var k3 = Math.log((1 + e * sinPhy0) / (1 - e * sinPhy0));
+      this.K = k1 - this.alpha * k2 + this.alpha * e / 2 * k3;
+    },
+
+
+    forward: function(p) {
+      var Sa1 = Math.log(Math.tan(Math.PI / 4 - p.y / 2));
+      var Sa2 = this.e / 2 * Math.log((1 + this.e * Math.sin(p.y)) / (1 - this.e * Math.sin(p.y)));
+      var S = -this.alpha * (Sa1 + Sa2) + this.K;
+
+      // spheric latitude
+      var b = 2 * (Math.atan(Math.exp(S)) - Math.PI / 4);
+
+      // spheric longitude
+      var I = this.alpha * (p.x - this.lambda0);
+
+      // psoeudo equatorial rotation
+      var rotI = Math.atan(Math.sin(I) / (Math.sin(this.b0) * Math.tan(b) + Math.cos(this.b0) * Math.cos(I)));
+
+      var rotB = Math.asin(Math.cos(this.b0) * Math.sin(b) - Math.sin(this.b0) * Math.cos(b) * Math.cos(I));
+
+      p.y = this.R / 2 * Math.log((1 + Math.sin(rotB)) / (1 - Math.sin(rotB))) + this.y0;
+      p.x = this.R * rotI + this.x0;
+      return p;
+    },
+
+    inverse: function(p) {
+      var Y = p.x - this.x0;
+      var X = p.y - this.y0;
+
+      var rotI = Y / this.R;
+      var rotB = 2 * (Math.atan(Math.exp(X / this.R)) - Math.PI / 4);
+
+      var b = Math.asin(Math.cos(this.b0) * Math.sin(rotB) + Math.sin(this.b0) * Math.cos(rotB) * Math.cos(rotI));
+      var I = Math.atan(Math.sin(rotI) / (Math.cos(this.b0) * Math.cos(rotI) - Math.sin(this.b0) * Math.tan(rotB)));
+
+      var lambda = this.lambda0 + I / this.alpha;
+
+      var S = 0;
+      var phy = b;
+      var prevPhy = -1000;
+      var iteration = 0;
+      while (Math.abs(phy - prevPhy) > 0.0000001) {
+        if (++iteration > 20) {
+          //proj4.reportError("omercFwdInfinity");
+          return;
+        }
+        //S = Math.log(Math.tan(Math.PI / 4 + phy / 2));
+        S = 1 / this.alpha * (Math.log(Math.tan(Math.PI / 4 + b / 2)) - this.K) + this.e * Math.log(Math.tan(Math.PI / 4 + Math.asin(this.e * Math.sin(phy)) / 2));
+        prevPhy = phy;
+        phy = 2 * Math.atan(Math.exp(S)) - Math.PI / 2;
+      }
+
+      p.x = lambda;
+      p.y = phy;
+      return p;
+    }
+  };
+
+});
+
+define('proj4/projCode/omerc',['proj4/common'],function(common) {
+  return {
+
+    /* Initialize the Oblique Mercator  projection
+    ------------------------------------------*/
+    init: function() {
+      this.no_off = this.no_off || false;
+      this.no_rot = this.no_rot || false;
+
+      if (isNaN(this.k0)) {
+        this.k0 = 1;
+      }
+      var sinlat = Math.sin(this.lat0);
+      var coslat = Math.cos(this.lat0);
+      var con = this.e * sinlat;
+
+      this.bl = Math.sqrt(1 + this.es / (1 - this.es) * Math.pow(coslat, 4));
+      this.al = this.a * this.bl * this.k0 * Math.sqrt(1 - this.es) / (1 - con * con);
+      var t0 = common.tsfnz(this.e, this.lat0, sinlat);
+      var dl = this.bl / coslat * Math.sqrt((1 - this.es) / (1 - con * con));
+      if (dl * dl < 1) {
+        dl = 1;
+      }
+      var fl;
+      var gl;
+      if (!isNaN(this.longc)) {
+        //Central point and azimuth method
+
+        if (this.lat0 >= 0) {
+          fl = dl + Math.sqrt(dl * dl - 1);
+        }
+        else {
+          fl = dl - Math.sqrt(dl * dl - 1);
+        }
+        this.el = fl * Math.pow(t0, this.bl);
+        gl = 0.5 * (fl - 1 / fl);
+        this.gamma0 = Math.asin(Math.sin(this.alpha) / dl);
+        this.long0 = this.longc - Math.asin(gl * Math.tan(this.gamma0)) / this.bl;
+
+      }
+      else {
+        //2 points method
+        var t1 = common.tsfnz(this.e, this.lat1, Math.sin(this.lat1));
+        var t2 = common.tsfnz(this.e, this.lat2, Math.sin(this.lat2));
+        if (this.lat0 >= 0) {
+          this.el = (dl + Math.sqrt(dl * dl - 1)) * Math.pow(t0, this.bl);
+        }
+        else {
+          this.el = (dl - Math.sqrt(dl * dl - 1)) * Math.pow(t0, this.bl);
+        }
+        var hl = Math.pow(t1, this.bl);
+        var ll = Math.pow(t2, this.bl);
+        fl = this.el / hl;
+        gl = 0.5 * (fl - 1 / fl);
+        var jl = (this.el * this.el - ll * hl) / (this.el * this.el + ll * hl);
+        var pl = (ll - hl) / (ll + hl);
+        var dlon12 = common.adjust_lon(this.long1 - this.long2);
+        this.long0 = 0.5 * (this.long1 + this.long2) - Math.atan(jl * Math.tan(0.5 * this.bl * (dlon12)) / pl) / this.bl;
+        this.long0 = common.adjust_lon(this.long0);
+        var dlon10 = common.adjust_lon(this.long1 - this.long0);
+        this.gamma0 = Math.atan(Math.sin(this.bl * (dlon10)) / gl);
+        this.alpha = Math.asin(dl * Math.sin(this.gamma0));
+      }
+
+      if (this.no_off) {
+        this.uc = 0;
+      }
+      else {
+        if (this.lat0 >= 0) {
+          this.uc = this.al / this.bl * Math.atan2(Math.sqrt(dl * dl - 1), Math.cos(this.alpha));
+        }
+        else {
+          this.uc = -1 * this.al / this.bl * Math.atan2(Math.sqrt(dl * dl - 1), Math.cos(this.alpha));
+        }
+      }
+
+    },
+
+
+    /* Oblique Mercator forward equations--mapping lat,long to x,y
+    ----------------------------------------------------------*/
+    forward: function(p) {
+      var lon = p.x;
+      var lat = p.y;
+      var dlon = common.adjust_lon(lon - this.long0);
+      var us, vs;
+      var con;
+      if (Math.abs(Math.abs(lat) - common.HALF_PI) <= common.EPSLN) {
+        if (lat > 0) {
+          con = -1;
+        }
+        else {
+          con = 1;
+        }
+        vs = this.al / this.bl * Math.log(Math.tan(common.FORTPI + con * this.gamma0 * 0.5));
+        us = -1 * con * common.HALF_PI * this.al / this.bl;
+      }
+      else {
+        var t = common.tsfnz(this.e, lat, Math.sin(lat));
+        var ql = this.el / Math.pow(t, this.bl);
+        var sl = 0.5 * (ql - 1 / ql);
+        var tl = 0.5 * (ql + 1 / ql);
+        var vl = Math.sin(this.bl * (dlon));
+        var ul = (sl * Math.sin(this.gamma0) - vl * Math.cos(this.gamma0)) / tl;
+        if (Math.abs(Math.abs(ul) - 1) <= common.EPSLN) {
+          vs = Number.POSITIVE_INFINITY;
+        }
+        else {
+          vs = 0.5 * this.al * Math.log((1 - ul) / (1 + ul)) / this.bl;
+        }
+        if (Math.abs(Math.cos(this.bl * (dlon))) <= common.EPSLN) {
+          us = this.al * this.bl * (dlon);
+        }
+        else {
+          us = this.al * Math.atan2(sl * Math.cos(this.gamma0) + vl * Math.sin(this.gamma0), Math.cos(this.bl * dlon)) / this.bl;
+        }
+      }
+
+      if (this.no_rot) {
+        p.x = this.x0 + us;
+        p.y = this.y0 + vs;
+      }
+      else {
+
+        us -= this.uc;
+        p.x = this.x0 + vs * Math.cos(this.alpha) + us * Math.sin(this.alpha);
+        p.y = this.y0 + us * Math.cos(this.alpha) - vs * Math.sin(this.alpha);
+      }
+      return p;
+    },
+
+    inverse: function(p) {
+      var us, vs;
+      if (this.no_rot) {
+        vs = p.y - this.y0;
+        us = p.x - this.x0;
+      }
+      else {
+        vs = (p.x - this.x0) * Math.cos(this.alpha) - (p.y - this.y0) * Math.sin(this.alpha);
+        us = (p.y - this.y0) * Math.cos(this.alpha) + (p.x - this.x0) * Math.sin(this.alpha);
+        us += this.uc;
+      }
+      var qp = Math.exp(-1 * this.bl * vs / this.al);
+      var sp = 0.5 * (qp - 1 / qp);
+      var tp = 0.5 * (qp + 1 / qp);
+      var vp = Math.sin(this.bl * us / this.al);
+      var up = (vp * Math.cos(this.gamma0) + sp * Math.sin(this.gamma0)) / tp;
+      var ts = Math.pow(this.el / Math.sqrt((1 + up) / (1 - up)), 1 / this.bl);
+      if (Math.abs(up - 1) < common.EPSLN) {
+        p.x = this.long0;
+        p.y = common.HALF_PI;
+      }
+      else if (Math.abs(up + 1) < common.EPSLN) {
+        p.x = this.long0;
+        p.y = -1 * common.HALF_PI;
+      }
+      else {
+        p.y = common.phi2z(this.e, ts);
+        p.x = common.adjust_lon(this.long0 - Math.atan2(sp * Math.cos(this.gamma0) - vp * Math.sin(this.gamma0), Math.cos(this.bl * us / this.al)) / this.bl);
+      }
+      return p;
+    }
+  };
+
+});
+
+define('proj4/projCode/lcc',['proj4/common'],function(common) {
+  return {
+    init: function() {
+
+      // array of:  r_maj,r_min,lat1,lat2,c_lon,c_lat,false_east,false_north
+      //double c_lat;                   /* center latitude                      */
+      //double c_lon;                   /* center longitude                     */
+      //double lat1;                    /* first standard parallel              */
+      //double lat2;                    /* second standard parallel             */
+      //double r_maj;                   /* major axis                           */
+      //double r_min;                   /* minor axis                           */
+      //double false_east;              /* x offset in meters                   */
+      //double false_north;             /* y offset in meters                   */
+
+      if (!this.lat2) {
+        this.lat2 = this.lat1;
+      } //if lat2 is not defined
+      if (!this.k0) {
+        this.k0 = 1;
+      }
+
+      // Standard Parallels cannot be equal and on opposite sides of the equator
+      if (Math.abs(this.lat1 + this.lat2) < common.EPSLN) {
+        //proj4.reportError("lcc:init: Equal Latitudes");
+        return;
+      }
+
+      var temp = this.b / this.a;
+      this.e = Math.sqrt(1 - temp * temp);
+
+      var sin1 = Math.sin(this.lat1);
+      var cos1 = Math.cos(this.lat1);
+      var ms1 = common.msfnz(this.e, sin1, cos1);
+      var ts1 = common.tsfnz(this.e, this.lat1, sin1);
+
+      var sin2 = Math.sin(this.lat2);
+      var cos2 = Math.cos(this.lat2);
+      var ms2 = common.msfnz(this.e, sin2, cos2);
+      var ts2 = common.tsfnz(this.e, this.lat2, sin2);
+
+      var ts0 = common.tsfnz(this.e, this.lat0, Math.sin(this.lat0));
+
+      if (Math.abs(this.lat1 - this.lat2) > common.EPSLN) {
+        this.ns = Math.log(ms1 / ms2) / Math.log(ts1 / ts2);
+      }
+      else {
+        this.ns = sin1;
+      }
+      if(isNaN(this.ns)){
+        this.ns = sin1;
+      }
+      this.f0 = ms1 / (this.ns * Math.pow(ts1, this.ns));
+      this.rh = this.a * this.f0 * Math.pow(ts0, this.ns);
+      if (!this.title) {
+        this.title = "Lambert Conformal Conic";
+      }
+    },
+
+
+    // Lambert Conformal conic forward equations--mapping lat,long to x,y
+    // -----------------------------------------------------------------
+    forward: function(p) {
+
+      var lon = p.x;
+      var lat = p.y;
+
+      // singular cases :
+      if (Math.abs(2 * Math.abs(lat) - common.PI) <= common.EPSLN) {
+        lat = common.sign(lat) * (common.HALF_PI - 2 * common.EPSLN);
+      }
+
+      var con = Math.abs(Math.abs(lat) - common.HALF_PI);
+      var ts, rh1;
+      if (con > common.EPSLN) {
+        ts = common.tsfnz(this.e, lat, Math.sin(lat));
+        rh1 = this.a * this.f0 * Math.pow(ts, this.ns);
+      }
+      else {
+        con = lat * this.ns;
+        if (con <= 0) {
+          //proj4.reportError("lcc:forward: No Projection");
+          return null;
+        }
+        rh1 = 0;
+      }
+      var theta = this.ns * common.adjust_lon(lon - this.long0);
+      p.x = this.k0 * (rh1 * Math.sin(theta)) + this.x0;
+      p.y = this.k0 * (this.rh - rh1 * Math.cos(theta)) + this.y0;
+
+      return p;
+    },
+
+    // Lambert Conformal Conic inverse equations--mapping x,y to lat/long
+    // -----------------------------------------------------------------
+    inverse: function(p) {
+
+      var rh1, con, ts;
+      var lat, lon;
+      var x = (p.x - this.x0) / this.k0;
+      var y = (this.rh - (p.y - this.y0) / this.k0);
+      if (this.ns > 0) {
+        rh1 = Math.sqrt(x * x + y * y);
+        con = 1;
+      }
+      else {
+        rh1 = -Math.sqrt(x * x + y * y);
+        con = -1;
+      }
+      var theta = 0;
+      if (rh1 !== 0) {
+        theta = Math.atan2((con * x), (con * y));
+      }
+      if ((rh1 !== 0) || (this.ns > 0)) {
+        con = 1 / this.ns;
+        ts = Math.pow((rh1 / (this.a * this.f0)), con);
+        lat = common.phi2z(this.e, ts);
+        if (lat === -9999) {
+          return null;
+        }
+      }
+      else {
+        lat = -common.HALF_PI;
+      }
+      lon = common.adjust_lon(theta / this.ns + this.long0);
+
+      p.x = lon;
+      p.y = lat;
+      return p;
+    }
+  };
+
+});
+
+define('proj4/projCode/krovak',['proj4/common'],function(common) {
+  return {
+
+    init: function() {
+      /* we want Bessel as fixed ellipsoid */
+      this.a = 6377397.155;
+      this.es = 0.006674372230614;
+      this.e = Math.sqrt(this.es);
+      /* if latitude of projection center is not set, use 49d30'N */
+      if (!this.lat0) {
+        this.lat0 = 0.863937979737193;
+      }
+      if (!this.long0) {
+        this.long0 = 0.7417649320975901 - 0.308341501185665;
+      }
+      /* if scale not set default to 0.9999 */
+      if (!this.k0) {
+        this.k0 = 0.9999;
+      }
+      this.s45 = 0.785398163397448; /* 45 */
+      this.s90 = 2 * this.s45;
+      this.fi0 = this.lat0; /* Latitude of projection centre 49  30' */
+      /*  Ellipsoid Bessel 1841 a = 6377397.155m 1/f = 299.1528128,
+                 e2=0.006674372230614;
+     */
+      this.e2 = this.es; /* 0.006674372230614; */
+      this.e = Math.sqrt(this.e2);
+      this.alfa = Math.sqrt(1 + (this.e2 * Math.pow(Math.cos(this.fi0), 4)) / (1 - this.e2));
+      this.uq = 1.04216856380474; /* DU(2, 59, 42, 42.69689) */
+      this.u0 = Math.asin(Math.sin(this.fi0) / this.alfa);
+      this.g = Math.pow((1 + this.e * Math.sin(this.fi0)) / (1 - this.e * Math.sin(this.fi0)), this.alfa * this.e / 2);
+      this.k = Math.tan(this.u0 / 2 + this.s45) / Math.pow(Math.tan(this.fi0 / 2 + this.s45), this.alfa) * this.g;
+      this.k1 = this.k0;
+      this.n0 = this.a * Math.sqrt(1 - this.e2) / (1 - this.e2 * Math.pow(Math.sin(this.fi0), 2));
+      this.s0 = 1.37008346281555; /* Latitude of pseudo standard parallel 78 30'00" N */
+      this.n = Math.sin(this.s0);
+      this.ro0 = this.k1 * this.n0 / Math.tan(this.s0);
+      this.ad = this.s90 - this.uq;
+    },
+
+    /* ellipsoid */
+    /* calculate xy from lat/lon */
+    /* Constants, identical to inverse transform function */
+    forward: function(p) {
+      var gfi, u, deltav, s, d, eps, ro;
+      var lon = p.x;
+      var lat = p.y;
+      var delta_lon = common.adjust_lon(lon - this.long0); // Delta longitude
+      /* Transformation */
+      gfi = Math.pow(((1 + this.e * Math.sin(lat)) / (1 - this.e * Math.sin(lat))), (this.alfa * this.e / 2));
+      u = 2 * (Math.atan(this.k * Math.pow(Math.tan(lat / 2 + this.s45), this.alfa) / gfi) - this.s45);
+      deltav = -delta_lon * this.alfa;
+      s = Math.asin(Math.cos(this.ad) * Math.sin(u) + Math.sin(this.ad) * Math.cos(u) * Math.cos(deltav));
+      d = Math.asin(Math.cos(u) * Math.sin(deltav) / Math.cos(s));
+      eps = this.n * d;
+      ro = this.ro0 * Math.pow(Math.tan(this.s0 / 2 + this.s45), this.n) / Math.pow(Math.tan(s / 2 + this.s45), this.n);
+      /* x and y are reverted! */
+      //p.y = ro * Math.cos(eps) / a;
+      //p.x = ro * Math.sin(eps) / a;
+      p.y = ro * Math.cos(eps) / 1;
+      p.x = ro * Math.sin(eps) / 1;
+
+      if (!this.czech) {
+        p.y *= -1;
+        p.x *= -1;
+      }
+      return (p);
+    },
+
+    /* calculate lat/lon from xy */
+    inverse: function(p) {
+      /* Constants, identisch wie in der Umkehrfunktion */
+      var u, deltav, s, d, eps, ro, fi1;
+      var ok;
+
+      /* Transformation */
+      /* revert y, x*/
+      var tmp = p.x;
+      p.x = p.y;
+      p.y = tmp;
+      if (!this.czech) {
+        p.y *= -1;
+        p.x *= -1;
+      }
+      ro = Math.sqrt(p.x * p.x + p.y * p.y);
+      eps = Math.atan2(p.y, p.x);
+      d = eps / Math.sin(this.s0);
+      s = 2 * (Math.atan(Math.pow(this.ro0 / ro, 1 / this.n) * Math.tan(this.s0 / 2 + this.s45)) - this.s45);
+      u = Math.asin(Math.cos(this.ad) * Math.sin(s) - Math.sin(this.ad) * Math.cos(s) * Math.cos(d));
+      deltav = Math.asin(Math.cos(s) * Math.sin(d) / Math.cos(u));
+      p.x = this.long0 - deltav / this.alfa;
+      /* ITERATION FOR lat */
+      fi1 = u;
+      ok = 0;
+      var iter = 0;
+      do {
+        p.y = 2 * (Math.atan(Math.pow(this.k, - 1 / this.alfa) * Math.pow(Math.tan(u / 2 + this.s45), 1 / this.alfa) * Math.pow((1 + this.e * Math.sin(fi1)) / (1 - this.e * Math.sin(fi1)), this.e / 2)) - this.s45);
+        if (Math.abs(fi1 - p.y) < 0.0000000001) {
+          ok = 1;
+        }
+        fi1 = p.y;
+        iter += 1;
+      } while (ok === 0 && iter < 15);
+      if (iter >= 15) {
+        //proj4.reportError("PHI3Z-CONV:Latitude failed to converge after 15 iterations");
+        //console.log('iter:', iter);
+        return null;
+      }
+
+      return (p);
+    }
+  };
+
+});
+
+define('proj4/projCode/cass',['proj4/common'],function(common) {
+  return {
+    init: function() {
+      if (!this.sphere) {
+        this.e0 = common.e0fn(this.es);
+        this.e1 = common.e1fn(this.es);
+        this.e2 = common.e2fn(this.es);
+        this.e3 = common.e3fn(this.es);
+        this.ml0 = this.a * common.mlfn(this.e0, this.e1, this.e2, this.e3, this.lat0);
+      }
+    },
+
+
+
+    /* Cassini forward equations--mapping lat,long to x,y
+  -----------------------------------------------------------------------*/
+    forward: function(p) {
+
+      /* Forward equations
+      -----------------*/
+      var x, y;
+      var lam = p.x;
+      var phi = p.y;
+      lam = common.adjust_lon(lam - this.long0);
+
+      if (this.sphere) {
+        x = this.a * Math.asin(Math.cos(phi) * Math.sin(lam));
+        y = this.a * (Math.atan2(Math.tan(phi), Math.cos(lam)) - this.lat0);
+      }
+      else {
+        //ellipsoid
+        var sinphi = Math.sin(phi);
+        var cosphi = Math.cos(phi);
+        var nl = common.gN(this.a, this.e, sinphi);
+        var tl = Math.tan(phi) * Math.tan(phi);
+        var al = lam * Math.cos(phi);
+        var asq = al * al;
+        var cl = this.es * cosphi * cosphi / (1 - this.es);
+        var ml = this.a * common.mlfn(this.e0, this.e1, this.e2, this.e3, phi);
+
+        x = nl * al * (1 - asq * tl * (1 / 6 - (8 - tl + 8 * cl) * asq / 120));
+        y = ml - this.ml0 + nl * sinphi / cosphi * asq * (0.5 + (5 - tl + 6 * cl) * asq / 24);
+
+
+      }
+
+      p.x = x + this.x0;
+      p.y = y + this.y0;
+      return p;
+    }, //cassFwd()
+
+    /* Inverse equations
+  -----------------*/
+    inverse: function(p) {
+      p.x -= this.x0;
+      p.y -= this.y0;
+      var x = p.x / this.a;
+      var y = p.y / this.a;
+      var phi, lam;
+
+      if (this.sphere) {
+        var dd = y + this.lat0;
+        phi = Math.asin(Math.sin(dd) * Math.cos(x));
+        lam = Math.atan2(Math.tan(x), Math.cos(dd));
+      }
+      else {
+        /* ellipsoid */
+        var ml1 = this.ml0 / this.a + y;
+        var phi1 = common.imlfn(ml1, this.e0, this.e1, this.e2, this.e3);
+        if (Math.abs(Math.abs(phi1) - common.HALF_PI) <= common.EPSLN) {
+          p.x = this.long0;
+          p.y = common.HALF_PI;
+          if (y < 0) {
+            p.y *= -1;
+          }
+          return p;
+        }
+        var nl1 = common.gN(this.a, this.e, Math.sin(phi1));
+
+        var rl1 = nl1 * nl1 * nl1 / this.a / this.a * (1 - this.es);
+        var tl1 = Math.pow(Math.tan(phi1), 2);
+        var dl = x * this.a / nl1;
+        var dsq = dl * dl;
+        phi = phi1 - nl1 * Math.tan(phi1) / rl1 * dl * dl * (0.5 - (1 + 3 * tl1) * dl * dl / 24);
+        lam = dl * (1 - dsq * (tl1 / 3 + (1 + 3 * tl1) * tl1 * dsq / 15)) / Math.cos(phi1);
+
+      }
+
+      p.x = common.adjust_lon(lam + this.long0);
+      p.y = common.adjust_lat(phi);
+      return p;
+
+    } //cassInv()
+
+  };
+
+});
+
+define('proj4/projCode/laea',['proj4/common'],function(common) {
+  /*
+  reference
+    "New Equal-Area Map Projections for Noncircular Regions", John P. Snyder,
+    The American Cartographer, Vol 15, No. 4, October 1988, pp. 341-355.
+  */
+  return {
+    S_POLE: 1,
+    N_POLE: 2,
+    EQUIT: 3,
+    OBLIQ: 4,
+
+
+    /* Initialize the Lambert Azimuthal Equal Area projection
+  ------------------------------------------------------*/
+    init: function() {
+      var t = Math.abs(this.lat0);
+      if (Math.abs(t - common.HALF_PI) < common.EPSLN) {
+        this.mode = this.lat0 < 0 ? this.S_POLE : this.N_POLE;
+      }
+      else if (Math.abs(t) < common.EPSLN) {
+        this.mode = this.EQUIT;
+      }
+      else {
+        this.mode = this.OBLIQ;
+      }
+      if (this.es > 0) {
+        var sinphi;
+
+        this.qp = common.qsfnz(this.e, 1);
+        this.mmf = 0.5 / (1 - this.es);
+        this.apa = this.authset(this.es);
+        switch (this.mode) {
+        case this.N_POLE:
+          this.dd = 1;
+          break;
+        case this.S_POLE:
+          this.dd = 1;
+          break;
+        case this.EQUIT:
+          this.rq = Math.sqrt(0.5 * this.qp);
+          this.dd = 1 / this.rq;
+          this.xmf = 1;
+          this.ymf = 0.5 * this.qp;
+          break;
+        case this.OBLIQ:
+          this.rq = Math.sqrt(0.5 * this.qp);
+          sinphi = Math.sin(this.lat0);
+          this.sinb1 = common.qsfnz(this.e, sinphi) / this.qp;
+          this.cosb1 = Math.sqrt(1 - this.sinb1 * this.sinb1);
+          this.dd = Math.cos(this.lat0) / (Math.sqrt(1 - this.es * sinphi * sinphi) * this.rq * this.cosb1);
+          this.ymf = (this.xmf = this.rq) / this.dd;
+          this.xmf *= this.dd;
+          break;
+        }
+      }
+      else {
+        if (this.mode === this.OBLIQ) {
+          this.sinph0 = Math.sin(this.lat0);
+          this.cosph0 = Math.cos(this.lat0);
+        }
+      }
+    },
+
+    /* Lambert Azimuthal Equal Area forward equations--mapping lat,long to x,y
+  -----------------------------------------------------------------------*/
+    forward: function(p) {
+
+      /* Forward equations
+      -----------------*/
+      var x, y, coslam, sinlam, sinphi, q, sinb, cosb, b, cosphi;
+      var lam = p.x;
+      var phi = p.y;
+
+      lam = common.adjust_lon(lam - this.long0);
+
+      if (this.sphere) {
+        sinphi = Math.sin(phi);
+        cosphi = Math.cos(phi);
+        coslam = Math.cos(lam);
+        if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
+          y = (this.mode === this.EQUIT) ? 1 + cosphi * coslam : 1 + this.sinph0 * sinphi + this.cosph0 * cosphi * coslam;
+          if (y <= common.EPSLN) {
+            //proj4.reportError("laea:fwd:y less than eps");
+            return null;
+          }
+          y = Math.sqrt(2 / y);
+          x = y * cosphi * Math.sin(lam);
+          y *= (this.mode === this.EQUIT) ? sinphi : this.cosph0 * sinphi - this.sinph0 * cosphi * coslam;
+        }
+        else if (this.mode === this.N_POLE || this.mode === this.S_POLE) {
+          if (this.mode === this.N_POLE) {
+            coslam = -coslam;
+          }
+          if (Math.abs(phi + this.phi0) < common.EPSLN) {
+            //proj4.reportError("laea:fwd:phi < eps");
+            return null;
+          }
+          y = common.FORTPI - phi * 0.5;
+          y = 2 * ((this.mode === this.S_POLE) ? Math.cos(y) : Math.sin(y));
+          x = y * Math.sin(lam);
+          y *= coslam;
+        }
+      }
+      else {
+        sinb = 0;
+        cosb = 0;
+        b = 0;
+        coslam = Math.cos(lam);
+        sinlam = Math.sin(lam);
+        sinphi = Math.sin(phi);
+        q = common.qsfnz(this.e, sinphi);
+        if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
+          sinb = q / this.qp;
+          cosb = Math.sqrt(1 - sinb * sinb);
+        }
+        switch (this.mode) {
+        case this.OBLIQ:
+          b = 1 + this.sinb1 * sinb + this.cosb1 * cosb * coslam;
+          break;
+        case this.EQUIT:
+          b = 1 + cosb * coslam;
+          break;
+        case this.N_POLE:
+          b = common.HALF_PI + phi;
+          q = this.qp - q;
+          break;
+        case this.S_POLE:
+          b = phi - common.HALF_PI;
+          q = this.qp + q;
+          break;
+        }
+        if (Math.abs(b) < common.EPSLN) {
+          //proj4.reportError("laea:fwd:b < eps");
+          return null;
+        }
+        switch (this.mode) {
+        case this.OBLIQ:
+        case this.EQUIT:
+          b = Math.sqrt(2 / b);
+          if (this.mode === this.OBLIQ) {
+            y = this.ymf * b * (this.cosb1 * sinb - this.sinb1 * cosb * coslam);
+          }
+          else {
+            y = (b = Math.sqrt(2 / (1 + cosb * coslam))) * sinb * this.ymf;
+          }
+          x = this.xmf * b * cosb * sinlam;
+          break;
+        case this.N_POLE:
+        case this.S_POLE:
+          if (q >= 0) {
+            x = (b = Math.sqrt(q)) * sinlam;
+            y = coslam * ((this.mode === this.S_POLE) ? b : -b);
+          }
+          else {
+            x = y = 0;
+          }
+          break;
+        }
+      }
+
+      //v 1
+      /*
+    var sin_lat=Math.sin(lat);
+    var cos_lat=Math.cos(lat);
+
+    var sin_delta_lon=Math.sin(delta_lon);
+    var cos_delta_lon=Math.cos(delta_lon);
+
+    var g =this.sin_lat_o * sin_lat +this.cos_lat_o * cos_lat * cos_delta_lon;
+    if (g == -1) {
+      //proj4.reportError("laea:fwd:Point projects to a circle of radius "+ 2 * R);
+      return null;
+    }
+    var ksp = this.a * Math.sqrt(2 / (1 + g));
+    var x = ksp * cos_lat * sin_delta_lon + this.x0;
+    var y = ksp * (this.cos_lat_o * sin_lat - this.sin_lat_o * cos_lat * cos_delta_lon) + this.y0;
+    */
+      p.x = this.a * x + this.x0;
+      p.y = this.a * y + this.y0;
+      return p;
+    }, //lamazFwd()
+
+    /* Inverse equations
+  -----------------*/
+    inverse: function(p) {
+      p.x -= this.x0;
+      p.y -= this.y0;
+      var x = p.x / this.a;
+      var y = p.y / this.a;
+      var lam, phi, cCe, sCe, q, rho, ab;
+
+      if (this.sphere) {
+        var cosz = 0,
+          rh, sinz = 0;
+
+        rh = Math.sqrt(x * x + y * y);
+        phi = rh * 0.5;
+        if (phi > 1) {
+          //proj4.reportError("laea:Inv:DataError");
+          return null;
+        }
+        phi = 2 * Math.asin(phi);
+        if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
+          sinz = Math.sin(phi);
+          cosz = Math.cos(phi);
+        }
+        switch (this.mode) {
+        case this.EQUIT:
+          phi = (Math.abs(rh) <= common.EPSLN) ? 0 : Math.asin(y * sinz / rh);
+          x *= sinz;
+          y = cosz * rh;
+          break;
+        case this.OBLIQ:
+          phi = (Math.abs(rh) <= common.EPSLN) ? this.phi0 : Math.asin(cosz * this.sinph0 + y * sinz * this.cosph0 / rh);
+          x *= sinz * this.cosph0;
+          y = (cosz - Math.sin(phi) * this.sinph0) * rh;
+          break;
+        case this.N_POLE:
+          y = -y;
+          phi = common.HALF_PI - phi;
+          break;
+        case this.S_POLE:
+          phi -= common.HALF_PI;
+          break;
+        }
+        lam = (y === 0 && (this.mode === this.EQUIT || this.mode === this.OBLIQ)) ? 0 : Math.atan2(x, y);
+      }
+      else {
+        ab = 0;
+        if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
+          x /= this.dd;
+          y *= this.dd;
+          rho = Math.sqrt(x * x + y * y);
+          if (rho < common.EPSLN) {
+            p.x = 0;
+            p.y = this.phi0;
+            return p;
+          }
+          sCe = 2 * Math.asin(0.5 * rho / this.rq);
+          cCe = Math.cos(sCe);
+          x *= (sCe = Math.sin(sCe));
+          if (this.mode === this.OBLIQ) {
+            ab = cCe * this.sinb1 + y * sCe * this.cosb1 / rho;
+            q = this.qp * ab;
+            y = rho * this.cosb1 * cCe - y * this.sinb1 * sCe;
+          }
+          else {
+            ab = y * sCe / rho;
+            q = this.qp * ab;
+            y = rho * cCe;
+          }
+        }
+        else if (this.mode === this.N_POLE || this.mode === this.S_POLE) {
+          if (this.mode === this.N_POLE) {
+            y = -y;
+          }
+          q = (x * x + y * y);
+          if (!q) {
+            p.x = 0;
+            p.y = this.phi0;
+            return p;
+          }
+          /*
+          q = this.qp - q;
+          */
+          ab = 1 - q / this.qp;
+          if (this.mode === this.S_POLE) {
+            ab = -ab;
+          }
+        }
+        lam = Math.atan2(x, y);
+        phi = this.authlat(Math.asin(ab), this.apa);
+      }
+
+      /*
+    var Rh = Math.Math.sqrt(p.x *p.x +p.y * p.y);
+    var temp = Rh / (2 * this.a);
+
+    if (temp > 1) {
+      proj4.reportError("laea:Inv:DataError");
+      return null;
+    }
+
+    var z = 2 * common.asinz(temp);
+    var sin_z=Math.sin(z);
+    var cos_z=Math.cos(z);
+
+    var lon =this.long0;
+    if (Math.abs(Rh) > common.EPSLN) {
+       var lat = common.asinz(this.sin_lat_o * cos_z +this. cos_lat_o * sin_z *p.y / Rh);
+       var temp =Math.abs(this.lat0) - common.HALF_PI;
+       if (Math.abs(temp) > common.EPSLN) {
+          temp = cos_z -this.sin_lat_o * Math.sin(lat);
+          if(temp!=0) lon=common.adjust_lon(this.long0+Math.atan2(p.x*sin_z*this.cos_lat_o,temp*Rh));
+       } else if (this.lat0 < 0) {
+          lon = common.adjust_lon(this.long0 - Math.atan2(-p.x,p.y));
+       } else {
+          lon = common.adjust_lon(this.long0 + Math.atan2(p.x, -p.y));
+       }
+    } else {
+      lat = this.lat0;
+    }
+    */
+      //return(OK);
+      p.x = common.adjust_lon(this.long0 + lam);
+      p.y = phi;
+      return p;
+    }, //lamazInv()
+
+    /* determine latitude from authalic latitude */
+    P00: 0.33333333333333333333,
+    P01: 0.17222222222222222222,
+    P02: 0.10257936507936507936,
+    P10: 0.06388888888888888888,
+    P11: 0.06640211640211640211,
+    P20: 0.01641501294219154443,
+
+    authset: function(es) {
+      var t;
+      var APA = [];
+      APA[0] = es * this.P00;
+      t = es * es;
+      APA[0] += t * this.P01;
+      APA[1] = t * this.P10;
+      t *= es;
+      APA[0] += t * this.P02;
+      APA[1] += t * this.P11;
+      APA[2] = t * this.P20;
+      return APA;
+    },
+
+    authlat: function(beta, APA) {
+      var t = beta + beta;
+      return (beta + APA[0] * Math.sin(t) + APA[1] * Math.sin(t + t) + APA[2] * Math.sin(t + t + t));
+    }
+
+  };
+
+});
+
+define('proj4/projCode/merc',['proj4/common'],function(common) {
+  return {
+    init: function() {
+      var con = this.b / this.a;
+      this.es = 1 - con * con;
+      this.e = Math.sqrt(this.es);
+      if (this.lat_ts) {
+        if (this.sphere) {
+          this.k0 = Math.cos(this.lat_ts);
+        }
+        else {
+          this.k0 = common.msfnz(this.e, Math.sin(this.lat_ts), Math.cos(this.lat_ts));
+        }
+      }
+      else {
+        if (!this.k0) {
+          if (this.k) {
+            this.k0 = this.k;
+          }
+          else {
+            this.k0 = 1;
+          }
+        }
+      }
+    },
+
+    /* Mercator forward equations--mapping lat,long to x,y
+  --------------------------------------------------*/
+
+    forward: function(p) {
+      //alert("ll2m coords : "+coords);
+      var lon = p.x;
+      var lat = p.y;
+      // convert to radians
+      if (lat * common.R2D > 90 && lat * common.R2D < -90 && lon * common.R2D > 180 && lon * common.R2D < -180) {
+        //proj4.reportError("merc:forward: llInputOutOfRange: " + lon + " : " + lat);
+        return null;
+      }
+
+      var x, y;
+      if (Math.abs(Math.abs(lat) - common.HALF_PI) <= common.EPSLN) {
+        //proj4.reportError("merc:forward: ll2mAtPoles");
+        return null;
+      }
+      else {
+        if (this.sphere) {
+          x = this.x0 + this.a * this.k0 * common.adjust_lon(lon - this.long0);
+          y = this.y0 + this.a * this.k0 * Math.log(Math.tan(common.FORTPI + 0.5 * lat));
+        }
+        else {
+          var sinphi = Math.sin(lat);
+          var ts = common.tsfnz(this.e, lat, sinphi);
+          x = this.x0 + this.a * this.k0 * common.adjust_lon(lon - this.long0);
+          y = this.y0 - this.a * this.k0 * Math.log(ts);
+        }
+        p.x = x;
+        p.y = y;
+        return p;
+      }
+    },
+
+
+    /* Mercator inverse equations--mapping x,y to lat/long
+  --------------------------------------------------*/
+    inverse: function(p) {
+
+      var x = p.x - this.x0;
+      var y = p.y - this.y0;
+      var lon, lat;
+
+      if (this.sphere) {
+        lat = common.HALF_PI - 2 * Math.atan(Math.exp(-y / (this.a * this.k0)));
+      }
+      else {
+        var ts = Math.exp(-y / (this.a * this.k0));
+        lat = common.phi2z(this.e, ts);
+        if (lat === -9999) {
+          //proj4.reportError("merc:inverse: lat = -9999");
+          return null;
+        }
+      }
+      lon = common.adjust_lon(this.long0 + x / (this.a * this.k0));
+
+      p.x = lon;
+      p.y = lat;
+      return p;
+    }
+  };
+
+});
+
+define('proj4/projCode/aea',['proj4/common'],function(common) {
+  return {
+    init: function() {
+
+      if (Math.abs(this.lat1 + this.lat2) < common.EPSLN) {
+        //proj4.reportError("aeaInitEqualLatitudes");
+        return;
+      }
+      this.temp = this.b / this.a;
+      this.es = 1 - Math.pow(this.temp, 2);
+      this.e3 = Math.sqrt(this.es);
+
+      this.sin_po = Math.sin(this.lat1);
+      this.cos_po = Math.cos(this.lat1);
+      this.t1 = this.sin_po;
+      this.con = this.sin_po;
+      this.ms1 = common.msfnz(this.e3, this.sin_po, this.cos_po);
+      this.qs1 = common.qsfnz(this.e3, this.sin_po, this.cos_po);
+
+      this.sin_po = Math.sin(this.lat2);
+      this.cos_po = Math.cos(this.lat2);
+      this.t2 = this.sin_po;
+      this.ms2 = common.msfnz(this.e3, this.sin_po, this.cos_po);
+      this.qs2 = common.qsfnz(this.e3, this.sin_po, this.cos_po);
+
+      this.sin_po = Math.sin(this.lat0);
+      this.cos_po = Math.cos(this.lat0);
+      this.t3 = this.sin_po;
+      this.qs0 = common.qsfnz(this.e3, this.sin_po, this.cos_po);
+
+      if (Math.abs(this.lat1 - this.lat2) > common.EPSLN) {
+        this.ns0 = (this.ms1 * this.ms1 - this.ms2 * this.ms2) / (this.qs2 - this.qs1);
+      }
+      else {
+        this.ns0 = this.con;
+      }
+      this.c = this.ms1 * this.ms1 + this.ns0 * this.qs1;
+      this.rh = this.a * Math.sqrt(this.c - this.ns0 * this.qs0) / this.ns0;
+    },
+
+    /* Albers Conical Equal Area forward equations--mapping lat,long to x,y
+  -------------------------------------------------------------------*/
+    forward: function(p) {
+
+      var lon = p.x;
+      var lat = p.y;
+
+      this.sin_phi = Math.sin(lat);
+      this.cos_phi = Math.cos(lat);
+
+      var qs = common.qsfnz(this.e3, this.sin_phi, this.cos_phi);
+      var rh1 = this.a * Math.sqrt(this.c - this.ns0 * qs) / this.ns0;
+      var theta = this.ns0 * common.adjust_lon(lon - this.long0);
+      var x = rh1 * Math.sin(theta) + this.x0;
+      var y = this.rh - rh1 * Math.cos(theta) + this.y0;
+
+      p.x = x;
+      p.y = y;
+      return p;
+    },
+
+
+    inverse: function(p) {
+      var rh1, qs, con, theta, lon, lat;
+
+      p.x -= this.x0;
+      p.y = this.rh - p.y + this.y0;
+      if (this.ns0 >= 0) {
+        rh1 = Math.sqrt(p.x * p.x + p.y * p.y);
+        con = 1;
+      }
+      else {
+        rh1 = -Math.sqrt(p.x * p.x + p.y * p.y);
+        con = -1;
+      }
+      theta = 0;
+      if (rh1 !== 0) {
+        theta = Math.atan2(con * p.x, con * p.y);
+      }
+      con = rh1 * this.ns0 / this.a;
+      if (this.sphere) {
+        lat = Math.asin((this.c - con * con) / (2 * this.ns0));
+      }
+      else {
+        qs = (this.c - con * con) / this.ns0;
+        lat = this.phi1z(this.e3, qs);
+      }
+
+      lon = common.adjust_lon(theta / this.ns0 + this.long0);
+      p.x = lon;
+      p.y = lat;
+      return p;
+    },
+
+    /* Function to compute phi1, the latitude for the inverse of the
+   Albers Conical Equal-Area projection.
+-------------------------------------------*/
+    phi1z: function(eccent, qs) {
+      var sinphi, cosphi, con, com, dphi;
+      var phi = common.asinz(0.5 * qs);
+      if (eccent < common.EPSLN) {
+        return phi;
+      }
+
+      var eccnts = eccent * eccent;
+      for (var i = 1; i <= 25; i++) {
+        sinphi = Math.sin(phi);
+        cosphi = Math.cos(phi);
+        con = eccent * sinphi;
+        com = 1 - con * con;
+        dphi = 0.5 * com * com / cosphi * (qs / (1 - eccnts) - sinphi / com + 0.5 / eccent * Math.log((1 - con) / (1 + con)));
+        phi = phi + dphi;
+        if (Math.abs(dphi) <= 1e-7) {
+          return phi;
+        }
+      }
+      //proj4.reportError("aea:phi1z:Convergence error");
+      return null;
+    }
+
+  };
+
+});
+
+define('proj4/projCode/gnom',['proj4/common'],function(common) {
+  /*
+  reference:
+    Wolfram Mathworld "Gnomonic Projection"
+    http://mathworld.wolfram.com/GnomonicProjection.html
+    Accessed: 12th November 2009
+  */
+  return {
+
+    /* Initialize the Gnomonic projection
+    -------------------------------------*/
+    init: function() {
+
+      /* Place parameters in static storage for common use
+      -------------------------------------------------*/
+      this.sin_p14 = Math.sin(this.lat0);
+      this.cos_p14 = Math.cos(this.lat0);
+      // Approximation for projecting points to the horizon (infinity)
+      this.infinity_dist = 1000 * this.a;
+      this.rc = 1;
+    },
+
+
+    /* Gnomonic forward equations--mapping lat,long to x,y
+    ---------------------------------------------------*/
+    forward: function(p) {
+      var sinphi, cosphi; /* sin and cos value        */
+      var dlon; /* delta longitude value      */
+      var coslon; /* cos of longitude        */
+      var ksp; /* scale factor          */
+      var g;
+      var x, y;
+      var lon = p.x;
+      var lat = p.y;
+      /* Forward equations
+      -----------------*/
+      dlon = common.adjust_lon(lon - this.long0);
+
+      sinphi = Math.sin(lat);
+      cosphi = Math.cos(lat);
+
+      coslon = Math.cos(dlon);
+      g = this.sin_p14 * sinphi + this.cos_p14 * cosphi * coslon;
+      ksp = 1;
+      if ((g > 0) || (Math.abs(g) <= common.EPSLN)) {
+        x = this.x0 + this.a * ksp * cosphi * Math.sin(dlon) / g;
+        y = this.y0 + this.a * ksp * (this.cos_p14 * sinphi - this.sin_p14 * cosphi * coslon) / g;
+      }
+      else {
+        //proj4.reportError("orthoFwdPointError");
+
+        // Point is in the opposing hemisphere and is unprojectable
+        // We still need to return a reasonable point, so we project 
+        // to infinity, on a bearing 
+        // equivalent to the northern hemisphere equivalent
+        // This is a reasonable approximation for short shapes and lines that 
+        // straddle the horizon.
+
+        x = this.x0 + this.infinity_dist * cosphi * Math.sin(dlon);
+        y = this.y0 + this.infinity_dist * (this.cos_p14 * sinphi - this.sin_p14 * cosphi * coslon);
+
+      }
+      p.x = x;
+      p.y = y;
+      return p;
+    },
+
+
+    inverse: function(p) {
+      var rh; /* Rho */
+      var sinc, cosc;
+      var c;
+      var lon, lat;
+
+      /* Inverse equations
+      -----------------*/
+      p.x = (p.x - this.x0) / this.a;
+      p.y = (p.y - this.y0) / this.a;
+
+      p.x /= this.k0;
+      p.y /= this.k0;
+
+      if ((rh = Math.sqrt(p.x * p.x + p.y * p.y))) {
+        c = Math.atan2(rh, this.rc);
+        sinc = Math.sin(c);
+        cosc = Math.cos(c);
+
+        lat = common.asinz(cosc * this.sin_p14 + (p.y * sinc * this.cos_p14) / rh);
+        lon = Math.atan2(p.x * sinc, rh * this.cos_p14 * cosc - p.y * this.sin_p14 * sinc);
+        lon = common.adjust_lon(this.long0 + lon);
+      }
+      else {
+        lat = this.phic0;
+        lon = 0;
+      }
+
+      p.x = lon;
+      p.y = lat;
+      return p;
+    }
+  };
+
+});
+
+define('proj4/projCode/cea',['proj4/common'],function(common) {
+/*
+  reference:  
+    "Cartographic Projection Procedures for the UNIX Environment-
+    A User's Manual" by Gerald I. Evenden,
+    USGS Open File Report 90-284and Release 4 Interim Reports (2003)
+*/
+  return {
+
+    /* Initialize the Cylindrical Equal Area projection
+  -------------------------------------------*/
+    init: function() {
+      //no-op
+      if (!this.sphere) {
+        this.k0 = common.msfnz(this.e, Math.sin(this.lat_ts), Math.cos(this.lat_ts));
+      }
+    },
+
+
+    /* Cylindrical Equal Area forward equations--mapping lat,long to x,y
+    ------------------------------------------------------------*/
+    forward: function(p) {
+      var lon = p.x;
+      var lat = p.y;
+      var x, y;
+      /* Forward equations
+      -----------------*/
+      var dlon = common.adjust_lon(lon - this.long0);
+      if (this.sphere) {
+        x = this.x0 + this.a * dlon * Math.cos(this.lat_ts);
+        y = this.y0 + this.a * Math.sin(lat) / Math.cos(this.lat_ts);
+      }
+      else {
+        var qs = common.qsfnz(this.e, Math.sin(lat));
+        x = this.x0 + this.a * this.k0 * dlon;
+        y = this.y0 + this.a * qs * 0.5 / this.k0;
+      }
+
+      p.x = x;
+      p.y = y;
+      return p;
+    }, //ceaFwd()
+
+    /* Cylindrical Equal Area inverse equations--mapping x,y to lat/long
+    ------------------------------------------------------------*/
+    inverse: function(p) {
+      p.x -= this.x0;
+      p.y -= this.y0;
+      var lon, lat;
+
+      if (this.sphere) {
+        lon = common.adjust_lon(this.long0 + (p.x / this.a) / Math.cos(this.lat_ts));
+        lat = Math.asin((p.y / this.a) * Math.cos(this.lat_ts));
+      }
+      else {
+        lat = common.iqsfnz(this.e, 2 * p.y * this.k0 / this.a);
+        lon = common.adjust_lon(this.long0 + p.x / (this.a * this.k0));
+      }
+
+      p.x = lon;
+      p.y = lat;
+      return p;
+    } //ceaInv()
+  };
+
+});
+
+define('proj4/projCode/eqc',['proj4/common'],function(common) {
+  return {
+    init: function() {
+
+      this.x0 = this.x0 || 0;
+      this.y0 = this.y0 || 0;
+      this.lat0 = this.lat0 || 0;
+      this.long0 = this.long0 || 0;
+      this.lat_ts = this.lat_t || 0;
+      this.title = this.title || "Equidistant Cylindrical (Plate Carre)";
+
+      this.rc = Math.cos(this.lat_ts);
+    },
+
+
+    // forward equations--mapping lat,long to x,y
+    // -----------------------------------------------------------------
+    forward: function(p) {
+
+      var lon = p.x;
+      var lat = p.y;
+
+      var dlon = common.adjust_lon(lon - this.long0);
+      var dlat = common.adjust_lat(lat - this.lat0);
+      p.x = this.x0 + (this.a * dlon * this.rc);
+      p.y = this.y0 + (this.a * dlat);
+      return p;
+    },
+
+    // inverse equations--mapping x,y to lat/long
+    // -----------------------------------------------------------------
+    inverse: function(p) {
+
+      var x = p.x;
+      var y = p.y;
+
+      p.x = common.adjust_lon(this.long0 + ((x - this.x0) / (this.a * this.rc)));
+      p.y = common.adjust_lat(this.lat0 + ((y - this.y0) / (this.a)));
+      return p;
+    }
+
+  };
+
+});
+
+define('proj4/projCode/poly',['proj4/common'],function(common) {
+  return {
+
+    /* Initialize the POLYCONIC projection
+    ----------------------------------*/
+    init: function() {
+      /* Place parameters in static storage for common use
+      -------------------------------------------------*/
+      this.temp = this.b / this.a;
+      this.es = 1 - Math.pow(this.temp, 2); // devait etre dans tmerc.js mais n y est pas donc je commente sinon retour de valeurs nulles
+      this.e = Math.sqrt(this.es);
+      this.e0 = common.e0fn(this.es);
+      this.e1 = common.e1fn(this.es);
+      this.e2 = common.e2fn(this.es);
+      this.e3 = common.e3fn(this.es);
+      this.ml0 = this.a * common.mlfn(this.e0, this.e1, this.e2, this.e3, this.lat0); //si que des zeros le calcul ne se fait pas
+    },
+
+
+    /* Polyconic forward equations--mapping lat,long to x,y
+    ---------------------------------------------------*/
+    forward: function(p) {
+      var lon = p.x;
+      var lat = p.y;
+      var x, y, el;
+      var dlon = common.adjust_lon(lon - this.long0);
+      el = dlon * Math.sin(lat);
+      if (this.sphere) {
+        if (Math.abs(lat) <= common.EPSLN) {
+          x = this.a * dlon;
+          y = -1 * this.a * this.lat0;
+        }
+        else {
+          x = this.a * Math.sin(el) / Math.tan(lat);
+          y = this.a * (common.adjust_lat(lat - this.lat0) + (1 - Math.cos(el)) / Math.tan(lat));
+        }
+      }
+      else {
+        if (Math.abs(lat) <= common.EPSLN) {
+          x = this.a * dlon;
+          y = -1 * this.ml0;
+        }
+        else {
+          var nl = common.gN(this.a, this.e, Math.sin(lat)) / Math.tan(lat);
+          x = nl * Math.sin(el);
+          y = this.a * common.mlfn(this.e0, this.e1, this.e2, this.e3, lat) - this.ml0 + nl * (1 - Math.cos(el));
+        }
+
+      }
+      p.x = x + this.x0;
+      p.y = y + this.y0;
+      return p;
+    },
+
+
+    /* Inverse equations
+  -----------------*/
+    inverse: function(p) {
+      var lon, lat, x, y, i;
+      var al, bl;
+      var phi, dphi;
+      x = p.x - this.x0;
+      y = p.y - this.y0;
+
+      if (this.sphere) {
+        if (Math.abs(y + this.a * this.lat0) <= common.EPSLN) {
+          lon = common.adjust_lon(x / this.a + this.long0);
+          lat = 0;
+        }
+        else {
+          al = this.lat0 + y / this.a;
+          bl = x * x / this.a / this.a + al * al;
+          phi = al;
+          var tanphi;
+          for (i = common.MAX_ITER; i; --i) {
+            tanphi = Math.tan(phi);
+            dphi = -1 * (al * (phi * tanphi + 1) - phi - 0.5 * (phi * phi + bl) * tanphi) / ((phi - al) / tanphi - 1);
+            phi += dphi;
+            if (Math.abs(dphi) <= common.EPSLN) {
+              lat = phi;
+              break;
+            }
+          }
+          lon = common.adjust_lon(this.long0 + (Math.asin(x * Math.tan(phi) / this.a)) / Math.sin(lat));
+        }
+      }
+      else {
+        if (Math.abs(y + this.ml0) <= common.EPSLN) {
+          lat = 0;
+          lon = common.adjust_lon(this.long0 + x / this.a);
+        }
+        else {
+
+          al = (this.ml0 + y) / this.a;
+          bl = x * x / this.a / this.a + al * al;
+          phi = al;
+          var cl, mln, mlnp, ma;
+          var con;
+          for (i = common.MAX_ITER; i; --i) {
+            con = this.e * Math.sin(phi);
+            cl = Math.sqrt(1 - con * con) * Math.tan(phi);
+            mln = this.a * common.mlfn(this.e0, this.e1, this.e2, this.e3, phi);
+            mlnp = this.e0 - 2 * this.e1 * Math.cos(2 * phi) + 4 * this.e2 * Math.cos(4 * phi) - 6 * this.e3 * Math.cos(6 * phi);
+            ma = mln / this.a;
+            dphi = (al * (cl * ma + 1) - ma - 0.5 * cl * (ma * ma + bl)) / (this.es * Math.sin(2 * phi) * (ma * ma + bl - 2 * al * ma) / (4 * cl) + (al - ma) * (cl * mlnp - 2 / Math.sin(2 * phi)) - mlnp);
+            phi -= dphi;
+            if (Math.abs(dphi) <= common.EPSLN) {
+              lat = phi;
+              break;
+            }
+          }
+
+          //lat=phi4z(this.e,this.e0,this.e1,this.e2,this.e3,al,bl,0,0);
+          cl = Math.sqrt(1 - this.es * Math.pow(Math.sin(lat), 2)) * Math.tan(lat);
+          lon = common.adjust_lon(this.long0 + Math.asin(x * cl / this.a) / Math.sin(lat));
+        }
+      }
+
+      p.x = lon;
+      p.y = lat;
+      return p;
+    }
+  };
+
+});
+
+define('proj4/projCode/nzmg',['proj4/common'],function(common) {
+  /*
+  reference
+    Department of Land and Survey Technical Circular 1973/32
+      http://www.linz.govt.nz/docs/miscellaneous/nz-map-definition.pdf
+    OSG Technical Report 4.1
+      http://www.linz.govt.nz/docs/miscellaneous/nzmg.pdf
+  */
+  return {
+
+    /**
+     * iterations: Number of iterations to refine inverse transform.
+     *     0 -> km accuracy
+     *     1 -> m accuracy -- suitable for most mapping applications
+     *     2 -> mm accuracy
+     */
+    iterations: 1,
+
+    init: function() {
+      this.A = [];
+      this.A[1] = 0.6399175073;
+      this.A[2] = -0.1358797613;
+      this.A[3] = 0.063294409;
+      this.A[4] = -0.02526853;
+      this.A[5] = 0.0117879;
+      this.A[6] = -0.0055161;
+      this.A[7] = 0.0026906;
+      this.A[8] = -0.001333;
+      this.A[9] = 0.00067;
+      this.A[10] = -0.00034;
+
+      this.B_re = [];
+      this.B_im = [];
+      this.B_re[1] = 0.7557853228;
+      this.B_im[1] = 0;
+      this.B_re[2] = 0.249204646;
+      this.B_im[2] = 0.003371507;
+      this.B_re[3] = -0.001541739;
+      this.B_im[3] = 0.041058560;
+      this.B_re[4] = -0.10162907;
+      this.B_im[4] = 0.01727609;
+      this.B_re[5] = -0.26623489;
+      this.B_im[5] = -0.36249218;
+      this.B_re[6] = -0.6870983;
+      this.B_im[6] = -1.1651967;
+
+      this.C_re = [];
+      this.C_im = [];
+      this.C_re[1] = 1.3231270439;
+      this.C_im[1] = 0;
+      this.C_re[2] = -0.577245789;
+      this.C_im[2] = -0.007809598;
+      this.C_re[3] = 0.508307513;
+      this.C_im[3] = -0.112208952;
+      this.C_re[4] = -0.15094762;
+      this.C_im[4] = 0.18200602;
+      this.C_re[5] = 1.01418179;
+      this.C_im[5] = 1.64497696;
+      this.C_re[6] = 1.9660549;
+      this.C_im[6] = 2.5127645;
+
+      this.D = [];
+      this.D[1] = 1.5627014243;
+      this.D[2] = 0.5185406398;
+      this.D[3] = -0.03333098;
+      this.D[4] = -0.1052906;
+      this.D[5] = -0.0368594;
+      this.D[6] = 0.007317;
+      this.D[7] = 0.01220;
+      this.D[8] = 0.00394;
+      this.D[9] = -0.0013;
+    },
+
+    /**
+    New Zealand Map Grid Forward  - long/lat to x/y
+    long/lat in radians
+  */
+    forward: function(p) {
+      var n;
+      var lon = p.x;
+      var lat = p.y;
+
+      var delta_lat = lat - this.lat0;
+      var delta_lon = lon - this.long0;
+
+      // 1. Calculate d_phi and d_psi    ...                          // and d_lambda
+      // For this algorithm, delta_latitude is in seconds of arc x 10-5, so we need to scale to those units. Longitude is radians.
+      var d_phi = delta_lat / common.SEC_TO_RAD * 1E-5;
+      var d_lambda = delta_lon;
+      var d_phi_n = 1; // d_phi^0
+
+      var d_psi = 0;
+      for (n = 1; n <= 10; n++) {
+        d_phi_n = d_phi_n * d_phi;
+        d_psi = d_psi + this.A[n] * d_phi_n;
+      }
+
+      // 2. Calculate theta
+      var th_re = d_psi;
+      var th_im = d_lambda;
+
+      // 3. Calculate z
+      var th_n_re = 1;
+      var th_n_im = 0; // theta^0
+      var th_n_re1;
+      var th_n_im1;
+
+      var z_re = 0;
+      var z_im = 0;
+      for (n = 1; n <= 6; n++) {
+        th_n_re1 = th_n_re * th_re - th_n_im * th_im;
+        th_n_im1 = th_n_im * th_re + th_n_re * th_im;
+        th_n_re = th_n_re1;
+        th_n_im = th_n_im1;
+        z_re = z_re + this.B_re[n] * th_n_re - this.B_im[n] * th_n_im;
+        z_im = z_im + this.B_im[n] * th_n_re + this.B_re[n] * th_n_im;
+      }
+
+      // 4. Calculate easting and northing
+      p.x = (z_im * this.a) + this.x0;
+      p.y = (z_re * this.a) + this.y0;
+
+      return p;
+    },
+
+
+    /**
+    New Zealand Map Grid Inverse  -  x/y to long/lat
+  */
+    inverse: function(p) {
+      var n;
+      var x = p.x;
+      var y = p.y;
+
+      var delta_x = x - this.x0;
+      var delta_y = y - this.y0;
+
+      // 1. Calculate z
+      var z_re = delta_y / this.a;
+      var z_im = delta_x / this.a;
+
+      // 2a. Calculate theta - first approximation gives km accuracy
+      var z_n_re = 1;
+      var z_n_im = 0; // z^0
+      var z_n_re1;
+      var z_n_im1;
+
+      var th_re = 0;
+      var th_im = 0;
+      for (n = 1; n <= 6; n++) {
+        z_n_re1 = z_n_re * z_re - z_n_im * z_im;
+        z_n_im1 = z_n_im * z_re + z_n_re * z_im;
+        z_n_re = z_n_re1;
+        z_n_im = z_n_im1;
+        th_re = th_re + this.C_re[n] * z_n_re - this.C_im[n] * z_n_im;
+        th_im = th_im + this.C_im[n] * z_n_re + this.C_re[n] * z_n_im;
+      }
+
+      // 2b. Iterate to refine the accuracy of the calculation
+      //        0 iterations gives km accuracy
+      //        1 iteration gives m accuracy -- good enough for most mapping applications
+      //        2 iterations bives mm accuracy
+      for (var i = 0; i < this.iterations; i++) {
+        var th_n_re = th_re;
+        var th_n_im = th_im;
+        var th_n_re1;
+        var th_n_im1;
+
+        var num_re = z_re;
+        var num_im = z_im;
+        for (n = 2; n <= 6; n++) {
+          th_n_re1 = th_n_re * th_re - th_n_im * th_im;
+          th_n_im1 = th_n_im * th_re + th_n_re * th_im;
+          th_n_re = th_n_re1;
+          th_n_im = th_n_im1;
+          num_re = num_re + (n - 1) * (this.B_re[n] * th_n_re - this.B_im[n] * th_n_im);
+          num_im = num_im + (n - 1) * (this.B_im[n] * th_n_re + this.B_re[n] * th_n_im);
+        }
+
+        th_n_re = 1;
+        th_n_im = 0;
+        var den_re = this.B_re[1];
+        var den_im = this.B_im[1];
+        for (n = 2; n <= 6; n++) {
+          th_n_re1 = th_n_re * th_re - th_n_im * th_im;
+          th_n_im1 = th_n_im * th_re + th_n_re * th_im;
+          th_n_re = th_n_re1;
+          th_n_im = th_n_im1;
+          den_re = den_re + n * (this.B_re[n] * th_n_re - this.B_im[n] * th_n_im);
+          den_im = den_im + n * (this.B_im[n] * th_n_re + this.B_re[n] * th_n_im);
+        }
+
+        // Complex division
+        var den2 = den_re * den_re + den_im * den_im;
+        th_re = (num_re * den_re + num_im * den_im) / den2;
+        th_im = (num_im * den_re - num_re * den_im) / den2;
+      }
+
+      // 3. Calculate d_phi              ...                                    // and d_lambda
+      var d_psi = th_re;
+      var d_lambda = th_im;
+      var d_psi_n = 1; // d_psi^0
+
+      var d_phi = 0;
+      for (n = 1; n <= 9; n++) {
+        d_psi_n = d_psi_n * d_psi;
+        d_phi = d_phi + this.D[n] * d_psi_n;
+      }
+
+      // 4. Calculate latitude and longitude
+      // d_phi is calcuated in second of arc * 10^-5, so we need to scale back to radians. d_lambda is in radians.
+      var lat = this.lat0 + (d_phi * common.SEC_TO_RAD * 1E5);
+      var lon = this.long0 + d_lambda;
+
+      p.x = lon;
+      p.y = lat;
+
+      return p;
+    }
+  };
+
+});
+
+define('proj4/projCode/mill',['proj4/common'],function(common) {
+  /*
+  reference
+    "New Equal-Area Map Projections for Noncircular Regions", John P. Snyder,
+    The American Cartographer, Vol 15, No. 4, October 1988, pp. 341-355.
+  */
+  return {
+
+    /* Initialize the Miller Cylindrical projection
+  -------------------------------------------*/
+    init: function() {
+      //no-op
+    },
+
+
+    /* Miller Cylindrical forward equations--mapping lat,long to x,y
+    ------------------------------------------------------------*/
+    forward: function(p) {
+      var lon = p.x;
+      var lat = p.y;
+      /* Forward equations
+      -----------------*/
+      var dlon = common.adjust_lon(lon - this.long0);
+      var x = this.x0 + this.a * dlon;
+      var y = this.y0 + this.a * Math.log(Math.tan((common.PI / 4) + (lat / 2.5))) * 1.25;
+
+      p.x = x;
+      p.y = y;
+      return p;
+    }, //millFwd()
+
+    /* Miller Cylindrical inverse equations--mapping x,y to lat/long
+    ------------------------------------------------------------*/
+    inverse: function(p) {
+      p.x -= this.x0;
+      p.y -= this.y0;
+
+      var lon = common.adjust_lon(this.long0 + p.x / this.a);
+      var lat = 2.5 * (Math.atan(Math.exp(0.8 * p.y / this.a)) - common.PI / 4);
+
+      p.x = lon;
+      p.y = lat;
+      return p;
+    } //millInv()
+  };
+
+});
+
+define('proj4/projCode/sinu',['proj4/common'],function(common) {
+  return {
+
+    /* Initialize the Sinusoidal projection
+    ------------------------------------*/
+    init: function() {
+      /* Place parameters in static storage for common use
+    -------------------------------------------------*/
+
+
+      if (!this.sphere) {
+        this.en = common.pj_enfn(this.es);
+      }
+      else {
+        this.n = 1;
+        this.m = 0;
+        this.es = 0;
+        this.C_y = Math.sqrt((this.m + 1) / this.n);
+        this.C_x = this.C_y / (this.m + 1);
+      }
+
+    },
+
+    /* Sinusoidal forward equations--mapping lat,long to x,y
+  -----------------------------------------------------*/
+    forward: function(p) {
+      var x, y;
+      var lon = p.x;
+      var lat = p.y;
+      /* Forward equations
+    -----------------*/
+      lon = common.adjust_lon(lon - this.long0);
+
+      if (this.sphere) {
+        if (!this.m) {
+          lat = this.n !== 1 ? Math.asin(this.n * Math.sin(lat)) : lat;
+        }
+        else {
+          var k = this.n * Math.sin(lat);
+          for (var i = common.MAX_ITER; i; --i) {
+            var V = (this.m * lat + Math.sin(lat) - k) / (this.m + Math.cos(lat));
+            lat -= V;
+            if (Math.abs(V) < common.EPSLN) {
+              break;
+            }
+          }
+        }
+        x = this.a * this.C_x * lon * (this.m + Math.cos(lat));
+        y = this.a * this.C_y * lat;
+
+      }
+      else {
+
+        var s = Math.sin(lat);
+        var c = Math.cos(lat);
+        y = this.a * common.pj_mlfn(lat, s, c, this.en);
+        x = this.a * lon * c / Math.sqrt(1 - this.es * s * s);
+      }
+
+      p.x = x;
+      p.y = y;
+      return p;
+    },
+
+    inverse: function(p) {
+      var lat, temp, lon;
+
+      /* Inverse equations
+    -----------------*/
+      p.x -= this.x0;
+      p.y -= this.y0;
+      lat = p.y / this.a;
+
+      if (this.sphere) {
+
+        p.y /= this.C_y;
+        lat = this.m ? Math.asin((this.m * p.y + Math.sin(p.y)) / this.n) : (this.n !== 1 ? Math.asin(Math.sin(p.y) / this.n) : p.y);
+        lon = p.x / (this.C_x * (this.m + Math.cos(p.y)));
+
+      }
+      else {
+        lat = common.pj_inv_mlfn(p.y / this.a, this.es, this.en);
+        var s = Math.abs(lat);
+        if (s < common.HALF_PI) {
+          s = Math.sin(lat);
+          temp = this.long0 + p.x * Math.sqrt(1 - this.es * s * s) / (this.a * Math.cos(lat));
+          //temp = this.long0 + p.x / (this.a * Math.cos(lat));
+          lon = common.adjust_lon(temp);
+        }
+        else if ((s - common.EPSLN) < common.HALF_PI) {
+          lon = this.long0;
+        }
+
+      }
+
+      p.x = lon;
+      p.y = lat;
+      return p;
+    }
+  };
+
+});
+
+define('proj4/projCode/moll',['proj4/common'],function(common) {
+  return {
+
+    /* Initialize the Mollweide projection
+    ------------------------------------*/
+    init: function() {
+      //no-op
+    },
+
+    /* Mollweide forward equations--mapping lat,long to x,y
+    ----------------------------------------------------*/
+    forward: function(p) {
+
+      /* Forward equations
+      -----------------*/
+      var lon = p.x;
+      var lat = p.y;
+
+      var delta_lon = common.adjust_lon(lon - this.long0);
+      var theta = lat;
+      var con = common.PI * Math.sin(lat);
+
+      /* Iterate using the Newton-Raphson method to find theta
+      -----------------------------------------------------*/
+      for (var i = 0; true; i++) {
+        var delta_theta = -(theta + Math.sin(theta) - con) / (1 + Math.cos(theta));
+        theta += delta_theta;
+        if (Math.abs(delta_theta) < common.EPSLN) {
+          break;
+        }
+        if (i >= 50) {
+          //proj4.reportError("moll:Fwd:IterationError");
+          //return(241);
+        }
+      }
+      theta /= 2;
+
+      /* If the latitude is 90 deg, force the x coordinate to be "0 + false easting"
+       this is done here because of precision problems with "cos(theta)"
+       --------------------------------------------------------------------------*/
+      if (common.PI / 2 - Math.abs(lat) < common.EPSLN) {
+        delta_lon = 0;
+      }
+      var x = 0.900316316158 * this.a * delta_lon * Math.cos(theta) + this.x0;
+      var y = 1.4142135623731 * this.a * Math.sin(theta) + this.y0;
+
+      p.x = x;
+      p.y = y;
+      return p;
+    },
+
+    inverse: function(p) {
+      var theta;
+      var arg;
+
+      /* Inverse equations
+      -----------------*/
+      p.x -= this.x0;
+      p.y -= this.y0;
+      arg = p.y / (1.4142135623731 * this.a);
+
+      /* Because of division by zero problems, 'arg' can not be 1.  Therefore
+       a number very close to one is used instead.
+       -------------------------------------------------------------------*/
+      if (Math.abs(arg) > 0.999999999999) {
+        arg = 0.999999999999;
+      }
+      theta = Math.asin(arg);
+      var lon = common.adjust_lon(this.long0 + (p.x / (0.900316316158 * this.a * Math.cos(theta))));
+      if (lon < (-common.PI)) {
+        lon = -common.PI;
+      }
+      if (lon > common.PI) {
+        lon = common.PI;
+      }
+      arg = (2 * theta + Math.sin(2 * theta)) / common.PI;
+      if (Math.abs(arg) > 1) {
+        arg = 1;
+      }
+      var lat = Math.asin(arg);
+      //return(OK);
+
+      p.x = lon;
+      p.y = lat;
+      return p;
+    }
+  };
+
+});
+
+define('proj4/projCode/eqdc',['proj4/common'],function(common) {
+  return {
+
+    /* Initialize the Equidistant Conic projection
+  ------------------------------------------*/
+    init: function() {
+
+      /* Place parameters in static storage for common use
+      -------------------------------------------------*/
+      // Standard Parallels cannot be equal and on opposite sides of the equator
+      if (Math.abs(this.lat1 + this.lat2) < common.EPSLN) {
+        common.reportError("eqdc:init: Equal Latitudes");
+        return;
+      }
+      this.lat2 = this.lat2 || this.lat1;
+      this.temp = this.b / this.a;
+      this.es = 1 - Math.pow(this.temp, 2);
+      this.e = Math.sqrt(this.es);
+      this.e0 = common.e0fn(this.es);
+      this.e1 = common.e1fn(this.es);
+      this.e2 = common.e2fn(this.es);
+      this.e3 = common.e3fn(this.es);
+
+      this.sinphi = Math.sin(this.lat1);
+      this.cosphi = Math.cos(this.lat1);
+
+      this.ms1 = common.msfnz(this.e, this.sinphi, this.cosphi);
+      this.ml1 = common.mlfn(this.e0, this.e1, this.e2, this.e3, this.lat1);
+
+      if (Math.abs(this.lat1 - this.lat2) < common.EPSLN) {
+        this.ns = this.sinphi;
+        //proj4.reportError("eqdc:Init:EqualLatitudes");
+      }
+      else {
+        this.sinphi = Math.sin(this.lat2);
+        this.cosphi = Math.cos(this.lat2);
+        this.ms2 = common.msfnz(this.e, this.sinphi, this.cosphi);
+        this.ml2 = common.mlfn(this.e0, this.e1, this.e2, this.e3, this.lat2);
+        this.ns = (this.ms1 - this.ms2) / (this.ml2 - this.ml1);
+      }
+      this.g = this.ml1 + this.ms1 / this.ns;
+      this.ml0 = common.mlfn(this.e0, this.e1, this.e2, this.e3, this.lat0);
+      this.rh = this.a * (this.g - this.ml0);
+    },
+
+
+    /* Equidistant Conic forward equations--mapping lat,long to x,y
+  -----------------------------------------------------------*/
+    forward: function(p) {
+      var lon = p.x;
+      var lat = p.y;
+      var rh1;
+
+      /* Forward equations
+      -----------------*/
+      if (this.sphere) {
+        rh1 = this.a * (this.g - lat);
+      }
+      else {
+        var ml = common.mlfn(this.e0, this.e1, this.e2, this.e3, lat);
+        rh1 = this.a * (this.g - ml);
+      }
+      var theta = this.ns * common.adjust_lon(lon - this.long0);
+      var x = this.x0 + rh1 * Math.sin(theta);
+      var y = this.y0 + this.rh - rh1 * Math.cos(theta);
+      p.x = x;
+      p.y = y;
+      return p;
+    },
+
+    /* Inverse equations
+  -----------------*/
+    inverse: function(p) {
+      p.x -= this.x0;
+      p.y = this.rh - p.y + this.y0;
+      var con, rh1, lat, lon;
+      if (this.ns >= 0) {
+        rh1 = Math.sqrt(p.x * p.x + p.y * p.y);
+        con = 1;
+      }
+      else {
+        rh1 = -Math.sqrt(p.x * p.x + p.y * p.y);
+        con = -1;
+      }
+      var theta = 0;
+      if (rh1 !== 0) {
+        theta = Math.atan2(con * p.x, con * p.y);
+      }
+
+      if (this.sphere) {
+        lon = common.adjust_lon(this.long0 + theta / this.ns);
+        lat = common.adjust_lat(this.g - rh1 / this.a);
+        p.x = lon;
+        p.y = lat;
+        return p;
+      }
+      else {
+        var ml = this.g - rh1 / this.a;
+        lat = common.imlfn(ml, this.e0, this.e1, this.e2, this.e3);
+        lon = common.adjust_lon(this.long0 + theta / this.ns);
+        p.x = lon;
+        p.y = lat;
+        return p;
+      }
+
+    }
+
+
+
+
+  };
+});
+
+define('proj4/projCode/vandg',['proj4/common'],function(common) {
+  return {
+
+    /* Initialize the Van Der Grinten projection
+  ----------------------------------------*/
+    init: function() {
+      //this.R = 6370997; //Radius of earth
+      this.R = this.a;
+    },
+
+    forward: function(p) {
+
+      var lon = p.x;
+      var lat = p.y;
+
+      /* Forward equations
+    -----------------*/
+      var dlon = common.adjust_lon(lon - this.long0);
+      var x, y;
+
+      if (Math.abs(lat) <= common.EPSLN) {
+        x = this.x0 + this.R * dlon;
+        y = this.y0;
+      }
+      var theta = common.asinz(2 * Math.abs(lat / common.PI));
+      if ((Math.abs(dlon) <= common.EPSLN) || (Math.abs(Math.abs(lat) - common.HALF_PI) <= common.EPSLN)) {
+        x = this.x0;
+        if (lat >= 0) {
+          y = this.y0 + common.PI * this.R * Math.tan(0.5 * theta);
+        }
+        else {
+          y = this.y0 + common.PI * this.R * -Math.tan(0.5 * theta);
+        }
+        //  return(OK);
+      }
+      var al = 0.5 * Math.abs((common.PI / dlon) - (dlon / common.PI));
+      var asq = al * al;
+      var sinth = Math.sin(theta);
+      var costh = Math.cos(theta);
+
+      var g = costh / (sinth + costh - 1);
+      var gsq = g * g;
+      var m = g * (2 / sinth - 1);
+      var msq = m * m;
+      var con = common.PI * this.R * (al * (g - msq) + Math.sqrt(asq * (g - msq) * (g - msq) - (msq + asq) * (gsq - msq))) / (msq + asq);
+      if (dlon < 0) {
+        con = -con;
+      }
+      x = this.x0 + con;
+      //con = Math.abs(con / (common.PI * this.R));
+      var q = asq + g;
+      con = common.PI * this.R * (m * q - al * Math.sqrt((msq + asq) * (asq + 1) - q * q)) / (msq + asq);
+      if (lat >= 0) {
+        //y = this.y0 + common.PI * this.R * Math.sqrt(1 - con * con - 2 * al * con);
+        y = this.y0 + con;
+      }
+      else {
+        //y = this.y0 - common.PI * this.R * Math.sqrt(1 - con * con - 2 * al * con);
+        y = this.y0 - con;
+      }
+      p.x = x;
+      p.y = y;
+      return p;
+    },
+
+    /* Van Der Grinten inverse equations--mapping x,y to lat/long
+  ---------------------------------------------------------*/
+    inverse: function(p) {
+      var lon, lat;
+      var xx, yy, xys, c1, c2, c3;
+      var a1;
+      var m1;
+      var con;
+      var th1;
+      var d;
+
+      /* inverse equations
+    -----------------*/
+      p.x -= this.x0;
+      p.y -= this.y0;
+      con = common.PI * this.R;
+      xx = p.x / con;
+      yy = p.y / con;
+      xys = xx * xx + yy * yy;
+      c1 = -Math.abs(yy) * (1 + xys);
+      c2 = c1 - 2 * yy * yy + xx * xx;
+      c3 = -2 * c1 + 1 + 2 * yy * yy + xys * xys;
+      d = yy * yy / c3 + (2 * c2 * c2 * c2 / c3 / c3 / c3 - 9 * c1 * c2 / c3 / c3) / 27;
+      a1 = (c1 - c2 * c2 / 3 / c3) / c3;
+      m1 = 2 * Math.sqrt(-a1 / 3);
+      con = ((3 * d) / a1) / m1;
+      if (Math.abs(con) > 1) {
+        if (con >= 0) {
+          con = 1;
+        }
+        else {
+          con = -1;
+        }
+      }
+      th1 = Math.acos(con) / 3;
+      if (p.y >= 0) {
+        lat = (-m1 * Math.cos(th1 + common.PI / 3) - c2 / 3 / c3) * common.PI;
+      }
+      else {
+        lat = -(-m1 * Math.cos(th1 + common.PI / 3) - c2 / 3 / c3) * common.PI;
+      }
+
+      if (Math.abs(xx) < common.EPSLN) {
+        lon = this.long0;
+      }
+      else {
+        lon = common.adjust_lon(this.long0 + common.PI * (xys - 1 + Math.sqrt(1 + 2 * (xx * xx - yy * yy) + xys * xys)) / 2 / xx);
+      }
+
+      p.x = lon;
+      p.y = lat;
+      return p;
+    }
+  };
+
+});
+
+define('proj4/projCode/aeqd',['proj4/common'],function(common) {
+  return {
+
+    init: function() {
+      this.sin_p12 = Math.sin(this.lat0);
+      this.cos_p12 = Math.cos(this.lat0);
+    },
+
+    forward: function(p) {
+      var lon = p.x;
+      var lat = p.y;
+      var sinphi = Math.sin(p.y);
+      var cosphi = Math.cos(p.y);
+      var dlon = common.adjust_lon(lon - this.long0);
+      var e0, e1, e2, e3, Mlp, Ml, tanphi, Nl1, Nl, psi, Az, G, H, GH, Hs, c, kp, cos_c, s, s2, s3, s4, s5;
+      if (this.sphere) {
+        if (Math.abs(this.sin_p12 - 1) <= common.EPSLN) {
+          //North Pole case
+          p.x = this.x0 + this.a * (common.HALF_PI - lat) * Math.sin(dlon);
+          p.y = this.y0 - this.a * (common.HALF_PI - lat) * Math.cos(dlon);
+          return p;
+        }
+        else if (Math.abs(this.sin_p12 + 1) <= common.EPSLN) {
+          //South Pole case
+          p.x = this.x0 + this.a * (common.HALF_PI + lat) * Math.sin(dlon);
+          p.y = this.y0 + this.a * (common.HALF_PI + lat) * Math.cos(dlon);
+          return p;
+        }
+        else {
+          //default case
+          cos_c = this.sin_p12 * sinphi + this.cos_p12 * cosphi * Math.cos(dlon);
+          c = Math.acos(cos_c);
+          kp = c / Math.sin(c);
+          p.x = this.x0 + this.a * kp * cosphi * Math.sin(dlon);
+          p.y = this.y0 + this.a * kp * (this.cos_p12 * sinphi - this.sin_p12 * cosphi * Math.cos(dlon));
+          return p;
+        }
+      }
+      else {
+        e0 = common.e0fn(this.es);
+        e1 = common.e1fn(this.es);
+        e2 = common.e2fn(this.es);
+        e3 = common.e3fn(this.es);
+        if (Math.abs(this.sin_p12 - 1) <= common.EPSLN) {
+          //North Pole case
+          Mlp = this.a * common.mlfn(e0, e1, e2, e3, common.HALF_PI);
+          Ml = this.a * common.mlfn(e0, e1, e2, e3, lat);
+          p.x = this.x0 + (Mlp - Ml) * Math.sin(dlon);
+          p.y = this.y0 - (Mlp - Ml) * Math.cos(dlon);
+          return p;
+        }
+        else if (Math.abs(this.sin_p12 + 1) <= common.EPSLN) {
+          //South Pole case
+          Mlp = this.a * common.mlfn(e0, e1, e2, e3, common.HALF_PI);
+          Ml = this.a * common.mlfn(e0, e1, e2, e3, lat);
+          p.x = this.x0 + (Mlp + Ml) * Math.sin(dlon);
+          p.y = this.y0 + (Mlp + Ml) * Math.cos(dlon);
+          return p;
+        }
+        else {
+          //Default case
+          tanphi = sinphi / cosphi;
+          Nl1 = common.gN(this.a, this.e, this.sin_p12);
+          Nl = common.gN(this.a, this.e, sinphi);
+          psi = Math.atan((1 - this.es) * tanphi + this.es * Nl1 * this.sin_p12 / (Nl * cosphi));
+          Az = Math.atan2(Math.sin(dlon), this.cos_p12 * Math.tan(psi) - this.sin_p12 * Math.cos(dlon));
+          if (Az === 0) {
+            s = Math.asin(this.cos_p12 * Math.sin(psi) - this.sin_p12 * Math.cos(psi));
+          }
+          else if (Math.abs(Math.abs(Az) - common.PI) <= common.EPSLN) {
+            s = -Math.asin(this.cos_p12 * Math.sin(psi) - this.sin_p12 * Math.cos(psi));
+          }
+          else {
+            s = Math.asin(Math.sin(dlon) * Math.cos(psi) / Math.sin(Az));
+          }
+          G = this.e * this.sin_p12 / Math.sqrt(1 - this.es);
+          H = this.e * this.cos_p12 * Math.cos(Az) / Math.sqrt(1 - this.es);
+          GH = G * H;
+          Hs = H * H;
+          s2 = s * s;
+          s3 = s2 * s;
+          s4 = s3 * s;
+          s5 = s4 * s;
+          c = Nl1 * s * (1 - s2 * Hs * (1 - Hs) / 6 + s3 / 8 * GH * (1 - 2 * Hs) + s4 / 120 * (Hs * (4 - 7 * Hs) - 3 * G * G * (1 - 7 * Hs)) - s5 / 48 * GH);
+          p.x = this.x0 + c * Math.sin(Az);
+          p.y = this.y0 + c * Math.cos(Az);
+          return p;
+        }
+      }
+
+
+    },
+
+    inverse: function(p) {
+      p.x -= this.x0;
+      p.y -= this.y0;
+      var rh, z, sinz, cosz, lon, lat, con, e0, e1, e2, e3, Mlp, M, N1, psi, Az, cosAz, tmp, A, B, D, Ee, F;
+      if (this.sphere) {
+        rh = Math.sqrt(p.x * p.x + p.y * p.y);
+        if (rh > (2 * common.HALF_PI * this.a)) {
+          //proj4.reportError("aeqdInvDataError");
+          return;
+        }
+        z = rh / this.a;
+
+        sinz = Math.sin(z);
+        cosz = Math.cos(z);
+
+        lon = this.long0;
+        if (Math.abs(rh) <= common.EPSLN) {
+          lat = this.lat0;
+        }
+        else {
+          lat = common.asinz(cosz * this.sin_p12 + (p.y * sinz * this.cos_p12) / rh);
+          con = Math.abs(this.lat0) - common.HALF_PI;
+          if (Math.abs(con) <= common.EPSLN) {
+            if (this.lat0 >= 0) {
+              lon = common.adjust_lon(this.long0 + Math.atan2(p.x, - p.y));
+            }
+            else {
+              lon = common.adjust_lon(this.long0 - Math.atan2(-p.x, p.y));
+            }
+          }
+          else {
+            /*con = cosz - this.sin_p12 * Math.sin(lat);
+        if ((Math.abs(con) < common.EPSLN) && (Math.abs(p.x) < common.EPSLN)) {
+          //no-op, just keep the lon value as is
+        } else {
+          var temp = Math.atan2((p.x * sinz * this.cos_p12), (con * rh));
+          lon = common.adjust_lon(this.long0 + Math.atan2((p.x * sinz * this.cos_p12), (con * rh)));
+        }*/
+            lon = common.adjust_lon(this.long0 + Math.atan2(p.x * sinz, rh * this.cos_p12 * cosz - p.y * this.sin_p12 * sinz));
+          }
+        }
+
+        p.x = lon;
+        p.y = lat;
+        return p;
+      }
+      else {
+        e0 = common.e0fn(this.es);
+        e1 = common.e1fn(this.es);
+        e2 = common.e2fn(this.es);
+        e3 = common.e3fn(this.es);
+        if (Math.abs(this.sin_p12 - 1) <= common.EPSLN) {
+          //North pole case
+          Mlp = this.a * common.mlfn(e0, e1, e2, e3, common.HALF_PI);
+          rh = Math.sqrt(p.x * p.x + p.y * p.y);
+          M = Mlp - rh;
+          lat = common.imlfn(M / this.a, e0, e1, e2, e3);
+          lon = common.adjust_lon(this.long0 + Math.atan2(p.x, - 1 * p.y));
+          p.x = lon;
+          p.y = lat;
+          return p;
+        }
+        else if (Math.abs(this.sin_p12 + 1) <= common.EPSLN) {
+          //South pole case
+          Mlp = this.a * common.mlfn(e0, e1, e2, e3, common.HALF_PI);
+          rh = Math.sqrt(p.x * p.x + p.y * p.y);
+          M = rh - Mlp;
+
+          lat = common.imlfn(M / this.a, e0, e1, e2, e3);
+          lon = common.adjust_lon(this.long0 + Math.atan2(p.x, p.y));
+          p.x = lon;
+          p.y = lat;
+          return p;
+        }
+        else {
+          //default case
+          rh = Math.sqrt(p.x * p.x + p.y * p.y);
+          Az = Math.atan2(p.x, p.y);
+          N1 = common.gN(this.a, this.e, this.sin_p12);
+          cosAz = Math.cos(Az);
+          tmp = this.e * this.cos_p12 * cosAz;
+          A = -tmp * tmp / (1 - this.es);
+          B = 3 * this.es * (1 - A) * this.sin_p12 * this.cos_p12 * cosAz / (1 - this.es);
+          D = rh / N1;
+          Ee = D - A * (1 + A) * Math.pow(D, 3) / 6 - B * (1 + 3 * A) * Math.pow(D, 4) / 24;
+          F = 1 - A * Ee * Ee / 2 - D * Ee * Ee * Ee / 6;
+          psi = Math.asin(this.sin_p12 * Math.cos(Ee) + this.cos_p12 * Math.sin(Ee) * cosAz);
+          lon = common.adjust_lon(this.long0 + Math.asin(Math.sin(Az) * Math.sin(Ee) / Math.cos(psi)));
+          lat = Math.atan((1 - this.es * F * this.sin_p12 / Math.sin(psi)) * Math.tan(psi) / (1 - this.es));
+          p.x = lon;
+          p.y = lat;
+          return p;
+        }
+      }
+
+    }
+  };
+
+});
+
+define('proj4/projections',['require','exports','module','proj4/projCode/longlat','proj4/projCode/tmerc','proj4/projCode/utm','proj4/projCode/sterea','proj4/projCode/somerc','proj4/projCode/omerc','proj4/projCode/lcc','proj4/projCode/krovak','proj4/projCode/cass','proj4/projCode/laea','proj4/projCode/merc','proj4/projCode/aea','proj4/projCode/gnom','proj4/projCode/cea','proj4/projCode/eqc','proj4/projCode/poly','proj4/projCode/nzmg','proj4/projCode/mill','proj4/projCode/sinu','proj4/projCode/moll','proj4/projCode/eqdc','proj4/projCode/vandg','proj4/projCode/aeqd','proj4/projCode/longlat'],function(require, exports) {
+  exports.longlat = require('proj4/projCode/longlat');
+  exports.identity = exports.longlat;
+  exports.tmerc = require('proj4/projCode/tmerc');
+  exports.utm = require('proj4/projCode/utm');
+  exports.sterea = require('proj4/projCode/sterea');
+  exports.somerc = require('proj4/projCode/somerc');
+  exports.omerc = require('proj4/projCode/omerc');
+  exports.lcc = require('proj4/projCode/lcc');
+  exports.krovak = require('proj4/projCode/krovak');
+  exports.cass = require('proj4/projCode/cass');
+  exports.laea = require('proj4/projCode/laea');
+  exports.merc = require('proj4/projCode/merc');
+  exports.aea = require('proj4/projCode/aea');
+  exports.gnom = require('proj4/projCode/gnom');
+  exports.cea = require('proj4/projCode/cea');
+  exports.eqc = require('proj4/projCode/eqc');
+  exports.poly = require('proj4/projCode/poly');
+  exports.nzmg = require('proj4/projCode/nzmg');
+  exports.mill = require('proj4/projCode/mill');
+  exports.sinu = require('proj4/projCode/sinu');
+  exports.moll = require('proj4/projCode/moll');
+  exports.eqdc = require('proj4/projCode/eqdc');
+  exports.vandg = require('proj4/projCode/vandg');
+  exports.aeqd = require('proj4/projCode/aeqd');
+  exports.longlat = require('proj4/projCode/longlat');
+  exports.identity = exports.longlat;
+});
+
+define('proj4/Proj',['proj4/extend','proj4/common','proj4/defs','proj4/constants','proj4/datum','proj4/projections','proj4/wkt','proj4/projString'],function(extend, common, defs,constants,datum,projections,wkt,projStr) {
+  
+  var proj = function proj(srsCode) {
+    if (!(this instanceof proj)) {
+      return new proj(srsCode);
+    }
+    this.srsCodeInput = srsCode;
+    var obj;
+    if(typeof srsCode === 'string'){
+    //check to see if this is a WKT string
+      if(srsCode in defs){
+        this.deriveConstants(defs[srsCode]);
+        extend(this,defs[srsCode]);
+      }else if ((srsCode.indexOf('GEOGCS') >= 0) || (srsCode.indexOf('GEOCCS') >= 0) || (srsCode.indexOf('PROJCS') >= 0) || (srsCode.indexOf('LOCAL_CS') >= 0)) {
+        obj = wkt(srsCode);
+        this.deriveConstants(obj);
+        extend(this,obj);
+        //this.loadProjCode(this.projName);
+      }else if(srsCode[0]==='+'){
+        obj = projStr(srsCode);
+        this.deriveConstants(obj);
+        extend(this,obj);
+      }
+    } else {
+      this.deriveConstants(srsCode);
+      extend(this,srsCode);
+    }
+
+    this.initTransforms(this.projName);
+  };
+  proj.prototype = {
+    /**
+     * Function: initTransforms
+     *    Finalize the initialization of the Proj object
+     *
+     */
+    initTransforms: function(projName) {
+      if (!(projName in proj.projections)) {
+        throw ("unknown projection " + projName);
+      }
+      extend(this, proj.projections[projName]);
+      this.init();
+    },
+  
+    deriveConstants: function(self) {
+      // DGR 2011-03-20 : nagrids -> nadgrids
+      if (self.nadgrids && self.nadgrids.length === 0) {
+        self.nadgrids = null;
+      }
+      if (self.nadgrids) {
+        self.grids = self.nadgrids.split(",");
+        var g = null,
+          l = self.grids.length;
+        if (l > 0) {
+          for (var i = 0; i < l; i++) {
+            g = self.grids[i];
+            var fg = g.split("@");
+            if (fg[fg.length - 1] === "") {
+              //proj4.reportError("nadgrids syntax error '" + self.nadgrids + "' : empty grid found");
+              continue;
+            }
+            self.grids[i] = {
+              mandatory: fg.length === 1, //@=> optional grid (no error if not found)
+              name: fg[fg.length - 1],
+              grid: constants.grids[fg[fg.length - 1]] //FIXME: grids loading ...
+            };
+            if (self.grids[i].mandatory && !self.grids[i].grid) {
+              //proj4.reportError("Missing '" + self.grids[i].name + "'");
+            }
+          }
+        }
+        // DGR, 2011-03-20: grids is an array of objects that hold
+        // the loaded grids, its name and the mandatory informations of it.
+      }
+      if (self.datumCode && self.datumCode !== 'none') {
+        var datumDef = constants.Datum[self.datumCode];
+        if (datumDef) {
+          self.datum_params = datumDef.towgs84 ? datumDef.towgs84.split(',') : null;
+          self.ellps = datumDef.ellipse;
+          self.datumName = datumDef.datumName ? datumDef.datumName : self.datumCode;
+        }
+      }
+      if (!self.a) { // do we have an ellipsoid?
+        var ellipse = constants.Ellipsoid[self.ellps] ? constants.Ellipsoid[self.ellps] : constants.Ellipsoid.WGS84;
+        extend(self, ellipse);
+      }
+      if (self.rf && !self.b) {
+        self.b = (1.0 - 1.0 / self.rf) * self.a;
+      }
+      if (self.rf === 0 || Math.abs(self.a - self.b) < common.EPSLN) {
+        self.sphere = true;
+        self.b = self.a;
+      }
+      self.a2 = self.a * self.a; // used in geocentric
+      self.b2 = self.b * self.b; // used in geocentric
+      self.es = (self.a2 - self.b2) / self.a2; // e ^ 2
+      self.e = Math.sqrt(self.es); // eccentricity
+      if (self.R_A) {
+        self.a *= 1 - self.es * (common.SIXTH + self.es * (common.RA4 + self.es * common.RA6));
+        self.a2 = self.a * self.a;
+        self.b2 = self.b * self.b;
+        self.es = 0;
+      }
+      self.ep2 = (self.a2 - self.b2) / self.b2; // used in geocentric
+      if (!self.k0) {
+        self.k0 = 1.0; //default value
+      }
+      //DGR 2010-11-12: axis
+      if (!self.axis) {
+        self.axis = "enu";
+      }
+  
+      self.datum = datum(self);
+    }
+  };
+  proj.projections = projections;
+  return proj;
+
+});
+
+define('proj4/datum_transform',['proj4/common'],function(common) {
+  return function(source, dest, point) {
+    var wp, i, l;
+
+    function checkParams(fallback) {
+      return (fallback === common.PJD_3PARAM || fallback === common.PJD_7PARAM);
+    }
+    // Short cut if the datums are identical.
+    if (source.compare_datums(dest)) {
+      return point; // in this case, zero is sucess,
+      // whereas cs_compare_datums returns 1 to indicate TRUE
+      // confusing, should fix this
+    }
+
+    // Explicitly skip datum transform by setting 'datum=none' as parameter for either source or dest
+    if (source.datum_type === common.PJD_NODATUM || dest.datum_type === common.PJD_NODATUM) {
+      return point;
+    }
+
+    //DGR: 2012-07-29 : add nadgrids support (begin)
+    var src_a = source.a;
+    var src_es = source.es;
+
+    var dst_a = dest.a;
+    var dst_es = dest.es;
+
+    var fallback = source.datum_type;
+    // If this datum requires grid shifts, then apply it to geodetic coordinates.
+    if (fallback === common.PJD_GRIDSHIFT) {
+      if (this.apply_gridshift(source, 0, point) === 0) {
+        source.a = common.SRS_WGS84_SEMIMAJOR;
+        source.es = common.SRS_WGS84_ESQUARED;
+      }
+      else {
+        // try 3 or 7 params transformation or nothing ?
+        if (!source.datum_params) {
+          source.a = src_a;
+          source.es = source.es;
+          return point;
+        }
+        wp = 1;
+        for (i = 0, l = source.datum_params.length; i < l; i++) {
+          wp *= source.datum_params[i];
+        }
+        if (wp === 0) {
+          source.a = src_a;
+          source.es = source.es;
+          return point;
+        }
+        if (source.datum_params.length > 3) {
+          fallback = common.PJD_7PARAM;
+        }
+        else {
+          fallback = common.PJD_3PARAM;
+        }
+      }
+    }
+    if (dest.datum_type === common.PJD_GRIDSHIFT) {
+      dest.a = common.SRS_WGS84_SEMIMAJOR;
+      dest.es = common.SRS_WGS84_ESQUARED;
+    }
+    // Do we need to go through geocentric coordinates?
+    if (source.es !== dest.es || source.a !== dest.a || checkParams(fallback) || checkParams(dest.datum_type)) {
+      //DGR: 2012-07-29 : add nadgrids support (end)
+      // Convert to geocentric coordinates.
+      source.geodetic_to_geocentric(point);
+      // CHECK_RETURN;
+      // Convert between datums
+      if (checkParams(source.datum_type)) {
+        source.geocentric_to_wgs84(point);
+        // CHECK_RETURN;
+      }
+      if (checkParams(dest.datum_type)) {
+        dest.geocentric_from_wgs84(point);
+        // CHECK_RETURN;
+      }
+      // Convert back to geodetic coordinates
+      dest.geocentric_to_geodetic(point);
+      // CHECK_RETURN;
+    }
+    // Apply grid shift to destination if required
+    if (dest.datum_type === common.PJD_GRIDSHIFT) {
+      this.apply_gridshift(dest, 1, point);
+      // CHECK_RETURN;
+    }
+
+    source.a = src_a;
+    source.es = src_es;
+    dest.a = dst_a;
+    dest.es = dst_es;
+
+    return point;
+  };
+});
+
+define('proj4/adjust_axis',[],function() {
+  return function(crs, denorm, point) {
+    var xin = point.x,
+      yin = point.y,
+      zin = point.z || 0.0;
+    var v, t, i;
+    for (i = 0; i < 3; i++) {
+      if (denorm && i === 2 && point.z === undefined) {
+        continue;
+      }
+      if (i === 0) {
+        v = xin;
+        t = 'x';
+      }
+      else if (i === 1) {
+        v = yin;
+        t = 'y';
+      }
+      else {
+        v = zin;
+        t = 'z';
+      }
+      switch (crs.axis[i]) {
+      case 'e':
+        point[t] = v;
+        break;
+      case 'w':
+        point[t] = -v;
+        break;
+      case 'n':
+        point[t] = v;
+        break;
+      case 's':
+        point[t] = -v;
+        break;
+      case 'u':
+        if (point[t] !== undefined) {
+          point.z = v;
+        }
+        break;
+      case 'd':
+        if (point[t] !== undefined) {
+          point.z = -v;
+        }
+        break;
+      default:
+        //console.log("ERROR: unknow axis ("+crs.axis[i]+") - check definition of "+crs.projName);
+        return null;
+      }
+    }
+    return point;
+  };
+});
+
+define('proj4/transform',['proj4/common','proj4/datum_transform','proj4/adjust_axis','proj4/Proj'],function(common, datum_transform, adjust_axis,proj) {
+
+  return function(source, dest, point) {
+    var wgs84;
+
+    function checkNotWGS(source, dest) {
+      return ((source.datum.datum_type === common.PJD_3PARAM || source.datum.datum_type === common.PJD_7PARAM) && dest.datumCode !== "WGS84");
+    }
+
+    // Workaround for datum shifts towgs84, if either source or destination projection is not wgs84
+    if (source.datum && dest.datum && (checkNotWGS(source, dest) || checkNotWGS(dest, source))) {
+      wgs84 = new proj('WGS84');
+      this.transform(source, wgs84, point);
+      source = wgs84;
+    }
+    // DGR, 2010/11/12
+    if (source.axis !== "enu") {
+      adjust_axis(source, false, point);
+    }
+    // Transform source points to long/lat, if they aren't already.
+    if (source.projName === "longlat") {
+      point.x *= common.D2R; // convert degrees to radians
+      point.y *= common.D2R;
+    }
+    else {
+      if (source.to_meter) {
+        point.x *= source.to_meter;
+        point.y *= source.to_meter;
+      }
+      source.inverse(point); // Convert Cartesian to longlat
+    }
+    // Adjust for the prime meridian if necessary
+    if (source.from_greenwich) {
+      point.x += source.from_greenwich;
+    }
+
+    // Convert datums if needed, and if possible.
+    point = datum_transform(source.datum, dest.datum, point);
+
+    // Adjust for the prime meridian if necessary
+    if (dest.from_greenwich) {
+      point.x -= dest.from_greenwich;
+    }
+
+    if (dest.projName === "longlat") {
+      // convert radians to decimal degrees
+      point.x *= common.R2D;
+      point.y *= common.R2D;
+    }
+    else { // else project
+      dest.forward(point);
+      if (dest.to_meter) {
+        point.x /= dest.to_meter;
+        point.y /= dest.to_meter;
+      }
+    }
+
+    // DGR, 2010/11/12
+    if (dest.axis !== "enu") {
+      adjust_axis(dest, true, point);
+    }
+
+    return point;
+  };
+});
+
+define('proj4/core',['proj4/Point','proj4/Proj','proj4/transform'],function(point,proj,transform) {
+  var wgs84 = proj('WGS84');
+  return function(fromProj, toProj, coord) {
+    var transformer = function(f, t, c) {
+      var transformedArray;
+      if (Array.isArray(c)) {
+        transformedArray = transform(f, t, point(c));
+        if (c.length === 3) {
+          return [transformedArray.x, transformedArray.y, transformedArray.z];
+        }
+        else {
+          return [transformedArray.x, transformedArray.y];
+        }
+      }
+      else {
+        return transform(fromProj, toProj, c);
+      }
+    };
+
+    fromProj = fromProj instanceof proj ? fromProj :proj(fromProj);
+    if (typeof toProj === 'undefined') {
+      toProj = fromProj;
+      fromProj = wgs84;
+    }
+    else if (typeof toProj === 'string') {
+      toProj = proj(toProj);
+    }
+    else if (('x' in toProj) || Array.isArray(toProj)) {
+      coord = toProj;
+      toProj = fromProj;
+      fromProj = wgs84;
+    }
+    else {
+      toProj = toProj instanceof proj ? toProj : proj(toProj);
+    }
+    if (coord) {
+      return transformer(fromProj, toProj, coord);
+    }
+    else {
+      return {
+        forward: function(coords) {
+          return transformer(fromProj, toProj, coords);
+        },
+        inverse: function(coords) {
+          return transformer(toProj, fromProj, coords);
+        }
+      };
+    }
+  };
+});
+define('proj4',['proj4/core','proj4/Proj','proj4/Point','proj4/defs','proj4/transform','proj4/mgrs'],function(proj4, Proj, Point,defs,transform,mgrs) {
+  
+  proj4.defaultDatum = 'WGS84'; //default datum
+  proj4.Proj = Proj;
+  proj4.WGS84 = new proj4.Proj('WGS84');
+  proj4.Point = Point;
+  proj4.defs = defs;
+  proj4.transform = transform;
+  proj4.mgrs = mgrs;
+  return proj4;
+
+});
+
+define('shp/jszip/support',[],function() {
+	var out = {};
+	out.arraybuffer = typeof ArrayBuffer !== "undefined" && typeof Uint8Array !== "undefined";
+	out.uint8array = typeof Uint8Array !== "undefined";
+	if (typeof ArrayBuffer === "undefined") {
+		out.blog = false;
+		return out;
+	}
+	var buffer = new ArrayBuffer(0);
+	try {
+		out.blog = new Blob([buffer], {
+			type: "application/zip"
+		}).size === 0;
+		return out;
+	}
+	catch (e) {
+		try {
+			var b = window.BlobBuilder || window.WebKitBlobBuilder || window.MozBlobBuilder || window.MSBlobBuilder;
+			var builder = new b();
+			builder.append(buffer);
+			out.blob = builder.getBlob('application/zip').size === 0;
+			return out;
+		}
+		catch (e) {
+			out.blob = false;
+			return out;
+		}
+	}
+	return out;
+});
+define('shp/jszip/flate/inflate',[],function() {
+	var context = {};
+	(function() {
+
+		// https://github.com/imaya/zlib.js
+		// tag 0.1.6
+		// file bin/deflate.min.js
+
+		/** @license zlib.js 2012 - imaya [ https://github.com/imaya/zlib.js ] The MIT License */
+		(function() {
+			
+			var l = void 0,
+				p = this;
+
+			function q(c, d) {
+				var a = c.split("."),
+					b = p;
+				!(a[0] in b) && b.execScript && b.execScript("var " + a[0]);
+				for (var e; a.length && (e = a.shift());)!a.length && d !== l ? b[e] = d : b = b[e] ? b[e] : b[e] = {}
+			};
+			var r = "undefined" !== typeof Uint8Array && "undefined" !== typeof Uint16Array && "undefined" !== typeof Uint32Array;
+
+			function u(c) {
+				var d = c.length,
+					a = 0,
+					b = Number.POSITIVE_INFINITY,
+					e, f, g, h, k, m, s, n, t;
+				for (n = 0; n < d; ++n) c[n] > a && (a = c[n]), c[n] < b && (b = c[n]);
+				e = 1 << a;
+				f = new(r ? Uint32Array : Array)(e);
+				g = 1;
+				h = 0;
+				for (k = 2; g <= a;) {
+					for (n = 0; n < d; ++n) if (c[n] === g) {
+						m = 0;
+						s = h;
+						for (t = 0; t < g; ++t) m = m << 1 | s & 1, s >>= 1;
+						for (t = m; t < e; t += k) f[t] = g << 16 | n;
+						++h
+					}++g;
+					h <<= 1;
+					k <<= 1
+				}
+				return [f, a, b]
+			};
+
+			function v(c, d) {
+				this.g = [];
+				this.h = 32768;
+				this.c = this.f = this.d = this.k = 0;
+				this.input = r ? new Uint8Array(c) : c;
+				this.l = !1;
+				this.i = w;
+				this.p = !1;
+				if (d || !(d = {})) d.index && (this.d = d.index), d.bufferSize && (this.h = d.bufferSize), d.bufferType && (this.i = d.bufferType), d.resize && (this.p = d.resize);
+				switch (this.i) {
+				case x:
+					this.a = 32768;
+					this.b = new(r ? Uint8Array : Array)(32768 + this.h + 258);
+					break;
+				case w:
+					this.a = 0;
+					this.b = new(r ? Uint8Array : Array)(this.h);
+					this.e = this.u;
+					this.m = this.r;
+					this.j = this.s;
+					break;
+				default:
+					throw Error("invalid inflate mode");
+				}
+			}
+			var x = 0,
+				w = 1;
+			v.prototype.t = function() {
+				for (; !this.l;) {
+					var c = y(this, 3);
+					c & 1 && (this.l = !0);
+					c >>>= 1;
+					switch (c) {
+					case 0:
+						var d = this.input,
+							a = this.d,
+							b = this.b,
+							e = this.a,
+							f = l,
+							g = l,
+							h = l,
+							k = b.length,
+							m = l;
+						this.c = this.f = 0;
+						f = d[a++];
+						if (f === l) throw Error("invalid uncompressed block header: LEN (first byte)");
+						g = f;
+						f = d[a++];
+						if (f === l) throw Error("invalid uncompressed block header: LEN (second byte)");
+						g |= f << 8;
+						f = d[a++];
+						if (f === l) throw Error("invalid uncompressed block header: NLEN (first byte)");
+						h = f;
+						f = d[a++];
+						if (f === l) throw Error("invalid uncompressed block header: NLEN (second byte)");
+						h |= f << 8;
+						if (g === ~h) throw Error("invalid uncompressed block header: length verify");
+						if (a + g > d.length) throw Error("input buffer is broken");
+						switch (this.i) {
+						case x:
+							for (; e + g > b.length;) {
+								m = k - e;
+								g -= m;
+								if (r) b.set(d.subarray(a, a + m), e), e += m, a += m;
+								else for (; m--;) b[e++] = d[a++];
+								this.a = e;
+								b = this.e();
+								e = this.a
+							}
+							break;
+						case w:
+							for (; e + g > b.length;) b = this.e({
+								o: 2
+							});
+							break;
+						default:
+							throw Error("invalid inflate mode");
+						}
+						if (r) b.set(d.subarray(a, a + g), e), e += g, a += g;
+						else for (; g--;) b[e++] = d[a++];
+						this.d = a;
+						this.a = e;
+						this.b = b;
+						break;
+					case 1:
+						this.j(z,
+						A);
+						break;
+					case 2:
+						B(this);
+						break;
+					default:
+						throw Error("unknown BTYPE: " + c);
+					}
+				}
+				return this.m()
+			};
+			var C = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15],
+				D = r ? new Uint16Array(C) : C,
+				E = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258, 258, 258],
+				F = r ? new Uint16Array(E) : E,
+				G = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, 0, 0],
+				H = r ? new Uint8Array(G) : G,
+				I = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577],
+				J = r ? new Uint16Array(I) : I,
+				K = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13,
+				13],
+				L = r ? new Uint8Array(K) : K,
+				M = new(r ? Uint8Array : Array)(288),
+				N, O;
+			N = 0;
+			for (O = M.length; N < O; ++N) M[N] = 143 >= N ? 8 : 255 >= N ? 9 : 279 >= N ? 7 : 8;
+			var z = u(M),
+				P = new(r ? Uint8Array : Array)(30),
+				Q, R;
+			Q = 0;
+			for (R = P.length; Q < R; ++Q) P[Q] = 5;
+			var A = u(P);
+
+			function y(c, d) {
+				for (var a = c.f, b = c.c, e = c.input, f = c.d, g; b < d;) {
+					g = e[f++];
+					if (g === l) throw Error("input buffer is broken");
+					a |= g << b;
+					b += 8
+				}
+				g = a & (1 << d) - 1;
+				c.f = a >>> d;
+				c.c = b - d;
+				c.d = f;
+				return g
+			}
+
+			function S(c, d) {
+				for (var a = c.f, b = c.c, e = c.input, f = c.d, g = d[0], h = d[1], k, m, s; b < h;) {
+					k = e[f++];
+					if (k === l) break;
+					a |= k << b;
+					b += 8
+				}
+				m = g[a & (1 << h) - 1];
+				s = m >>> 16;
+				c.f = a >> s;
+				c.c = b - s;
+				c.d = f;
+				return m & 65535
+			}
+
+			function B(c) {
+				function d(a, c, b) {
+					var d, f, e, g;
+					for (g = 0; g < a;) switch (d = S(this, c), d) {
+					case 16:
+						for (e = 3 + y(this, 2); e--;) b[g++] = f;
+						break;
+					case 17:
+						for (e = 3 + y(this, 3); e--;) b[g++] = 0;
+						f = 0;
+						break;
+					case 18:
+						for (e = 11 + y(this, 7); e--;) b[g++] = 0;
+						f = 0;
+						break;
+					default:
+						f = b[g++] = d
+					}
+					return b
+				}
+				var a = y(c, 5) + 257,
+					b = y(c, 5) + 1,
+					e = y(c, 4) + 4,
+					f = new(r ? Uint8Array : Array)(D.length),
+					g, h, k, m;
+				for (m = 0; m < e; ++m) f[D[m]] = y(c, 3);
+				g = u(f);
+				h = new(r ? Uint8Array : Array)(a);
+				k = new(r ? Uint8Array : Array)(b);
+				c.j(u(d.call(c, a, g, h)), u(d.call(c, b, g, k)))
+			}
+			v.prototype.j = function(c, d) {
+				var a = this.b,
+					b = this.a;
+				this.n = c;
+				for (var e = a.length - 258, f, g, h, k; 256 !== (f = S(this, c));) if (256 > f) b >= e && (this.a = b, a = this.e(), b = this.a), a[b++] = f;
+				else {
+					g = f - 257;
+					k = F[g];
+					0 < H[g] && (k += y(this, H[g]));
+					f = S(this, d);
+					h = J[f];
+					0 < L[f] && (h += y(this, L[f]));
+					b >= e && (this.a = b, a = this.e(), b = this.a);
+					for (; k--;) a[b] = a[b++-h]
+				}
+				for (; 8 <= this.c;) this.c -= 8, this.d--;
+				this.a = b
+			};
+			v.prototype.s = function(c, d) {
+				var a = this.b,
+					b = this.a;
+				this.n = c;
+				for (var e = a.length, f, g, h, k; 256 !== (f = S(this, c));) if (256 > f) b >= e && (a = this.e(), e = a.length), a[b++] = f;
+				else {
+					g = f - 257;
+					k = F[g];
+					0 < H[g] && (k += y(this, H[g]));
+					f = S(this, d);
+					h = J[f];
+					0 < L[f] && (h += y(this, L[f]));
+					b + k > e && (a = this.e(), e = a.length);
+					for (; k--;) a[b] = a[b++-h]
+				}
+				for (; 8 <= this.c;) this.c -= 8, this.d--;
+				this.a = b
+			};
+			v.prototype.e = function() {
+				var c = new(r ? Uint8Array : Array)(this.a - 32768),
+					d = this.a - 32768,
+					a, b, e = this.b;
+				if (r) c.set(e.subarray(32768, c.length));
+				else {
+					a = 0;
+					for (b = c.length; a < b; ++a) c[a] = e[a + 32768]
+				}
+				this.g.push(c);
+				this.k += c.length;
+				if (r) e.set(e.subarray(d, d + 32768));
+				else for (a = 0; 32768 > a; ++a) e[a] = e[d + a];
+				this.a = 32768;
+				return e
+			};
+			v.prototype.u = function(c) {
+				var d, a = this.input.length / this.d + 1 | 0,
+					b, e, f, g = this.input,
+					h = this.b;
+				c && ("number" === typeof c.o && (a = c.o), "number" === typeof c.q && (a += c.q));
+				2 > a ? (b = (g.length - this.d) / this.n[2], f = 258 * (b / 2) | 0, e = f < h.length ? h.length + f : h.length << 1) : e = h.length * a;
+				r ? (d = new Uint8Array(e), d.set(h)) : d = h;
+				return this.b = d
+			};
+			v.prototype.m = function() {
+				var c = 0,
+					d = this.b,
+					a = this.g,
+					b, e = new(r ? Uint8Array : Array)(this.k + (this.a - 32768)),
+					f, g, h, k;
+				if (0 === a.length) return r ? this.b.subarray(32768, this.a) : this.b.slice(32768, this.a);
+				f = 0;
+				for (g = a.length; f < g; ++f) {
+					b = a[f];
+					h = 0;
+					for (k = b.length; h < k; ++h) e[c++] = b[h]
+				}
+				f = 32768;
+				for (g = this.a; f < g; ++f) e[c++] = d[f];
+				this.g = [];
+				return this.buffer = e
+			};
+			v.prototype.r = function() {
+				var c, d = this.a;
+				r ? this.p ? (c = new Uint8Array(d), c.set(this.b.subarray(0, d))) : c = this.b.subarray(0, d) : (this.b.length > d && (this.b.length = d), c = this.b);
+				return this.buffer = c
+			};
+			q("Zlib.RawInflate", v);
+			q("Zlib.RawInflate.prototype.decompress", v.prototype.t);
+			var T = {
+				ADAPTIVE: w,
+				BLOCK: x
+			}, U, V, W, X;
+			if (Object.keys) U = Object.keys(T);
+			else for (V in U = [], W = 0, T) U[W++] = V;
+			W = 0;
+			for (X = U.length; W < X; ++W) V = U[W], q("Zlib.RawInflate.BufferType." + V, T[V]);
+		}).call(this); 
+
+
+	}).call(context);
+
+	return function(input) {
+		var inflate = new context.Zlib.RawInflate(new Uint8Array(input));
+		return inflate.decompress();
+	};
+});
+define('shp/jszip/flate/deflate',[],function() {
+	var context = {};
+	(function() {
+		
+      // https://github.com/imaya/zlib.js
+      // tag 0.1.6
+      // file bin/deflate.min.js
+
+/** @license zlib.js 2012 - imaya [ https://github.com/imaya/zlib.js ] The MIT License */(function() {var n=void 0,u=!0,aa=this;function ba(e,d){var c=e.split("."),f=aa;!(c[0]in f)&&f.execScript&&f.execScript("var "+c[0]);for(var a;c.length&&(a=c.shift());)!c.length&&d!==n?f[a]=d:f=f[a]?f[a]:f[a]={}};var C="undefined"!==typeof Uint8Array&&"undefined"!==typeof Uint16Array&&"undefined"!==typeof Uint32Array;function K(e,d){this.index="number"===typeof d?d:0;this.d=0;this.buffer=e instanceof(C?Uint8Array:Array)?e:new (C?Uint8Array:Array)(32768);if(2*this.buffer.length<=this.index)throw Error("invalid index");this.buffer.length<=this.index&&ca(this)}function ca(e){var d=e.buffer,c,f=d.length,a=new (C?Uint8Array:Array)(f<<1);if(C)a.set(d);else for(c=0;c<f;++c)a[c]=d[c];return e.buffer=a}
+K.prototype.a=function(e,d,c){var f=this.buffer,a=this.index,b=this.d,k=f[a],m;c&&1<d&&(e=8<d?(L[e&255]<<24|L[e>>>8&255]<<16|L[e>>>16&255]<<8|L[e>>>24&255])>>32-d:L[e]>>8-d);if(8>d+b)k=k<<d|e,b+=d;else for(m=0;m<d;++m)k=k<<1|e>>d-m-1&1,8===++b&&(b=0,f[a++]=L[k],k=0,a===f.length&&(f=ca(this)));f[a]=k;this.buffer=f;this.d=b;this.index=a};K.prototype.finish=function(){var e=this.buffer,d=this.index,c;0<this.d&&(e[d]<<=8-this.d,e[d]=L[e[d]],d++);C?c=e.subarray(0,d):(e.length=d,c=e);return c};
+var ga=new (C?Uint8Array:Array)(256),M;for(M=0;256>M;++M){for(var R=M,S=R,ha=7,R=R>>>1;R;R>>>=1)S<<=1,S|=R&1,--ha;ga[M]=(S<<ha&255)>>>0}var L=ga;function ja(e){this.buffer=new (C?Uint16Array:Array)(2*e);this.length=0}ja.prototype.getParent=function(e){return 2*((e-2)/4|0)};ja.prototype.push=function(e,d){var c,f,a=this.buffer,b;c=this.length;a[this.length++]=d;for(a[this.length++]=e;0<c;)if(f=this.getParent(c),a[c]>a[f])b=a[c],a[c]=a[f],a[f]=b,b=a[c+1],a[c+1]=a[f+1],a[f+1]=b,c=f;else break;return this.length};
+ja.prototype.pop=function(){var e,d,c=this.buffer,f,a,b;d=c[0];e=c[1];this.length-=2;c[0]=c[this.length];c[1]=c[this.length+1];for(b=0;;){a=2*b+2;if(a>=this.length)break;a+2<this.length&&c[a+2]>c[a]&&(a+=2);if(c[a]>c[b])f=c[b],c[b]=c[a],c[a]=f,f=c[b+1],c[b+1]=c[a+1],c[a+1]=f;else break;b=a}return{index:e,value:d,length:this.length}};function ka(e,d){this.e=ma;this.f=0;this.input=C&&e instanceof Array?new Uint8Array(e):e;this.c=0;d&&(d.lazy&&(this.f=d.lazy),"number"===typeof d.compressionType&&(this.e=d.compressionType),d.outputBuffer&&(this.b=C&&d.outputBuffer instanceof Array?new Uint8Array(d.outputBuffer):d.outputBuffer),"number"===typeof d.outputIndex&&(this.c=d.outputIndex));this.b||(this.b=new (C?Uint8Array:Array)(32768))}var ma=2,T=[],U;
+for(U=0;288>U;U++)switch(u){case 143>=U:T.push([U+48,8]);break;case 255>=U:T.push([U-144+400,9]);break;case 279>=U:T.push([U-256+0,7]);break;case 287>=U:T.push([U-280+192,8]);break;default:throw"invalid literal: "+U;}
+ka.prototype.h=function(){var e,d,c,f,a=this.input;switch(this.e){case 0:c=0;for(f=a.length;c<f;){d=C?a.subarray(c,c+65535):a.slice(c,c+65535);c+=d.length;var b=d,k=c===f,m=n,g=n,p=n,v=n,x=n,l=this.b,h=this.c;if(C){for(l=new Uint8Array(this.b.buffer);l.length<=h+b.length+5;)l=new Uint8Array(l.length<<1);l.set(this.b)}m=k?1:0;l[h++]=m|0;g=b.length;p=~g+65536&65535;l[h++]=g&255;l[h++]=g>>>8&255;l[h++]=p&255;l[h++]=p>>>8&255;if(C)l.set(b,h),h+=b.length,l=l.subarray(0,h);else{v=0;for(x=b.length;v<x;++v)l[h++]=
+b[v];l.length=h}this.c=h;this.b=l}break;case 1:var q=new K(C?new Uint8Array(this.b.buffer):this.b,this.c);q.a(1,1,u);q.a(1,2,u);var t=na(this,a),w,da,z;w=0;for(da=t.length;w<da;w++)if(z=t[w],K.prototype.a.apply(q,T[z]),256<z)q.a(t[++w],t[++w],u),q.a(t[++w],5),q.a(t[++w],t[++w],u);else if(256===z)break;this.b=q.finish();this.c=this.b.length;break;case ma:var B=new K(C?new Uint8Array(this.b.buffer):this.b,this.c),ra,J,N,O,P,Ia=[16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15],W,sa,X,ta,ea,ia=Array(19),
+ua,Q,fa,y,va;ra=ma;B.a(1,1,u);B.a(ra,2,u);J=na(this,a);W=oa(this.j,15);sa=pa(W);X=oa(this.i,7);ta=pa(X);for(N=286;257<N&&0===W[N-1];N--);for(O=30;1<O&&0===X[O-1];O--);var wa=N,xa=O,F=new (C?Uint32Array:Array)(wa+xa),r,G,s,Y,E=new (C?Uint32Array:Array)(316),D,A,H=new (C?Uint8Array:Array)(19);for(r=G=0;r<wa;r++)F[G++]=W[r];for(r=0;r<xa;r++)F[G++]=X[r];if(!C){r=0;for(Y=H.length;r<Y;++r)H[r]=0}r=D=0;for(Y=F.length;r<Y;r+=G){for(G=1;r+G<Y&&F[r+G]===F[r];++G);s=G;if(0===F[r])if(3>s)for(;0<s--;)E[D++]=0,
+H[0]++;else for(;0<s;)A=138>s?s:138,A>s-3&&A<s&&(A=s-3),10>=A?(E[D++]=17,E[D++]=A-3,H[17]++):(E[D++]=18,E[D++]=A-11,H[18]++),s-=A;else if(E[D++]=F[r],H[F[r]]++,s--,3>s)for(;0<s--;)E[D++]=F[r],H[F[r]]++;else for(;0<s;)A=6>s?s:6,A>s-3&&A<s&&(A=s-3),E[D++]=16,E[D++]=A-3,H[16]++,s-=A}e=C?E.subarray(0,D):E.slice(0,D);ea=oa(H,7);for(y=0;19>y;y++)ia[y]=ea[Ia[y]];for(P=19;4<P&&0===ia[P-1];P--);ua=pa(ea);B.a(N-257,5,u);B.a(O-1,5,u);B.a(P-4,4,u);for(y=0;y<P;y++)B.a(ia[y],3,u);y=0;for(va=e.length;y<va;y++)if(Q=
+e[y],B.a(ua[Q],ea[Q],u),16<=Q){y++;switch(Q){case 16:fa=2;break;case 17:fa=3;break;case 18:fa=7;break;default:throw"invalid code: "+Q;}B.a(e[y],fa,u)}var ya=[sa,W],za=[ta,X],I,Aa,Z,la,Ba,Ca,Da,Ea;Ba=ya[0];Ca=ya[1];Da=za[0];Ea=za[1];I=0;for(Aa=J.length;I<Aa;++I)if(Z=J[I],B.a(Ba[Z],Ca[Z],u),256<Z)B.a(J[++I],J[++I],u),la=J[++I],B.a(Da[la],Ea[la],u),B.a(J[++I],J[++I],u);else if(256===Z)break;this.b=B.finish();this.c=this.b.length;break;default:throw"invalid compression type";}return this.b};
+function qa(e,d){this.length=e;this.g=d}
+var Fa=function(){function e(a){switch(u){case 3===a:return[257,a-3,0];case 4===a:return[258,a-4,0];case 5===a:return[259,a-5,0];case 6===a:return[260,a-6,0];case 7===a:return[261,a-7,0];case 8===a:return[262,a-8,0];case 9===a:return[263,a-9,0];case 10===a:return[264,a-10,0];case 12>=a:return[265,a-11,1];case 14>=a:return[266,a-13,1];case 16>=a:return[267,a-15,1];case 18>=a:return[268,a-17,1];case 22>=a:return[269,a-19,2];case 26>=a:return[270,a-23,2];case 30>=a:return[271,a-27,2];case 34>=a:return[272,
+a-31,2];case 42>=a:return[273,a-35,3];case 50>=a:return[274,a-43,3];case 58>=a:return[275,a-51,3];case 66>=a:return[276,a-59,3];case 82>=a:return[277,a-67,4];case 98>=a:return[278,a-83,4];case 114>=a:return[279,a-99,4];case 130>=a:return[280,a-115,4];case 162>=a:return[281,a-131,5];case 194>=a:return[282,a-163,5];case 226>=a:return[283,a-195,5];case 257>=a:return[284,a-227,5];case 258===a:return[285,a-258,0];default:throw"invalid length: "+a;}}var d=[],c,f;for(c=3;258>=c;c++)f=e(c),d[c]=f[2]<<24|
+f[1]<<16|f[0];return d}(),Ga=C?new Uint32Array(Fa):Fa;
+function na(e,d){function c(a,c){var b=a.g,d=[],f=0,e;e=Ga[a.length];d[f++]=e&65535;d[f++]=e>>16&255;d[f++]=e>>24;var g;switch(u){case 1===b:g=[0,b-1,0];break;case 2===b:g=[1,b-2,0];break;case 3===b:g=[2,b-3,0];break;case 4===b:g=[3,b-4,0];break;case 6>=b:g=[4,b-5,1];break;case 8>=b:g=[5,b-7,1];break;case 12>=b:g=[6,b-9,2];break;case 16>=b:g=[7,b-13,2];break;case 24>=b:g=[8,b-17,3];break;case 32>=b:g=[9,b-25,3];break;case 48>=b:g=[10,b-33,4];break;case 64>=b:g=[11,b-49,4];break;case 96>=b:g=[12,b-
+65,5];break;case 128>=b:g=[13,b-97,5];break;case 192>=b:g=[14,b-129,6];break;case 256>=b:g=[15,b-193,6];break;case 384>=b:g=[16,b-257,7];break;case 512>=b:g=[17,b-385,7];break;case 768>=b:g=[18,b-513,8];break;case 1024>=b:g=[19,b-769,8];break;case 1536>=b:g=[20,b-1025,9];break;case 2048>=b:g=[21,b-1537,9];break;case 3072>=b:g=[22,b-2049,10];break;case 4096>=b:g=[23,b-3073,10];break;case 6144>=b:g=[24,b-4097,11];break;case 8192>=b:g=[25,b-6145,11];break;case 12288>=b:g=[26,b-8193,12];break;case 16384>=
+b:g=[27,b-12289,12];break;case 24576>=b:g=[28,b-16385,13];break;case 32768>=b:g=[29,b-24577,13];break;default:throw"invalid distance";}e=g;d[f++]=e[0];d[f++]=e[1];d[f++]=e[2];var k,m;k=0;for(m=d.length;k<m;++k)l[h++]=d[k];t[d[0]]++;w[d[3]]++;q=a.length+c-1;x=null}var f,a,b,k,m,g={},p,v,x,l=C?new Uint16Array(2*d.length):[],h=0,q=0,t=new (C?Uint32Array:Array)(286),w=new (C?Uint32Array:Array)(30),da=e.f,z;if(!C){for(b=0;285>=b;)t[b++]=0;for(b=0;29>=b;)w[b++]=0}t[256]=1;f=0;for(a=d.length;f<a;++f){b=
+m=0;for(k=3;b<k&&f+b!==a;++b)m=m<<8|d[f+b];g[m]===n&&(g[m]=[]);p=g[m];if(!(0<q--)){for(;0<p.length&&32768<f-p[0];)p.shift();if(f+3>=a){x&&c(x,-1);b=0;for(k=a-f;b<k;++b)z=d[f+b],l[h++]=z,++t[z];break}0<p.length?(v=Ha(d,f,p),x?x.length<v.length?(z=d[f-1],l[h++]=z,++t[z],c(v,0)):c(x,-1):v.length<da?x=v:c(v,0)):x?c(x,-1):(z=d[f],l[h++]=z,++t[z])}p.push(f)}l[h++]=256;t[256]++;e.j=t;e.i=w;return C?l.subarray(0,h):l}
+function Ha(e,d,c){var f,a,b=0,k,m,g,p,v=e.length;m=0;p=c.length;a:for(;m<p;m++){f=c[p-m-1];k=3;if(3<b){for(g=b;3<g;g--)if(e[f+g-1]!==e[d+g-1])continue a;k=b}for(;258>k&&d+k<v&&e[f+k]===e[d+k];)++k;k>b&&(a=f,b=k);if(258===k)break}return new qa(b,d-a)}
+function oa(e,d){var c=e.length,f=new ja(572),a=new (C?Uint8Array:Array)(c),b,k,m,g,p;if(!C)for(g=0;g<c;g++)a[g]=0;for(g=0;g<c;++g)0<e[g]&&f.push(g,e[g]);b=Array(f.length/2);k=new (C?Uint32Array:Array)(f.length/2);if(1===b.length)return a[f.pop().index]=1,a;g=0;for(p=f.length/2;g<p;++g)b[g]=f.pop(),k[g]=b[g].value;m=Ja(k,k.length,d);g=0;for(p=b.length;g<p;++g)a[b[g].index]=m[g];return a}
+function Ja(e,d,c){function f(a){var b=g[a][p[a]];b===d?(f(a+1),f(a+1)):--k[b];++p[a]}var a=new (C?Uint16Array:Array)(c),b=new (C?Uint8Array:Array)(c),k=new (C?Uint8Array:Array)(d),m=Array(c),g=Array(c),p=Array(c),v=(1<<c)-d,x=1<<c-1,l,h,q,t,w;a[c-1]=d;for(h=0;h<c;++h)v<x?b[h]=0:(b[h]=1,v-=x),v<<=1,a[c-2-h]=(a[c-1-h]/2|0)+d;a[0]=b[0];m[0]=Array(a[0]);g[0]=Array(a[0]);for(h=1;h<c;++h)a[h]>2*a[h-1]+b[h]&&(a[h]=2*a[h-1]+b[h]),m[h]=Array(a[h]),g[h]=Array(a[h]);for(l=0;l<d;++l)k[l]=c;for(q=0;q<a[c-1];++q)m[c-
+1][q]=e[q],g[c-1][q]=q;for(l=0;l<c;++l)p[l]=0;1===b[c-1]&&(--k[0],++p[c-1]);for(h=c-2;0<=h;--h){t=l=0;w=p[h+1];for(q=0;q<a[h];q++)t=m[h+1][w]+m[h+1][w+1],t>e[l]?(m[h][q]=t,g[h][q]=d,w+=2):(m[h][q]=e[l],g[h][q]=l,++l);p[h]=0;1===b[h]&&f(h)}return k}
+function pa(e){var d=new (C?Uint16Array:Array)(e.length),c=[],f=[],a=0,b,k,m,g;b=0;for(k=e.length;b<k;b++)c[e[b]]=(c[e[b]]|0)+1;b=1;for(k=16;b<=k;b++)f[b]=a,a+=c[b]|0,a<<=1;b=0;for(k=e.length;b<k;b++){a=f[e[b]];f[e[b]]+=1;m=d[b]=0;for(g=e[b];m<g;m++)d[b]=d[b]<<1|a&1,a>>>=1}return d};ba("Zlib.RawDeflate",ka);ba("Zlib.RawDeflate.prototype.compress",ka.prototype.h);var Ka={NONE:0,FIXED:1,DYNAMIC:ma},V,La,$,Ma;if(Object.keys)V=Object.keys(Ka);else for(La in V=[],$=0,Ka)V[$++]=La;$=0;for(Ma=V.length;$<Ma;++$)La=V[$],ba("Zlib.RawDeflate.CompressionType."+La,Ka[La]);}).call(this);
+
+
+   }).call(context);
+
+   return function (input) {
+      var deflate = new context.Zlib.RawDeflate(input);
+      return deflate.compress();
+   };
+});
+define('shp/jszip/flate/main',['shp/jszip/flate/inflate','shp/jszip/flate/deflate'],function(inflate,deflate){
+
+var USE_TYPEDARRAY =
+      (typeof Uint8Array !== 'undefined') &&
+      (typeof Uint16Array !== 'undefined') &&
+      (typeof Uint32Array !== 'undefined');
+      return {
+		magic: "\x08\x00",
+		uncompressInputType : USE_TYPEDARRAY ? "uint8array" : "array",
+		uncompress:inflate,
+		compressInputType : USE_TYPEDARRAY ? "uint8array" : "array",
+		compress:deflate
+      };
+      
+});
+define('shp/jszip/compressions',['shp/jszip/flate/main'],function(deflate){
+	return {
+   "STORE" : {
+      magic : "\x00\x00",
+      compress : function (content) {
+         return content; // no compression
+      },
+      uncompress : function (content) {
+         return content; // no compression
+      },
+       compressInputType : null,
+      uncompressInputType : null
+   },
+   DEFLATE:deflate
+};
+});
+define('shp/jszip/utils',['shp/jszip/support','shp/jszip/compressions'], function(support,compressions) {
+	var utils = {};
+	/**
+	 * Convert a string to a "binary string" : a string containing only char codes between 0 and 255.
+	 * @param {string} str the string to transform.
+	 * @return {String} the binary string.
+	 */
+	utils.string2binary = function(str) {
+		var result = "";
+		for (var i = 0; i < str.length; i++) {
+			result += String.fromCharCode(str.charCodeAt(i) & 0xff);
+		}
+		return result;
+	};
+	/**
+	 * Create a Uint8Array from the string.
+	 * @param {string} str the string to transform.
+	 * @return {Uint8Array} the typed array.
+	 * @throws {Error} an Error if the browser doesn't support the requested feature.
+	 */
+	utils.string2Uint8Array =  function (str) {
+         return utils.transformTo("uint8array", str);
+      };
+
+	/**
+	 * Create a string from the Uint8Array.
+	 * @param {Uint8Array} array the array to transform.
+	 * @return {string} the string.
+	 * @throws {Error} an Error if the browser doesn't support the requested feature.
+	 */
+	utils.uint8Array2String = function (array) {
+         return utils.transformTo("string", array);
+      };
+	/**
+	 * Create a blob from the given string.
+	 * @param {string} str the string to transform.
+	 * @return {Blob} the string.
+	 * @throws {Error} an Error if the browser doesn't support the requested feature.
+	 */
+	utils.string2Blob = function (str) {
+         var buffer = utils.transformTo("arraybuffer", str);
+         return utils.arrayBuffer2Blob(buffer);
+      };
+	utils.arrayBuffer2Blog=function(buffer) {
+		utils.checkSupport("blob");
+
+         try {
+            // Blob constructor
+            return new Blob([buffer], { type: "application/zip" });
+         }
+         catch(e) {
+
+         try {
+            // deprecated, browser only, old way
+            var builder = new (window.BlobBuilder || window.WebKitBlobBuilder ||
+                               window.MozBlobBuilder || window.MSBlobBuilder)();
+            builder.append(buffer);
+            return builder.getBlob('application/zip');
+         }
+         catch(e) {
+         	
+         	// well, fuck ?!
+         throw new Error("Bug : can't construct the Blob.");
+         }
+}
+         
+
+	};
+/**
+    * The identity function.
+    * @param {Object} input the input.
+    * @return {Object} the same input.
+    */
+   function identity(input) {
+      return input;
+   };
+
+   /**
+    * Fill in an array with a string.
+    * @param {String} str the string to use.
+    * @param {Array|ArrayBuffer|Uint8Array|Buffer} array the array to fill in (will be mutated).
+    * @return {Array|ArrayBuffer|Uint8Array|Buffer} the updated array.
+    */
+   function stringToArrayLike(str, array) {
+      for (var i = 0; i < str.length; ++i) {
+         array[i] = str.charCodeAt(i) & 0xFF;
+      }
+      return array;
+   };
+
+   /**
+    * Transform an array-like object to a string.
+    * @param {Array|ArrayBuffer|Uint8Array|Buffer} array the array to transform.
+    * @return {String} the result.
+    */
+   function arrayLikeToString(array) {
+      // Performances notes :
+      // --------------------
+      // String.fromCharCode.apply(null, array) is the fastest, see
+      // see http://jsperf.com/converting-a-uint8array-to-a-string/2
+      // but the stack is limited (and we can get huge arrays !).
+      //
+      // result += String.fromCharCode(array[i]); generate too many strings !
+      //
+      // This code is inspired by http://jsperf.com/arraybuffer-to-string-apply-performance/2
+      var chunk = 65536;
+      var result = [], len = array.length, type = utils.getTypeOf(array), k = 0;
+
+      while (k < len && chunk > 1) {
+         try {
+            if (type === "array" || type === "nodebuffer") {
+               result.push(String.fromCharCode.apply(null, array.slice(k, Math.max(k + chunk, len))));
+            } else {
+               result.push(String.fromCharCode.apply(null, array.subarray(k, k + chunk)));
+            }
+            k += chunk;
+         } catch (e) {
+            chunk = Math.floor(chunk / 2);
+         }
+      }
+      return result.join("");
+   };
+
+   /**
+    * Copy the data from an array-like to an other array-like.
+    * @param {Array|ArrayBuffer|Uint8Array|Buffer} arrayFrom the origin array.
+    * @param {Array|ArrayBuffer|Uint8Array|Buffer} arrayTo the destination array which will be mutated.
+    * @return {Array|ArrayBuffer|Uint8Array|Buffer} the updated destination array.
+    */
+   function arrayLikeToArrayLike(arrayFrom, arrayTo) {
+      for(var i = 0; i < arrayFrom.length; i++) {
+         arrayTo[i] = arrayFrom[i];
+      }
+      return arrayTo;
+   };
+
+   // a matrix containing functions to transform everything into everything.
+   var transform = {};
+
+   // string to ?
+   transform["string"] = {
+      "string" : identity,
+      "array" : function (input) {
+         return stringToArrayLike(input, new Array(input.length));
+      },
+      "arraybuffer" : function (input) {
+         return transform["string"]["uint8array"](input).buffer;
+      },
+      "uint8array" : function (input) {
+         return stringToArrayLike(input, new Uint8Array(input.length));
+      },
+      "nodebuffer" : function (input) {
+         return stringToArrayLike(input, new Buffer(input.length));
+      }
+   };
+
+   // array to ?
+   transform["array"] = {
+      "string" : arrayLikeToString,
+      "array" : identity,
+      "arraybuffer" : function (input) {
+         return (new Uint8Array(input)).buffer;
+      },
+      "uint8array" : function (input) {
+         return new Uint8Array(input);
+      },
+      "nodebuffer" : function (input) {
+         return new Buffer(input);
+      }
+   };
+
+   // arraybuffer to ?
+   transform["arraybuffer"] = {
+      "string" : function (input) {
+         return arrayLikeToString(new Uint8Array(input));
+      },
+      "array" : function (input) {
+         return arrayLikeToArrayLike(new Uint8Array(input), new Array(input.byteLength));
+      },
+      "arraybuffer" : identity,
+      "uint8array" : function (input) {
+         return new Uint8Array(input);
+      },
+      "nodebuffer" : function (input) {
+         return new Buffer(new Uint8Array(input));
+      }
+   };
+
+   // uint8array to ?
+   transform["uint8array"] = {
+      "string" : arrayLikeToString,
+      "array" : function (input) {
+         return arrayLikeToArrayLike(input, new Array(input.length));
+      },
+      "arraybuffer" : function (input) {
+         return input.buffer;
+      },
+      "uint8array" : identity,
+      "nodebuffer" : function(input) {
+         return new Buffer(input);
+      }
+   };
+
+   // nodebuffer to ?
+   transform["nodebuffer"] = {
+      "string" : arrayLikeToString,
+      "array" : function (input) {
+         return arrayLikeToArrayLike(input, new Array(input.length));
+      },
+      "arraybuffer" : function (input) {
+         return transform["nodebuffer"]["uint8array"](input).buffer;
+      },
+      "uint8array" : function (input) {
+         return arrayLikeToArrayLike(input, new Uint8Array(input.length));
+      },
+      "nodebuffer" : identity
+   };
+
+   /**
+    * Transform an input into any type.
+    * The supported output type are : string, array, uint8array, arraybuffer, nodebuffer.
+    * If no output type is specified, the unmodified input will be returned.
+    * @param {String} outputType the output type.
+    * @param {String|Array|ArrayBuffer|Uint8Array|Buffer} input the input to convert.
+    * @throws {Error} an Error if the browser doesn't support the requested output type.
+    */
+   utils.transformTo = function (outputType, input) {
+      if (!input) {
+         // undefined, null, etc
+         // an empty string won't harm.
+         input = "";
+      }
+      if (!outputType) {
+         return input;
+      }
+      utils.checkSupport(outputType);
+      var inputType = utils.getTypeOf(input);
+      var result = transform[inputType][outputType](input);
+      return result;
+   };
+
+   /**
+    * Return the type of the input.
+    * The type will be in a format valid for JSZip.utils.transformTo : string, array, uint8array, arraybuffer.
+    * @param {Object} input the input to identify.
+    * @return {String} the (lowercase) type of the input.
+    */
+   utils.getTypeOf = function (input) {
+      if (typeof input === "string") {
+         return "string";
+      }
+      if (input instanceof Array) {
+         return "array";
+      }
+      if (support.nodebuffer && Buffer.isBuffer(input)) {
+         return "nodebuffer";
+      }
+      if (support.uint8array && input instanceof Uint8Array) {
+         return "uint8array";
+      }
+      if (support.arraybuffer && input instanceof ArrayBuffer) {
+         return "arraybuffer";
+      }
+   };
+
+   /**
+    * Throw an exception if the type is not supported.
+    * @param {String} type the type to check.
+    * @throws {Error} an Error if the browser doesn't support the requested type.
+    */
+   utils.checkSupport = function (type) {
+      var supported = true;
+      switch (type.toLowerCase()) {
+         case "uint8array":
+            supported = support.uint8array;
+         break;
+         case "arraybuffer":
+            supported = support.arraybuffer;
+         break;
+         case "nodebuffer":
+            supported = support.nodebuffer;
+         break;
+         case "blob":
+            supported = support.blob;
+         break;
+      }
+      if (!supported) {
+         throw new Error(type + " is not supported by this browser");
+      }
+   };
+	utils.MAX_VALUE_16BITS = 65535;
+   utils.MAX_VALUE_32BITS = -1; // well, "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" is parsed as -1
+
+   /**
+    * Prettify a string read as binary.
+    * @param {string} str the string to prettify.
+    * @return {string} a pretty string.
+    */
+   utils.pretty = function (str) {
+      var res = '', code, i;
+      for (i = 0; i < (str||"").length; i++) {
+         code = str.charCodeAt(i);
+         res += '\\x' + (code < 16 ? "0" : "") + code.toString(16).toUpperCase();
+      }
+      return res;
+   };
+
+   /**
+    * Find a compression registered in JSZip.
+    * @param {string} compressionMethod the method magic to find.
+    * @return {Object|null} the JSZip compression object, null if none found.
+    */
+   utils.findCompression = function (compressionMethod) {
+      for (var method in compressions) {
+         if( !compressions.hasOwnProperty(method) ) { continue; }
+         if (compressions[method].magic === compressionMethod) {
+            return compressions[method];
+         }
+      }
+      return null;
+   };
+	return utils;
+});
+define('shp/jszip/signature',[],function(){
+	return {
+   LOCAL_FILE_HEADER : "\x50\x4b\x03\x04",
+   CENTRAL_FILE_HEADER : "\x50\x4b\x01\x02",
+   CENTRAL_DIRECTORY_END : "\x50\x4b\x05\x06",
+   ZIP64_CENTRAL_DIRECTORY_LOCATOR : "\x50\x4b\x06\x07",
+   ZIP64_CENTRAL_DIRECTORY_END : "\x50\x4b\x06\x06",
+   DATA_DESCRIPTOR : "\x50\x4b\x07\x08"
+};	
+});
+define('shp/jszip/defaults',[],function(){
+	return {
+   base64: false,
+   binary: false,
+   dir: false,
+   date: null,
+   compression: null
+};	
+});
+define('shp/jszip/base64',[],function() {
+   // private property
+    var _keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+
+   return {
+      // public method for encoding
+      encode : function(input, utf8) {
+         var output = "";
+         var chr1, chr2, chr3, enc1, enc2, enc3, enc4;
+         var i = 0;
+
+         while (i < input.length) {
+
+            chr1 = input.charCodeAt(i++);
+            chr2 = input.charCodeAt(i++);
+            chr3 = input.charCodeAt(i++);
+
+            enc1 = chr1 >> 2;
+            enc2 = ((chr1 & 3) << 4) | (chr2 >> 4);
+            enc3 = ((chr2 & 15) << 2) | (chr3 >> 6);
+            enc4 = chr3 & 63;
+
+            if (isNaN(chr2)) {
+               enc3 = enc4 = 64;
+            } else if (isNaN(chr3)) {
+               enc4 = 64;
+            }
+
+            output = output +
+               _keyStr.charAt(enc1) + _keyStr.charAt(enc2) +
+               _keyStr.charAt(enc3) + _keyStr.charAt(enc4);
+
+         }
+
+         return output;
+      },
+
+      // public method for decoding
+      decode : function(input, utf8) {
+         var output = "";
+         var chr1, chr2, chr3;
+         var enc1, enc2, enc3, enc4;
+         var i = 0;
+
+         input = input.replace(/[^A-Za-z0-9\+\/\=]/g, "");
+
+         while (i < input.length) {
+
+            enc1 = _keyStr.indexOf(input.charAt(i++));
+            enc2 = _keyStr.indexOf(input.charAt(i++));
+            enc3 = _keyStr.indexOf(input.charAt(i++));
+            enc4 = _keyStr.indexOf(input.charAt(i++));
+
+            chr1 = (enc1 << 2) | (enc2 >> 4);
+            chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
+            chr3 = ((enc3 & 3) << 6) | enc4;
+
+            output = output + String.fromCharCode(chr1);
+
+            if (enc3 != 64) {
+               output = output + String.fromCharCode(chr2);
+            }
+            if (enc4 != 64) {
+               output = output + String.fromCharCode(chr3);
+            }
+
+         }
+
+         return output;
+
+      }
+   
+   };
+});
+define('shp/jszip/compressedObject',[],function(){
+CompressedObject = function () {
+         this.compressedSize = 0;
+         this.uncompressedSize = 0;
+         this.crc32 = 0;
+         this.compressionMethod = null;
+         this.compressedContent = null;
+   };
+
+   CompressedObject.prototype = {
+      /**
+       * Return the decompressed content in an unspecified format.
+       * The format will depend on the decompressor.
+       * @return {Object} the decompressed content.
+       */
+      getContent : function () {
+         return null; // see implementation
+      },
+      /**
+       * Return the compressed content in an unspecified format.
+       * The format will depend on the compressed conten source.
+       * @return {Object} the compressed content.
+       */
+      getCompressedContent : function () {
+         return null; // see implementation
+      }
+   };
+   return CompressedObject;
+});
+define('shp/jszip/object',['shp/jszip/support','shp/jszip/utils','shp/jszip/signature','shp/jszip/defaults','shp/jszip/base64','shp/jszip/compressions','shp/jszip/compressedObject'],
+function(support,utils,signature,defaults,base64,compressions,CompressedObject){
+
+   /**
+    * Returns the raw data of a ZipObject, decompress the content if necessary.
+    * @param {ZipObject} file the file to use.
+    * @return {String|ArrayBuffer|Uint8Array|Buffer} the data.
+    */
+   var getRawData = function (file) {
+      if (file._data instanceof CompressedObject) {
+         file._data = file._data.getContent();
+         file.options.binary = true;
+         file.options.base64 = false;
+
+         if (utils.getTypeOf(file._data) === "uint8array") {
+            var copy = file._data;
+            // when reading an arraybuffer, the CompressedObject mechanism will keep it and subarray() a Uint8Array.
+            // if we request a file in the same format, we might get the same Uint8Array or its ArrayBuffer (the original zip file).
+            file._data = new Uint8Array(copy.length);
+            // with an empty Uint8Array, Opera fails with a "Offset larger than array size"
+            if (copy.length !== 0) {
+               file._data.set(copy, 0);
+            }
+         }
+      }
+      return file._data;
+   };
+
+   /**
+    * Returns the data of a ZipObject in a binary form. If the content is an unicode string, encode it.
+    * @param {ZipObject} file the file to use.
+    * @return {String|ArrayBuffer|Uint8Array|Buffer} the data.
+    */
+   var getBinaryData = function (file) {
+      var result = getRawData(file), type = utils.getTypeOf(result);
+      if (type === "string") {
+         if (!file.options.binary) {
+            // unicode text !
+            // unicode string => binary string is a painful process, check if we can avoid it.
+            if (support.uint8array && typeof TextEncoder === "function") {
+               return TextEncoder("utf-8").encode(result);
+            }
+            if (support.nodebuffer) {
+               return new Buffer(result, "utf-8");
+            }
+         }
+         return file.asBinary();
+      }
+      return result;
+   }
+
+   /**
+    * Transform this._data into a string.
+    * @param {function} filter a function String -> String, applied if not null on the result.
+    * @return {String} the string representing this._data.
+    */
+   var dataToString = function (asUTF8) {
+      var result = getRawData(this);
+      if (result === null || typeof result === "undefined") {
+         return "";
+      }
+      // if the data is a base64 string, we decode it before checking the encoding !
+      if (this.options.base64) {
+         result = base64.decode(result);
+      }
+      if (asUTF8 && this.options.binary) {
+         // JSZip.prototype.utf8decode supports arrays as input
+         // skip to array => string step, utf8decode will do it.
+         result = out.utf8decode(result);
+      } else {
+         // no utf8 transformation, do the array => string step.
+         result = utils.transformTo("string", result);
+      }
+
+      if (!asUTF8 && !this.options.binary) {
+         result = out.utf8encode(result);
+      }
+      return result;
+   };
+   /**
+    * A simple object representing a file in the zip file.
+    * @constructor
+    * @param {string} name the name of the file
+    * @param {String|ArrayBuffer|Uint8Array|Buffer} data the data
+    * @param {Object} options the options of the file
+    */
+   var ZipObject = function (name, data, options) {
+      this.name = name;
+      this._data = data;
+      this.options = options;
+   };
+
+   ZipObject.prototype = {
+      /**
+       * Return the content as UTF8 string.
+       * @return {string} the UTF8 string.
+       */
+      asText : function () {
+         return dataToString.call(this, true);
+      },
+      /**
+       * Returns the binary content.
+       * @return {string} the content as binary.
+       */
+      asBinary : function () {
+         return dataToString.call(this, false);
+      },
+      /**
+       * Returns the content as a nodejs Buffer.
+       * @return {Buffer} the content as a Buffer.
+       */
+      asNodeBuffer : function () {
+         var result = getBinaryData(this);
+         return utils.transformTo("nodebuffer", result);
+      },
+      /**
+       * Returns the content as an Uint8Array.
+       * @return {Uint8Array} the content as an Uint8Array.
+       */
+      asUint8Array : function () {
+         var result = getBinaryData(this);
+         return utils.transformTo("uint8array", result);
+      },
+      /**
+       * Returns the content as an ArrayBuffer.
+       * @return {ArrayBuffer} the content as an ArrayBufer.
+       */
+      asArrayBuffer : function () {
+         return this.asUint8Array().buffer;
+      }
+   };
+
+   /**
+    * Transform an integer into a string in hexadecimal.
+    * @private
+    * @param {number} dec the number to convert.
+    * @param {number} bytes the number of bytes to generate.
+    * @returns {string} the result.
+    */
+   var decToHex = function(dec, bytes) {
+      var hex = "", i;
+      for(i = 0; i < bytes; i++) {
+         hex += String.fromCharCode(dec&0xff);
+         dec=dec>>>8;
+      }
+      return hex;
+   };
+
+   /**
+    * Merge the objects passed as parameters into a new one.
+    * @private
+    * @param {...Object} var_args All objects to merge.
+    * @return {Object} a new object with the data of the others.
+    */
+   var extend = function () {
+      var result = {}, i, attr;
+      for (i = 0; i < arguments.length; i++) { // arguments is not enumerable in some browsers
+         for (attr in arguments[i]) {
+            if (arguments[i].hasOwnProperty(attr) && typeof result[attr] === "undefined") {
+               result[attr] = arguments[i][attr];
+            }
+         }
+      }
+      return result;
+   };
+
+   /**
+    * Transforms the (incomplete) options from the user into the complete
+    * set of options to create a file.
+    * @private
+    * @param {Object} o the options from the user.
+    * @return {Object} the complete set of options.
+    */
+   var prepareFileAttrs = function (o) {
+      o = o || {};
+      if (o.base64 === true && o.binary == null) {
+         o.binary = true;
+      }
+      o = extend(o, defaults);
+      o.date = o.date || new Date();
+      if (o.compression !== null) o.compression = o.compression.toUpperCase();
+
+      return o;
+   };
+
+   /**
+    * Add a file in the current folder.
+    * @private
+    * @param {string} name the name of the file
+    * @param {String|ArrayBuffer|Uint8Array|Buffer} data the data of the file
+    * @param {Object} o the options of the file
+    * @return {Object} the new file.
+    */
+   var fileAdd = function (name, data, o) {
+      // be sure sub folders exist
+      var parent = parentFolder(name), dataType = utils.getTypeOf(data);
+      if (parent) {
+         folderAdd.call(this, parent);
+      }
+
+      o = prepareFileAttrs(o);
+
+      if (o.dir || data === null || typeof data === "undefined") {
+         o.base64 = false;
+         o.binary = false;
+         data = null;
+      } else if (dataType === "string") {
+         if (o.binary && !o.base64) {
+            // optimizedBinaryString == true means that the file has already been filtered with a 0xFF mask
+            if (o.optimizedBinaryString !== true) {
+               // this is a string, not in a base64 format.
+               // Be sure that this is a correct "binary string"
+               data = utils.string2binary(data);
+            }
+         }
+      } else { // arraybuffer, uint8array, ...
+         o.base64 = false;
+         o.binary = true;
+
+         if (!dataType && !(data instanceof CompressedObject)) {
+            throw new Error("The data of '" + name + "' is in an unsupported format !");
+         }
+
+         // special case : it's way easier to work with Uint8Array than with ArrayBuffer
+         if (dataType === "arraybuffer") {
+            data = utils.transformTo("uint8array", data);
+         }
+      }
+
+      return this.files[name] = new ZipObject(name, data, o);
+   };
+
+
+   /**
+    * Find the parent folder of the path.
+    * @private
+    * @param {string} path the path to use
+    * @return {string} the parent folder, or ""
+    */
+   var parentFolder = function (path) {
+      if (path.slice(-1) == '/') {
+         path = path.substring(0, path.length - 1);
+      }
+      var lastSlash = path.lastIndexOf('/');
+      return (lastSlash > 0) ? path.substring(0, lastSlash) : "";
+   };
+
+   /**
+    * Add a (sub) folder in the current folder.
+    * @private
+    * @param {string} name the folder's name
+    * @return {Object} the new folder.
+    */
+   var folderAdd = function (name) {
+      // Check the name ends with a /
+      if (name.slice(-1) != "/") {
+         name += "/"; // IE doesn't like substr(-1)
+      }
+
+      // Does this folder already exist?
+      if (!this.files[name]) {
+         fileAdd.call(this, name, null, {dir:true});
+      }
+      return this.files[name];
+   };
+
+   /**
+    * Generate a JSZip.CompressedObject for a given zipOject.
+    * @param {ZipObject} file the object to read.
+    * @param {JSZip.compression} compression the compression to use.
+    * @return {JSZip.CompressedObject} the compressed result.
+    */
+   var generateCompressedObjectFrom = function (file, compression) {
+      var result = new CompressedObject(), content;
+
+      // the data has not been decompressed, we might reuse things !
+      if (file._data instanceof CompressedObject) {
+         result.uncompressedSize = file._data.uncompressedSize;
+         result.crc32 = file._data.crc32;
+
+         if (result.uncompressedSize === 0 || file.options.dir) {
+            compression = compressions['STORE'];
+            result.compressedContent = "";
+            result.crc32 = 0;
+         } else if (file._data.compressionMethod === compression.magic) {
+            result.compressedContent = file._data.getCompressedContent();
+         } else {
+            content = file._data.getContent()
+            // need to decompress / recompress
+            result.compressedContent = compression.compress(utils.transformTo(compression.compressInputType, content));
+         }
+      } else {
+         // have uncompressed data
+         content = getBinaryData(file);
+         if (!content || content.length === 0 || file.options.dir) {
+            compression = compressions['STORE'];
+            content = "";
+         }
+         result.uncompressedSize = content.length;
+         result.crc32 = this.crc32(content);
+         result.compressedContent = compression.compress(utils.transformTo(compression.compressInputType, content));
+      }
+
+      result.compressedSize = result.compressedContent.length;
+      result.compressionMethod = compression.magic;
+
+      return result;
+   };
+
+   /**
+    * Generate the various parts used in the construction of the final zip file.
+    * @param {string} name the file name.
+    * @param {ZipObject} file the file content.
+    * @param {JSZip.CompressedObject} compressedObject the compressed object.
+    * @param {number} offset the current offset from the start of the zip file.
+    * @return {object} the zip parts.
+    */
+   var generateZipParts = function(name, file, compressedObject, offset) {
+      var data = compressedObject.compressedContent,
+          utfEncodedFileName = this.utf8encode(file.name),
+          useUTF8 = utfEncodedFileName !== file.name,
+          o       = file.options,
+          dosTime,
+          dosDate;
+
+      // date
+      // @see http://www.delorie.com/djgpp/doc/rbinter/it/52/13.html
+      // @see http://www.delorie.com/djgpp/doc/rbinter/it/65/16.html
+      // @see http://www.delorie.com/djgpp/doc/rbinter/it/66/16.html
+
+      dosTime = o.date.getHours();
+      dosTime = dosTime << 6;
+      dosTime = dosTime | o.date.getMinutes();
+      dosTime = dosTime << 5;
+      dosTime = dosTime | o.date.getSeconds() / 2;
+
+      dosDate = o.date.getFullYear() - 1980;
+      dosDate = dosDate << 4;
+      dosDate = dosDate | (o.date.getMonth() + 1);
+      dosDate = dosDate << 5;
+      dosDate = dosDate | o.date.getDate();
+
+
+      var header = "";
+
+      // version needed to extract
+      header += "\x0A\x00";
+      // general purpose bit flag
+      // set bit 11 if utf8
+      header += useUTF8 ? "\x00\x08" : "\x00\x00";
+      // compression method
+      header += compressedObject.compressionMethod;
+      // last mod file time
+      header += decToHex(dosTime, 2);
+      // last mod file date
+      header += decToHex(dosDate, 2);
+      // crc-32
+      header += decToHex(compressedObject.crc32, 4);
+      // compressed size
+      header += decToHex(compressedObject.compressedSize, 4);
+      // uncompressed size
+      header += decToHex(compressedObject.uncompressedSize, 4);
+      // file name length
+      header += decToHex(utfEncodedFileName.length, 2);
+      // extra field length
+      header += "\x00\x00";
+
+
+      var fileRecord = signature.LOCAL_FILE_HEADER + header + utfEncodedFileName;
+
+      var dirRecord = signature.CENTRAL_FILE_HEADER +
+      // version made by (00: DOS)
+      "\x14\x00" +
+      // file header (common to file and central directory)
+      header +
+      // file comment length
+      "\x00\x00" +
+      // disk number start
+      "\x00\x00" +
+      // internal file attributes TODO
+      "\x00\x00" +
+      // external file attributes
+      (file.options.dir===true?"\x10\x00\x00\x00":"\x00\x00\x00\x00")+
+      // relative offset of local header
+      decToHex(offset, 4) +
+      // file name
+      utfEncodedFileName;
+
+
+      return {
+         fileRecord : fileRecord,
+         dirRecord : dirRecord,
+         compressedObject : compressedObject
+      };
+   };
+
+   /**
+    * An object to write any content to a string.
+    * @constructor
+    */
+   var StringWriter = function () {
+      this.data = [];
+   };
+   StringWriter.prototype = {
+      /**
+       * Append any content to the current string.
+       * @param {Object} input the content to add.
+       */
+      append : function (input) {
+         input = utils.transformTo("string", input);
+         this.data.push(input);
+      },
+      /**
+       * Finalize the construction an return the result.
+       * @return {string} the generated string.
+       */
+      finalize : function () {
+         return this.data.join("");
+      }
+   };
+   /**
+    * An object to write any content to an Uint8Array.
+    * @constructor
+    * @param {number} length The length of the array.
+    */
+   var Uint8ArrayWriter = function (length) {
+      this.data = new Uint8Array(length);
+      this.index = 0;
+   };
+   Uint8ArrayWriter.prototype = {
+      /**
+       * Append any content to the current array.
+       * @param {Object} input the content to add.
+       */
+      append : function (input) {
+         if (input.length !== 0) {
+            // with an empty Uint8Array, Opera fails with a "Offset larger than array size"
+            input = utils.transformTo("uint8array", input);
+            this.data.set(input, this.index);
+            this.index += input.length;
+         }
+      },
+      /**
+       * Finalize the construction an return the result.
+       * @return {Uint8Array} the generated array.
+       */
+      finalize : function () {
+         return this.data;
+      }
+   };
+
+   // return the actual prototype of JSZip
+   var out = {
+      /**
+       * Read an existing zip and merge the data in the current JSZip object.
+       * The implementation is in jszip-load.js, don't forget to include it.
+       * @param {String|ArrayBuffer|Uint8Array|Buffer} stream  The stream to load
+       * @param {Object} options Options for loading the stream.
+       *  options.base64 : is the stream in base64 ? default : false
+       * @return {JSZip} the current JSZip object
+       */
+      load : function (stream, options) {
+         throw new Error("Load method is not defined. Is the file jszip-load.js included ?");
+      },
+
+      /**
+       * Filter nested files/folders with the specified function.
+       * @param {Function} search the predicate to use :
+       * function (relativePath, file) {...}
+       * It takes 2 arguments : the relative path and the file.
+       * @return {Array} An array of matching elements.
+       */
+      filter : function (search) {
+         var result = [], filename, relativePath, file, fileClone;
+         for (filename in this.files) {
+            if ( !this.files.hasOwnProperty(filename) ) { continue; }
+            file = this.files[filename];
+            // return a new object, don't let the user mess with our internal objects :)
+            fileClone = new ZipObject(file.name, file._data, extend(file.options));
+            relativePath = filename.slice(this.root.length, filename.length);
+            if (filename.slice(0, this.root.length) === this.root && // the file is in the current root
+                search(relativePath, fileClone)) { // and the file matches the function
+               result.push(fileClone);
+            }
+         }
+         return result;
+      },
+
+      /**
+       * Add a file to the zip file, or search a file.
+       * @param   {string|RegExp} name The name of the file to add (if data is defined),
+       * the name of the file to find (if no data) or a regex to match files.
+       * @param   {String|ArrayBuffer|Uint8Array|Buffer} data  The file data, either raw or base64 encoded
+       * @param   {Object} o     File options
+       * @return  {JSZip|Object|Array} this JSZip object (when adding a file),
+       * a file (when searching by string) or an array of files (when searching by regex).
+       */
+      file : function(name, data, o) {
+         if (arguments.length === 1) {
+            if (name instanceof RegExp) {
+               var regexp = name;
+               return this.filter(function(relativePath, file) {
+                  return !file.options.dir && regexp.test(relativePath);
+               });
+            } else { // text
+               return this.filter(function (relativePath, file) {
+                  return !file.options.dir && relativePath === name;
+               })[0]||null;
+            }
+         } else { // more than one argument : we have data !
+            name = this.root+name;
+            fileAdd.call(this, name, data, o);
+         }
+         return this;
+      },
+
+      /**
+       * Add a directory to the zip file, or search.
+       * @param   {String|RegExp} arg The name of the directory to add, or a regex to search folders.
+       * @return  {JSZip} an object with the new directory as the root, or an array containing matching folders.
+       */
+      folder : function(arg) {
+         if (!arg) {
+            return this;
+         }
+
+         if (arg instanceof RegExp) {
+            return this.filter(function(relativePath, file) {
+               return file.options.dir && arg.test(relativePath);
+            });
+         }
+
+         // else, name is a new folder
+         var name = this.root + arg;
+         var newFolder = folderAdd.call(this, name);
+
+         // Allow chaining by returning a new object with this folder as the root
+         var ret = this.clone();
+         ret.root = newFolder.name;
+         return ret;
+      },
+
+      /**
+       * Delete a file, or a directory and all sub-files, from the zip
+       * @param {string} name the name of the file to delete
+       * @return {JSZip} this JSZip object
+       */
+      remove : function(name) {
+         name = this.root + name;
+         var file = this.files[name];
+         if (!file) {
+            // Look for any folders
+            if (name.slice(-1) != "/") {
+               name += "/";
+            }
+            file = this.files[name];
+         }
+
+         if (file) {
+            if (!file.options.dir) {
+               // file
+               delete this.files[name];
+            } else {
+               // folder
+               var kids = this.filter(function (relativePath, file) {
+                  return file.name.slice(0, name.length) === name;
+               });
+               for (var i = 0; i < kids.length; i++) {
+                  delete this.files[kids[i].name];
+               }
+            }
+         }
+
+         return this;
+      },
+
+      /**
+       * Generate the complete zip file
+       * @param {Object} options the options to generate the zip file :
+       * - base64, (deprecated, use type instead) true to generate base64.
+       * - compression, "STORE" by default.
+       * - type, "base64" by default. Values are : string, base64, uint8array, arraybuffer, blob.
+       * @return {String|Uint8Array|ArrayBuffer|Buffer|Blob} the zip file
+       */
+      generate : function(options) {
+         options = extend(options || {}, {
+            base64 : true,
+            compression : "STORE",
+            type : "base64"
+         });
+
+         utils.checkSupport(options.type);
+
+         var zipData = [], localDirLength = 0, centralDirLength = 0, writer, i;
+
+
+         // first, generate all the zip parts.
+         for (var name in this.files) {
+            if ( !this.files.hasOwnProperty(name) ) { continue; }
+            var file = this.files[name];
+
+            var compressionName = file.options.compression || options.compression.toUpperCase();
+            var compression = compressions[compressionName];
+            if (!compression) {
+               throw new Error(compressionName + " is not a valid compression method !");
+            }
+
+            var compressedObject = generateCompressedObjectFrom.call(this, file, compression);
+
+            var zipPart = generateZipParts.call(this, name, file, compressedObject, localDirLength);
+            localDirLength += zipPart.fileRecord.length + compressedObject.compressedSize;
+            centralDirLength += zipPart.dirRecord.length;
+            zipData.push(zipPart);
+         }
+
+         var dirEnd = "";
+
+         // end of central dir signature
+         dirEnd = signature.CENTRAL_DIRECTORY_END +
+         // number of this disk
+         "\x00\x00" +
+         // number of the disk with the start of the central directory
+         "\x00\x00" +
+         // total number of entries in the central directory on this disk
+         decToHex(zipData.length, 2) +
+         // total number of entries in the central directory
+         decToHex(zipData.length, 2) +
+         // size of the central directory   4 bytes
+         decToHex(centralDirLength, 4) +
+         // offset of start of central directory with respect to the starting disk number
+         decToHex(localDirLength, 4) +
+         // .ZIP file comment length
+         "\x00\x00";
+
+
+         // we have all the parts (and the total length)
+         // time to create a writer !
+         switch(options.type.toLowerCase()) {
+            case "uint8array" :
+            case "arraybuffer" :
+            case "blob" :
+            case "nodebuffer" :
+               writer = new Uint8ArrayWriter(localDirLength + centralDirLength + dirEnd.length);
+               break;
+            case "base64" :
+            default : // case "string" :
+               writer = new StringWriter(localDirLength + centralDirLength + dirEnd.length);
+               break;
+         }
+
+         for (i = 0; i < zipData.length; i++) {
+            writer.append(zipData[i].fileRecord);
+            writer.append(zipData[i].compressedObject.compressedContent);
+         }
+         for (i = 0; i < zipData.length; i++) {
+            writer.append(zipData[i].dirRecord);
+         }
+
+         writer.append(dirEnd);
+
+         var zip = writer.finalize();
+
+
+
+         switch(options.type.toLowerCase()) {
+            // case "zip is an Uint8Array"
+            case "uint8array" :
+            case "arraybuffer" :
+            case "nodebuffer" :
+               return utils.transformTo(options.type.toLowerCase(), zip);
+            case "blob" :
+               return utils.arrayBuffer2Blob(utils.transformTo("arraybuffer", zip));
+
+            // case "zip is a string"
+            case "base64" :
+               return (options.base64) ? base64.encode(zip) : zip;
+            default : // case "string" :
+               return zip;
+         }
+      },
+
+      /**
+       *
+       *  Javascript crc32
+       *  http://www.webtoolkit.info/
+       *
+       */
+      crc32 : function crc32(input, crc) {
+         if (typeof input === "undefined" || !input.length) {
+            return 0;
+         }
+
+         var isArray = utils.getTypeOf(input) !== "string";
+
+         var table = [
+            0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA,
+            0x076DC419, 0x706AF48F, 0xE963A535, 0x9E6495A3,
+            0x0EDB8832, 0x79DCB8A4, 0xE0D5E91E, 0x97D2D988,
+            0x09B64C2B, 0x7EB17CBD, 0xE7B82D07, 0x90BF1D91,
+            0x1DB71064, 0x6AB020F2, 0xF3B97148, 0x84BE41DE,
+            0x1ADAD47D, 0x6DDDE4EB, 0xF4D4B551, 0x83D385C7,
+            0x136C9856, 0x646BA8C0, 0xFD62F97A, 0x8A65C9EC,
+            0x14015C4F, 0x63066CD9, 0xFA0F3D63, 0x8D080DF5,
+            0x3B6E20C8, 0x4C69105E, 0xD56041E4, 0xA2677172,
+            0x3C03E4D1, 0x4B04D447, 0xD20D85FD, 0xA50AB56B,
+            0x35B5A8FA, 0x42B2986C, 0xDBBBC9D6, 0xACBCF940,
+            0x32D86CE3, 0x45DF5C75, 0xDCD60DCF, 0xABD13D59,
+            0x26D930AC, 0x51DE003A, 0xC8D75180, 0xBFD06116,
+            0x21B4F4B5, 0x56B3C423, 0xCFBA9599, 0xB8BDA50F,
+            0x2802B89E, 0x5F058808, 0xC60CD9B2, 0xB10BE924,
+            0x2F6F7C87, 0x58684C11, 0xC1611DAB, 0xB6662D3D,
+            0x76DC4190, 0x01DB7106, 0x98D220BC, 0xEFD5102A,
+            0x71B18589, 0x06B6B51F, 0x9FBFE4A5, 0xE8B8D433,
+            0x7807C9A2, 0x0F00F934, 0x9609A88E, 0xE10E9818,
+            0x7F6A0DBB, 0x086D3D2D, 0x91646C97, 0xE6635C01,
+            0x6B6B51F4, 0x1C6C6162, 0x856530D8, 0xF262004E,
+            0x6C0695ED, 0x1B01A57B, 0x8208F4C1, 0xF50FC457,
+            0x65B0D9C6, 0x12B7E950, 0x8BBEB8EA, 0xFCB9887C,
+            0x62DD1DDF, 0x15DA2D49, 0x8CD37CF3, 0xFBD44C65,
+            0x4DB26158, 0x3AB551CE, 0xA3BC0074, 0xD4BB30E2,
+            0x4ADFA541, 0x3DD895D7, 0xA4D1C46D, 0xD3D6F4FB,
+            0x4369E96A, 0x346ED9FC, 0xAD678846, 0xDA60B8D0,
+            0x44042D73, 0x33031DE5, 0xAA0A4C5F, 0xDD0D7CC9,
+            0x5005713C, 0x270241AA, 0xBE0B1010, 0xC90C2086,
+            0x5768B525, 0x206F85B3, 0xB966D409, 0xCE61E49F,
+            0x5EDEF90E, 0x29D9C998, 0xB0D09822, 0xC7D7A8B4,
+            0x59B33D17, 0x2EB40D81, 0xB7BD5C3B, 0xC0BA6CAD,
+            0xEDB88320, 0x9ABFB3B6, 0x03B6E20C, 0x74B1D29A,
+            0xEAD54739, 0x9DD277AF, 0x04DB2615, 0x73DC1683,
+            0xE3630B12, 0x94643B84, 0x0D6D6A3E, 0x7A6A5AA8,
+            0xE40ECF0B, 0x9309FF9D, 0x0A00AE27, 0x7D079EB1,
+            0xF00F9344, 0x8708A3D2, 0x1E01F268, 0x6906C2FE,
+            0xF762575D, 0x806567CB, 0x196C3671, 0x6E6B06E7,
+            0xFED41B76, 0x89D32BE0, 0x10DA7A5A, 0x67DD4ACC,
+            0xF9B9DF6F, 0x8EBEEFF9, 0x17B7BE43, 0x60B08ED5,
+            0xD6D6A3E8, 0xA1D1937E, 0x38D8C2C4, 0x4FDFF252,
+            0xD1BB67F1, 0xA6BC5767, 0x3FB506DD, 0x48B2364B,
+            0xD80D2BDA, 0xAF0A1B4C, 0x36034AF6, 0x41047A60,
+            0xDF60EFC3, 0xA867DF55, 0x316E8EEF, 0x4669BE79,
+            0xCB61B38C, 0xBC66831A, 0x256FD2A0, 0x5268E236,
+            0xCC0C7795, 0xBB0B4703, 0x220216B9, 0x5505262F,
+            0xC5BA3BBE, 0xB2BD0B28, 0x2BB45A92, 0x5CB36A04,
+            0xC2D7FFA7, 0xB5D0CF31, 0x2CD99E8B, 0x5BDEAE1D,
+            0x9B64C2B0, 0xEC63F226, 0x756AA39C, 0x026D930A,
+            0x9C0906A9, 0xEB0E363F, 0x72076785, 0x05005713,
+            0x95BF4A82, 0xE2B87A14, 0x7BB12BAE, 0x0CB61B38,
+            0x92D28E9B, 0xE5D5BE0D, 0x7CDCEFB7, 0x0BDBDF21,
+            0x86D3D2D4, 0xF1D4E242, 0x68DDB3F8, 0x1FDA836E,
+            0x81BE16CD, 0xF6B9265B, 0x6FB077E1, 0x18B74777,
+            0x88085AE6, 0xFF0F6A70, 0x66063BCA, 0x11010B5C,
+            0x8F659EFF, 0xF862AE69, 0x616BFFD3, 0x166CCF45,
+            0xA00AE278, 0xD70DD2EE, 0x4E048354, 0x3903B3C2,
+            0xA7672661, 0xD06016F7, 0x4969474D, 0x3E6E77DB,
+            0xAED16A4A, 0xD9D65ADC, 0x40DF0B66, 0x37D83BF0,
+            0xA9BCAE53, 0xDEBB9EC5, 0x47B2CF7F, 0x30B5FFE9,
+            0xBDBDF21C, 0xCABAC28A, 0x53B39330, 0x24B4A3A6,
+            0xBAD03605, 0xCDD70693, 0x54DE5729, 0x23D967BF,
+            0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94,
+            0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D
+         ];
+
+         if (typeof(crc) == "undefined") { crc = 0; }
+         var x = 0;
+         var y = 0;
+         var byte = 0;
+
+         crc = crc ^ (-1);
+         for( var i = 0, iTop = input.length; i < iTop; i++ ) {
+            byte = isArray ? input[i] : input.charCodeAt(i);
+            y = ( crc ^ byte ) & 0xFF;
+            x = table[y];
+            crc = ( crc >>> 8 ) ^ x;
+         }
+
+         return crc ^ (-1);
+      },
+
+      // Inspired by http://my.opera.com/GreyWyvern/blog/show.dml/1725165
+      
+      /**
+       * http://www.webtoolkit.info/javascript-utf8.html
+       */
+      utf8encode : function (string) {
+         // TextEncoder + Uint8Array to binary string is faster than checking every bytes on long strings.
+         // http://jsperf.com/utf8encode-vs-textencoder
+         // On short strings (file names for example), the TextEncoder API is (currently) slower.
+         if (support.uint8array && typeof TextEncoder === "function") {
+            var u8 = TextEncoder("utf-8").encode(string);
+            return utils.transformTo("string", u8);
+         }
+         if (support.nodebuffer) {
+            return utils.transformTo("string", new Buffer(string, "utf-8"));
+         }
+
+         // array.join may be slower than string concatenation but generates less objects (less time spent garbage collecting).
+         // See also http://jsperf.com/array-direct-assignment-vs-push/31
+         var result = [], resIndex = 0;
+
+         for (var n = 0; n < string.length; n++) {
+
+            var c = string.charCodeAt(n);
+
+            if (c < 128) {
+               result[resIndex++] = String.fromCharCode(c);
+            } else if ((c > 127) && (c < 2048)) {
+               result[resIndex++] = String.fromCharCode((c >> 6) | 192);
+               result[resIndex++] = String.fromCharCode((c & 63) | 128);
+            } else {
+               result[resIndex++] = String.fromCharCode((c >> 12) | 224);
+               result[resIndex++] = String.fromCharCode(((c >> 6) & 63) | 128);
+               result[resIndex++] = String.fromCharCode((c & 63) | 128);
+            }
+
+         }
+
+         return result.join("");
+      },
+
+      /**
+       * http://www.webtoolkit.info/javascript-utf8.html
+       */
+      utf8decode : function (input) {
+         var result = [], resIndex = 0;
+         var type = utils.getTypeOf(input);
+         var isArray = type !== "string";
+         var i = 0;
+         var c = 0, c1 = 0, c2 = 0, c3 = 0;
+
+         // check if we can use the TextDecoder API
+         // see http://encoding.spec.whatwg.org/#api
+         if (support.uint8array && typeof TextDecoder === "function") {
+            return TextDecoder("utf-8").decode(
+               utils.transformTo("uint8array", input)
+            );
+         }
+         if (support.nodebuffer) {
+            return utils.transformTo("nodebuffer", input).toString("utf-8");
+         }
+
+         while ( i < input.length ) {
+
+            c = isArray ? input[i] : input.charCodeAt(i);
+
+            if (c < 128) {
+               result[resIndex++] = String.fromCharCode(c);
+               i++;
+            } else if ((c > 191) && (c < 224)) {
+               c2 = isArray ? input[i+1] : input.charCodeAt(i+1);
+               result[resIndex++] = String.fromCharCode(((c & 31) << 6) | (c2 & 63));
+               i += 2;
+            } else {
+               c2 = isArray ? input[i+1] : input.charCodeAt(i+1);
+               c3 = isArray ? input[i+2] : input.charCodeAt(i+2);
+               result[resIndex++] = String.fromCharCode(((c & 15) << 12) | ((c2 & 63) << 6) | (c3 & 63));
+               i += 3;
+            }
+
+         }
+
+         return result.join("");
+      }
+   };
+   return out;
+   });
+define('shp/jszip/dataReader',['shp/jszip/utils'],function(utils){
+
+function DataReader(data) {
+      this.data = null; // type : see implementation
+      this.length = 0;
+      this.index = 0;
+   }
+   DataReader.prototype = {
+      /**
+       * Check that the offset will not go too far.
+       * @param {string} offset the additional offset to check.
+       * @throws {Error} an Error if the offset is out of bounds.
+       */
+      checkOffset : function (offset) {
+         this.checkIndex(this.index + offset);
+      },
+      /**
+       * Check that the specifed index will not be too far.
+       * @param {string} newIndex the index to check.
+       * @throws {Error} an Error if the index is out of bounds.
+       */
+      checkIndex : function (newIndex) {
+         if (this.length < newIndex || newIndex < 0) {
+            throw new Error("End of data reached (data length = " +
+                            this.length + ", asked index = " +
+                            (newIndex) + "). Corrupted zip ?");
+         }
+      },
+      /**
+       * Change the index.
+       * @param {number} newIndex The new index.
+       * @throws {Error} if the new index is out of the data.
+       */
+      setIndex : function (newIndex) {
+         this.checkIndex(newIndex);
+         this.index = newIndex;
+      },
+      /**
+       * Skip the next n bytes.
+       * @param {number} n the number of bytes to skip.
+       * @throws {Error} if the new index is out of the data.
+       */
+      skip : function (n) {
+         this.setIndex(this.index + n);
+      },
+      /**
+       * Get the byte at the specified index.
+       * @param {number} i the index to use.
+       * @return {number} a byte.
+       */
+      byteAt : function(i) {
+         // see implementations
+      },
+      /**
+       * Get the next number with a given byte size.
+       * @param {number} size the number of bytes to read.
+       * @return {number} the corresponding number.
+       */
+      readInt : function (size) {
+         var result = 0, i;
+         this.checkOffset(size);
+         for(i = this.index + size - 1; i >= this.index; i--) {
+            result = (result << 8) + this.byteAt(i);
+         }
+         this.index += size;
+         return result;
+      },
+      /**
+       * Get the next string with a given byte size.
+       * @param {number} size the number of bytes to read.
+       * @return {string} the corresponding string.
+       */
+      readString : function (size) {
+         return utils.transformTo("string", this.readData(size));
+      },
+      /**
+       * Get raw data without conversion, <size> bytes.
+       * @param {number} size the number of bytes to read.
+       * @return {Object} the raw data, implementation specific.
+       */
+      readData : function (size) {
+         // see implementations
+      },
+      /**
+       * Find the last occurence of a zip signature (4 bytes).
+       * @param {string} sig the signature to find.
+       * @return {number} the index of the last occurence, -1 if not found.
+       */
+      lastIndexOfSignature : function (sig) {
+         // see implementations
+      },
+      /**
+       * Get the next date.
+       * @return {Date} the date.
+       */
+      readDate : function () {
+         var dostime = this.readInt(4);
+         return new Date(
+            ((dostime >> 25) & 0x7f) + 1980, // year
+            ((dostime >> 21) & 0x0f) - 1, // month
+            (dostime >> 16) & 0x1f, // day
+            (dostime >> 11) & 0x1f, // hour
+            (dostime >> 5) & 0x3f, // minute
+            (dostime & 0x1f) << 1); // second
+      }
+   };
+   return DataReader
+
+});
+define('shp/jszip/stringReader',['shp/jszip/dataReader','shp/jszip/utils'],function(DataReader,utils){
+	
+	
+	function StringReader(data, optimizedBinaryString) {
+      this.data = data;
+      if (!optimizedBinaryString) {
+         this.data = utils.string2binary(this.data);
+      }
+      this.length = this.data.length;
+      this.index = 0;
+   }
+   StringReader.prototype = new DataReader();
+   /**
+    * @see DataReader.byteAt
+    */
+   StringReader.prototype.byteAt = function(i) {
+      return this.data.charCodeAt(i);
+   };
+   /**
+    * @see DataReader.lastIndexOfSignature
+    */
+   StringReader.prototype.lastIndexOfSignature = function (sig) {
+      return this.data.lastIndexOf(sig);
+   };
+   /**
+    * @see DataReader.readData
+    */
+   StringReader.prototype.readData = function (size) {
+      this.checkOffset(size);
+      // this will work because the constructor applied the "& 0xff" mask.
+      var result = this.data.slice(this.index, this.index + size);
+      this.index += size;
+      return result;
+   };
+	return StringReader;
+});
+define('shp/jszip/uint8ArrayReader',['shp/jszip/dataReader'],function(DataReader){
+function Uint8ArrayReader(data) {
+      if (data) {
+         this.data = data;
+         this.length = this.data.length;
+         this.index = 0;
+      }
+   }
+   Uint8ArrayReader.prototype = new DataReader();
+   /**
+    * @see DataReader.byteAt
+    */
+   Uint8ArrayReader.prototype.byteAt = function(i) {
+      return this.data[i];
+   };
+   /**
+    * @see DataReader.lastIndexOfSignature
+    */
+   Uint8ArrayReader.prototype.lastIndexOfSignature = function (sig) {
+      var sig0 = sig.charCodeAt(0),
+      sig1 = sig.charCodeAt(1),
+      sig2 = sig.charCodeAt(2),
+      sig3 = sig.charCodeAt(3);
+      for(var i = this.length - 4;i >= 0;--i) {
+         if (this.data[i] === sig0 && this.data[i+1] === sig1 && this.data[i+2] === sig2 && this.data[i+3] === sig3) {
+            return i;
+         }
+      }
+
+      return -1;
+   };
+   /**
+    * @see DataReader.readData
+    */
+   Uint8ArrayReader.prototype.readData = function (size) {
+      this.checkOffset(size);
+      var result = this.data.subarray(this.index, this.index + size);
+      this.index += size;
+      return result;
+   };
+   return Uint8ArrayReader;
+});
+define('shp/jszip/nodeBufferReader',['shp/jszip/uint8ArrayReader'],function(Uint8ArrayReader){
+
+function NodeBufferReader(data) {
+      this.data = data;
+      this.length = this.data.length;
+      this.index = 0;
+   }
+   NodeBufferReader.prototype = new Uint8ArrayReader();
+
+   /**
+    * @see DataReader.readData
+    */
+   NodeBufferReader.prototype.readData = function (size) {
+      this.checkOffset(size);
+      var result = this.data.slice(this.index, this.index + size);
+      this.index += size;
+      return result;
+   };
+   return NodeBufferReader;
+});
+  define('shp/jszip/zipEntry',['shp/jszip/stringReader','shp/jszip/object','shp/jszip/utils','shp/jszip/compressedObject'],function(StringReader,jszipProto,utils,CompressedObject){
+  // class ZipEntry {{{
+   /**
+    * An entry in the zip file.
+    * @constructor
+    * @param {Object} options Options of the current file.
+    * @param {Object} loadOptions Options for loading the stream.
+    */
+   function ZipEntry(options, loadOptions) {
+      this.options = options;
+      this.loadOptions = loadOptions;
+   }
+   ZipEntry.prototype = {
+      /**
+       * say if the file is encrypted.
+       * @return {boolean} true if the file is encrypted, false otherwise.
+       */
+      isEncrypted : function () {
+         // bit 1 is set
+         return (this.bitFlag & 0x0001) === 0x0001;
+      },
+      /**
+       * say if the file has utf-8 filename/comment.
+       * @return {boolean} true if the filename/comment is in utf-8, false otherwise.
+       */
+      useUTF8 : function () {
+         // bit 11 is set
+         return (this.bitFlag & 0x0800) === 0x0800;
+      },
+      /**
+       * Prepare the function used to generate the compressed content from this ZipFile.
+       * @param {DataReader} reader the reader to use.
+       * @param {number} from the offset from where we should read the data.
+       * @param {number} length the length of the data to read.
+       * @return {Function} the callback to get the compressed content (the type depends of the DataReader class).
+       */
+      prepareCompressedContent : function (reader, from, length) {
+         return function () {
+            var previousIndex = reader.index;
+            reader.setIndex(from);
+            var compressedFileData = reader.readData(length);
+            reader.setIndex(previousIndex);
+
+            return compressedFileData;
+         }
+      },
+      /**
+       * Prepare the function used to generate the uncompressed content from this ZipFile.
+       * @param {DataReader} reader the reader to use.
+       * @param {number} from the offset from where we should read the data.
+       * @param {number} length the length of the data to read.
+       * @param {JSZip.compression} compression the compression used on this file.
+       * @param {number} uncompressedSize the uncompressed size to expect.
+       * @return {Function} the callback to get the uncompressed content (the type depends of the DataReader class).
+       */
+      prepareContent : function (reader, from, length, compression, uncompressedSize) {
+         return function () {
+
+            var compressedFileData = utils.transformTo(compression.uncompressInputType, this.getCompressedContent());
+            var uncompressedFileData = compression.uncompress(compressedFileData);
+
+            if (uncompressedFileData.length !== uncompressedSize) {
+               throw new Error("Bug : uncompressed data size mismatch");
+            }
+
+            return uncompressedFileData;
+         }
+      },
+      /**
+       * Read the local part of a zip file and add the info in this object.
+       * @param {DataReader} reader the reader to use.
+       */
+      readLocalPart : function(reader) {
+         var compression, localExtraFieldsLength;
+
+         // we already know everything from the central dir !
+         // If the central dir data are false, we are doomed.
+         // On the bright side, the local part is scary  : zip64, data descriptors, both, etc.
+         // The less data we get here, the more reliable this should be.
+         // Let's skip the whole header and dash to the data !
+         reader.skip(22);
+         // in some zip created on windows, the filename stored in the central dir contains \ instead of /.
+         // Strangely, the filename here is OK.
+         // I would love to treat these zip files as corrupted (see http://www.info-zip.org/FAQ.html#backslashes
+         // or APPNOTE#4.4.17.1, "All slashes MUST be forward slashes '/'") but there are a lot of bad zip generators...
+         // Search "unzip mismatching "local" filename continuing with "central" filename version" on
+         // the internet.
+         //
+         // I think I see the logic here : the central directory is used to display
+         // content and the local directory is used to extract the files. Mixing / and \
+         // may be used to display \ to windows users and use / when extracting the files.
+         // Unfortunately, this lead also to some issues : http://seclists.org/fulldisclosure/2009/Sep/394
+         this.fileNameLength = reader.readInt(2);
+         localExtraFieldsLength = reader.readInt(2); // can't be sure this will be the same as the central dir
+         this.fileName = reader.readString(this.fileNameLength);
+         reader.skip(localExtraFieldsLength);
+
+         if (this.compressedSize == -1 || this.uncompressedSize == -1) {
+            throw new Error("Bug or corrupted zip : didn't get enough informations from the central directory " +
+                            "(compressedSize == -1 || uncompressedSize == -1)");
+         }
+
+         compression = utils.findCompression(this.compressionMethod);
+         if (compression === null) { // no compression found
+            throw new Error("Corrupted zip : compression " + utils.pretty(this.compressionMethod) +
+                            " unknown (inner file : " + this.fileName + ")");
+         }
+         this.decompressed = new CompressedObject();
+         this.decompressed.compressedSize = this.compressedSize;
+         this.decompressed.uncompressedSize = this.uncompressedSize;
+         this.decompressed.crc32 = this.crc32;
+         this.decompressed.compressionMethod = this.compressionMethod;
+         this.decompressed.getCompressedContent = this.prepareCompressedContent(reader, reader.index, this.compressedSize, compression);
+         this.decompressed.getContent = this.prepareContent(reader, reader.index, this.compressedSize, compression, this.uncompressedSize);
+
+         // we need to compute the crc32...
+         if (this.loadOptions.checkCRC32) {
+            this.decompressed = utils.transformTo("string", this.decompressed.getContent());
+            if (jszipProto.crc32(this.decompressed) !== this.crc32) {
+               throw new Error("Corrupted zip : CRC32 mismatch");
+            }
+         }
+      },
+
+      /**
+       * Read the central part of a zip file and add the info in this object.
+       * @param {DataReader} reader the reader to use.
+       */
+      readCentralPart : function(reader) {
+         this.versionMadeBy          = reader.readString(2);
+         this.versionNeeded          = reader.readInt(2);
+         this.bitFlag                = reader.readInt(2);
+         this.compressionMethod      = reader.readString(2);
+         this.date                   = reader.readDate();
+         this.crc32                  = reader.readInt(4);
+         this.compressedSize         = reader.readInt(4);
+         this.uncompressedSize       = reader.readInt(4);
+         this.fileNameLength         = reader.readInt(2);
+         this.extraFieldsLength      = reader.readInt(2);
+         this.fileCommentLength      = reader.readInt(2);
+         this.diskNumberStart        = reader.readInt(2);
+         this.internalFileAttributes = reader.readInt(2);
+         this.externalFileAttributes = reader.readInt(4);
+         this.localHeaderOffset      = reader.readInt(4);
+
+         if (this.isEncrypted()) {
+            throw new Error("Encrypted zip are not supported");
+         }
+
+         this.fileName = reader.readString(this.fileNameLength);
+         this.readExtraFields(reader);
+         this.parseZIP64ExtraField(reader);
+         this.fileComment = reader.readString(this.fileCommentLength);
+
+         // warning, this is true only for zip with madeBy == DOS (plateform dependent feature)
+         this.dir = this.externalFileAttributes & 0x00000010 ? true : false;
+      },
+      /**
+       * Parse the ZIP64 extra field and merge the info in the current ZipEntry.
+       * @param {DataReader} reader the reader to use.
+       */
+      parseZIP64ExtraField : function(reader) {
+
+         if(!this.extraFields[0x0001]) {
+            return;
+         }
+
+         // should be something, preparing the extra reader
+         var extraReader = new StringReader(this.extraFields[0x0001].value);
+
+         // I really hope that these 64bits integer can fit in 32 bits integer, because js
+         // won't let us have more.
+         if(this.uncompressedSize === utils.MAX_VALUE_32BITS) {
+            this.uncompressedSize = extraReader.readInt(8);
+         }
+         if(this.compressedSize === utils.MAX_VALUE_32BITS) {
+            this.compressedSize = extraReader.readInt(8);
+         }
+         if(this.localHeaderOffset === utils.MAX_VALUE_32BITS) {
+            this.localHeaderOffset = extraReader.readInt(8);
+         }
+         if(this.diskNumberStart === utils.MAX_VALUE_32BITS) {
+            this.diskNumberStart = extraReader.readInt(4);
+         }
+      },
+      /**
+       * Read the central part of a zip file and add the info in this object.
+       * @param {DataReader} reader the reader to use.
+       */
+      readExtraFields : function(reader) {
+         var start = reader.index,
+             extraFieldId,
+             extraFieldLength,
+             extraFieldValue;
+
+         this.extraFields = this.extraFields || {};
+
+         while (reader.index < start + this.extraFieldsLength) {
+            extraFieldId     = reader.readInt(2);
+            extraFieldLength = reader.readInt(2);
+            extraFieldValue  = reader.readString(extraFieldLength);
+
+            this.extraFields[extraFieldId] = {
+               id:     extraFieldId,
+               length: extraFieldLength,
+               value:  extraFieldValue
+            };
+         }
+      },
+      /**
+       * Apply an UTF8 transformation if needed.
+       */
+      handleUTF8 : function() {
+         if (this.useUTF8()) {
+            this.fileName    = jszipProto.utf8decode(this.fileName);
+            this.fileComment = jszipProto.utf8decode(this.fileComment);
+         }
+      }
+   };
+   return ZipEntry;
+});
+define('shp/jszip/zipEntries',['shp/jszip/stringReader','shp/jszip/nodeBufferReader','shp/jszip/uint8ArrayReader','shp/jszip/utils','shp/jszip/signature','shp/jszip/zipEntry','shp/jszip/support'],function(StringReader,NodeBufferReader,Uint8ArrayReader,utils,sig,ZipEntry,support){
+  //  class ZipEntries {{{
+   /**
+    * All the entries in the zip file.
+    * @constructor
+    * @param {String|ArrayBuffer|Uint8Array} data the binary stream to load.
+    * @param {Object} loadOptions Options for loading the stream.
+    */
+   function ZipEntries(data, loadOptions) {
+      this.files = [];
+      this.loadOptions = loadOptions;
+      if (data) {
+         this.load(data);
+      }
+   }
+   ZipEntries.prototype = {
+      /**
+       * Check that the reader is on the speficied signature.
+       * @param {string} expectedSignature the expected signature.
+       * @throws {Error} if it is an other signature.
+       */
+      checkSignature : function(expectedSignature) {
+         var signature = this.reader.readString(4);
+         if (signature !== expectedSignature) {
+            throw new Error("Corrupted zip or bug : unexpected signature " +
+                            "(" + utils.pretty(signature) + ", expected " + utils.pretty(expectedSignature) + ")");
+         }
+      },
+      /**
+       * Read the end of the central directory.
+       */
+      readBlockEndOfCentral : function () {
+         this.diskNumber                  = this.reader.readInt(2);
+         this.diskWithCentralDirStart     = this.reader.readInt(2);
+         this.centralDirRecordsOnThisDisk = this.reader.readInt(2);
+         this.centralDirRecords           = this.reader.readInt(2);
+         this.centralDirSize              = this.reader.readInt(4);
+         this.centralDirOffset            = this.reader.readInt(4);
+
+         this.zipCommentLength            = this.reader.readInt(2);
+         this.zipComment                  = this.reader.readString(this.zipCommentLength);
+      },
+      /**
+       * Read the end of the Zip 64 central directory.
+       * Not merged with the method readEndOfCentral :
+       * The end of central can coexist with its Zip64 brother,
+       * I don't want to read the wrong number of bytes !
+       */
+      readBlockZip64EndOfCentral : function () {
+         this.zip64EndOfCentralSize       = this.reader.readInt(8);
+         this.versionMadeBy               = this.reader.readString(2);
+         this.versionNeeded               = this.reader.readInt(2);
+         this.diskNumber                  = this.reader.readInt(4);
+         this.diskWithCentralDirStart     = this.reader.readInt(4);
+         this.centralDirRecordsOnThisDisk = this.reader.readInt(8);
+         this.centralDirRecords           = this.reader.readInt(8);
+         this.centralDirSize              = this.reader.readInt(8);
+         this.centralDirOffset            = this.reader.readInt(8);
+
+         this.zip64ExtensibleData = {};
+         var extraDataSize = this.zip64EndOfCentralSize - 44,
+         index = 0,
+         extraFieldId,
+         extraFieldLength,
+         extraFieldValue;
+         while(index < extraDataSize) {
+            extraFieldId     = this.reader.readInt(2);
+            extraFieldLength = this.reader.readInt(4);
+            extraFieldValue  = this.reader.readString(extraFieldLength);
+            this.zip64ExtensibleData[extraFieldId] = {
+               id:     extraFieldId,
+               length: extraFieldLength,
+               value:  extraFieldValue
+            };
+         }
+      },
+      /**
+       * Read the end of the Zip 64 central directory locator.
+       */
+      readBlockZip64EndOfCentralLocator : function () {
+         this.diskWithZip64CentralDirStart       = this.reader.readInt(4);
+         this.relativeOffsetEndOfZip64CentralDir = this.reader.readInt(8);
+         this.disksCount                         = this.reader.readInt(4);
+         if (this.disksCount > 1) {
+            throw new Error("Multi-volumes zip are not supported");
+         }
+      },
+      /**
+       * Read the local files, based on the offset read in the central part.
+       */
+      readLocalFiles : function() {
+         var i, file;
+         for(i = 0; i < this.files.length; i++) {
+            file = this.files[i];
+            this.reader.setIndex(file.localHeaderOffset);
+            this.checkSignature(sig.LOCAL_FILE_HEADER);
+            file.readLocalPart(this.reader);
+            file.handleUTF8();
+         }
+      },
+      /**
+       * Read the central directory.
+       */
+      readCentralDir : function() {
+         var file;
+
+         this.reader.setIndex(this.centralDirOffset);
+         while(this.reader.readString(4) === sig.CENTRAL_FILE_HEADER) {
+            file = new ZipEntry({
+               zip64: this.zip64
+            }, this.loadOptions);
+            file.readCentralPart(this.reader);
+            this.files.push(file);
+         }
+      },
+      /**
+       * Read the end of central directory.
+       */
+      readEndOfCentral : function() {
+         var offset = this.reader.lastIndexOfSignature(sig.CENTRAL_DIRECTORY_END);
+         if (offset === -1) {
+            throw new Error("Corrupted zip : can't find end of central directory");
+         }
+         this.reader.setIndex(offset);
+         this.checkSignature(sig.CENTRAL_DIRECTORY_END);
+         this.readBlockEndOfCentral();
+
+
+         /* extract from the zip spec :
+            4)  If one of the fields in the end of central directory
+                record is too small to hold required data, the field
+                should be set to -1 (0xFFFF or 0xFFFFFFFF) and the
+                ZIP64 format record should be created.
+            5)  The end of central directory record and the
+                Zip64 end of central directory locator record must
+                reside on the same disk when splitting or spanning
+                an archive.
+         */
+         if (  this.diskNumber                  === utils.MAX_VALUE_16BITS
+            || this.diskWithCentralDirStart     === utils.MAX_VALUE_16BITS
+            || this.centralDirRecordsOnThisDisk === utils.MAX_VALUE_16BITS
+            || this.centralDirRecords           === utils.MAX_VALUE_16BITS
+            || this.centralDirSize              === utils.MAX_VALUE_32BITS
+            || this.centralDirOffset            === utils.MAX_VALUE_32BITS
+         ) {
+            this.zip64 = true;
+
+            /*
+            Warning : the zip64 extension is supported, but ONLY if the 64bits integer read from
+            the zip file can fit into a 32bits integer. This cannot be solved : Javascript represents
+            all numbers as 64-bit double precision IEEE 754 floating point numbers.
+            So, we have 53bits for integers and bitwise operations treat everything as 32bits.
+            see https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Operators/Bitwise_Operators
+            and http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-262.pdf section 8.5
+            */
+
+            // should look for a zip64 EOCD locator
+            offset = this.reader.lastIndexOfSignature(sig.ZIP64_CENTRAL_DIRECTORY_LOCATOR);
+            if (offset === -1) {
+               throw new Error("Corrupted zip : can't find the ZIP64 end of central directory locator");
+            }
+            this.reader.setIndex(offset);
+            this.checkSignature(sig.ZIP64_CENTRAL_DIRECTORY_LOCATOR);
+            this.readBlockZip64EndOfCentralLocator();
+
+            // now the zip64 EOCD record
+            this.reader.setIndex(this.relativeOffsetEndOfZip64CentralDir);
+            this.checkSignature(sig.ZIP64_CENTRAL_DIRECTORY_END);
+            this.readBlockZip64EndOfCentral();
+         }
+      },
+      prepareReader : function (data) {
+         var type = utils.getTypeOf(data);
+         if (type === "string" && !support.uint8array) {
+            this.reader = new StringReader(data, this.loadOptions.optimizedBinaryString);
+         } else if (type === "nodebuffer") {
+            this.reader = new NodeBufferReader(data);
+         } else {
+            this.reader = new Uint8ArrayReader(utils.transformTo("uint8array", data));
+         }
+      },
+      /**
+       * Read a zip file and create ZipEntries.
+       * @param {String|ArrayBuffer|Uint8Array|Buffer} data the binary string representing a zip file.
+       */
+      load : function(data) {
+         this.prepareReader(data);
+         this.readEndOfCentral();
+         this.readCentralDir();
+         this.readLocalFiles();
+      }
+   };
+   // }}} end of ZipEntries
+   return ZipEntries;
+});
+define('shp/jszip/load',['shp/jszip/base64','shp/jszip/zipEntries'],function(JSZipBase64,ZipEntries){
+return function(data, options) {
+      var files, zipEntries, i, input;
+      options = options || {};
+      if(options.base64) {
+         data = JSZipBase64.decode(data);
+      }
+
+      zipEntries = new ZipEntries(data, options);
+      files = zipEntries.files;
+      for (i = 0; i < files.length; i++) {
+         input = files[i];
+         this.file(input.fileName, input.decompressed, {
+            binary:true,
+            optimizedBinaryString:true,
+            date:input.date,
+            dir:input.dir
+         });
+      }
+
+      return this;
+   };
+});
+/**
+
+JSZip - A Javascript class for generating and reading zip files
+<http://stuartk.com/jszip>
+
+(c) 2009-2012 Stuart Knightley <stuart [at] stuartk.com>
+Dual licenced under the MIT license or GPLv3. See https://raw.github.com/Stuk/jszip/master/LICENSE.markdown.
+
+Usage:
+   zip = new JSZip();
+   zip.file("hello.txt", "Hello, World!").file("tempfile", "nothing");
+   zip.folder("images").file("smile.gif", base64Data, {base64: true});
+   zip.file("Xmas.txt", "Ho ho ho !", {date : new Date("December 25, 2007 00:00:01")});
+   zip.remove("tempfile");
+
+   base64zip = zip.generate();
+
+**/
+
+/**
+ * Representation a of zip file in js
+ * @constructor
+ * @param {String=|ArrayBuffer=|Uint8Array=} data the data to load, if any (optional).
+ * @param {Object=} options the options for creating this objects (optional).
+ */
+define('shp/jszip/main',['shp/jszip/object','shp/jszip/load'],function(jszipProto,loadMethod){
+var JSZip = function(data, options) {
+   // object containing the files :
+   // {
+   //   "folder/" : {...},
+   //   "folder/data.txt" : {...}
+   // }
+   this.files = {};
+
+   // Where we are in the hierarchy
+   this.root = "";
+
+   if (data) {
+      this.load(data, options);
+   }
+};
+
+
+
+JSZip.prototype = jszipProto;
+JSZip.prototype.clone = function() {
+         var newObj = new JSZip();
+         for (var i in this) {
+            if (typeof this[i] !== "function") {
+               newObj[i] = this[i];
+            }
+         }
+         return newObj;
+      };
+JSZip.prototype.load=loadMethod;
+
+
+return JSZip;
+});
+define('shp/jszip',['shp/jszip/main'],function(jszip){
+	return jszip;
+});
+define('shp/unzip',['./jszip'],function(JSZip){
+    return function(buffer){
+        var zip = new JSZip(buffer);
+        var files = zip.file(/.+/);
+        var out = {};
+        files.forEach(function(a){
+	        if(a.name.slice(-7).toLowerCase()==="geojson"){
+		        out[a.name]=a.asText();
+	        }else{
+		        out[a.name]=a.asArrayBuffer();
+	        }
+        });
+        return out;
+    };
+});
+
+(function (global, undefined) {
+    
+
+    var tasks = (function () {
+        function Task(handler, args) {
+            this.handler = handler;
+            this.args = args;
+        }
+        Task.prototype.run = function () {
+            // See steps in section 5 of the spec.
+            if (typeof this.handler === "function") {
+                // Choice of `thisArg` is not in the setImmediate spec; `undefined` is in the setTimeout spec though:
+                // http://www.whatwg.org/specs/web-apps/current-work/multipage/timers.html
+                this.handler.apply(undefined, this.args);
+            } else {
+                var scriptSource = "" + this.handler;
+                /*jshint evil: true */
+                eval(scriptSource);
+            }
+        };
+
+        var nextHandle = 1; // Spec says greater than zero
+        var tasksByHandle = {};
+        var currentlyRunningATask = false;
+
+        return {
+            addFromSetImmediateArguments: function (args) {
+                var handler = args[0];
+                var argsToHandle = Array.prototype.slice.call(args, 1);
+                var task = new Task(handler, argsToHandle);
+
+                var thisHandle = nextHandle++;
+                tasksByHandle[thisHandle] = task;
+                return thisHandle;
+            },
+            runIfPresent: function (handle) {
+                // From the spec: "Wait until any invocations of this algorithm started before this one have completed."
+                // So if we're currently running a task, we'll need to delay this invocation.
+                if (!currentlyRunningATask) {
+                    var task = tasksByHandle[handle];
+                    if (task) {
+                        currentlyRunningATask = true;
+                        try {
+                            task.run();
+                        } finally {
+                            delete tasksByHandle[handle];
+                            currentlyRunningATask = false;
+                        }
+                    }
+                } else {
+                    // Delay by doing a setTimeout. setImmediate was tried instead, but in Firefox 7 it generated a
+                    // "too much recursion" error.
+                    global.setTimeout(function () {
+                        tasks.runIfPresent(handle);
+                    }, 0);
+                }
+            },
+            remove: function (handle) {
+                delete tasksByHandle[handle];
+            }
+        };
+    }());
+
+    function canUseNextTick() {
+        // Don't get fooled by e.g. browserify environments.
+        return typeof process === "object" &&
+               Object.prototype.toString.call(process) === "[object process]";
+    }
+
+    function canUseMessageChannel() {
+        return !!global.MessageChannel;
+    }
+
+    function canUsePostMessage() {
+        // The test against `importScripts` prevents this implementation from being installed inside a web worker,
+        // where `global.postMessage` means something completely different and can't be used for this purpose.
+
+        if (!global.postMessage || global.importScripts) {
+            return false;
+        }
+
+        var postMessageIsAsynchronous = true;
+        var oldOnMessage = global.onmessage;
+        global.onmessage = function () {
+            postMessageIsAsynchronous = false;
+        };
+        global.postMessage("", "*");
+        global.onmessage = oldOnMessage;
+
+        return postMessageIsAsynchronous;
+    }
+
+    function canUseReadyStateChange() {
+        return "document" in global && "onreadystatechange" in global.document.createElement("script");
+    }
+
+    function installNextTickImplementation(attachTo) {
+        attachTo.setImmediate = function () {
+            var handle = tasks.addFromSetImmediateArguments(arguments);
+
+            process.nextTick(function () {
+                tasks.runIfPresent(handle);
+            });
+
+            return handle;
+        };
+    }
+
+    function installMessageChannelImplementation(attachTo) {
+        var channel = new global.MessageChannel();
+        channel.port1.onmessage = function (event) {
+            var handle = event.data;
+            tasks.runIfPresent(handle);
+        };
+        attachTo.setImmediate = function () {
+            var handle = tasks.addFromSetImmediateArguments(arguments);
+
+            channel.port2.postMessage(handle);
+
+            return handle;
+        };
+    }
+
+    function installPostMessageImplementation(attachTo) {
+        // Installs an event handler on `global` for the `message` event: see
+        // * https://developer.mozilla.org/en/DOM/window.postMessage
+        // * http://www.whatwg.org/specs/web-apps/current-work/multipage/comms.html#crossDocumentMessages
+
+        var MESSAGE_PREFIX = "com.bn.NobleJS.setImmediate" + Math.random();
+
+        function isStringAndStartsWith(string, putativeStart) {
+            return typeof string === "string" && string.substring(0, putativeStart.length) === putativeStart;
+        }
+
+        function onGlobalMessage(event) {
+            // This will catch all incoming messages (even from other windows!), so we need to try reasonably hard to
+            // avoid letting anyone else trick us into firing off. We test the origin is still this window, and that a
+            // (randomly generated) unpredictable identifying prefix is present.
+            if (event.source === global && isStringAndStartsWith(event.data, MESSAGE_PREFIX)) {
+                var handle = event.data.substring(MESSAGE_PREFIX.length);
+                tasks.runIfPresent(handle);
+            }
+        }
+        if (global.addEventListener) {
+            global.addEventListener("message", onGlobalMessage, false);
+        } else {
+            global.attachEvent("onmessage", onGlobalMessage);
+        }
+
+        attachTo.setImmediate = function () {
+            var handle = tasks.addFromSetImmediateArguments(arguments);
+
+            // Make `global` post a message to itself with the handle and identifying prefix, thus asynchronously
+            // invoking our onGlobalMessage listener above.
+            global.postMessage(MESSAGE_PREFIX + handle, "*");
+
+            return handle;
+        };
+    }
+
+    function installReadyStateChangeImplementation(attachTo) {
+        attachTo.setImmediate = function () {
+            var handle = tasks.addFromSetImmediateArguments(arguments);
+
+            // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
+            // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
+            var scriptEl = global.document.createElement("script");
+            scriptEl.onreadystatechange = function () {
+                tasks.runIfPresent(handle);
+
+                scriptEl.onreadystatechange = null;
+                scriptEl.parentNode.removeChild(scriptEl);
+                scriptEl = null;
+            };
+            global.document.documentElement.appendChild(scriptEl);
+
+            return handle;
+        };
+    }
+
+    function installSetTimeoutImplementation(attachTo) {
+        attachTo.setImmediate = function () {
+            var handle = tasks.addFromSetImmediateArguments(arguments);
+
+            global.setTimeout(function () {
+                tasks.runIfPresent(handle);
+            }, 0);
+
+            return handle;
+        };
+    }
+
+    if (!global.setImmediate) {
+        // If supported, we should attach to the prototype of global, since that is where setTimeout et al. live.
+        var attachTo = typeof Object.getPrototypeOf === "function" && "setTimeout" in Object.getPrototypeOf(global) ?
+                          Object.getPrototypeOf(global)
+                        : global;
+
+        if (canUseNextTick()) {
+            // For Node.js before 0.9
+            installNextTickImplementation(attachTo);
+        } else if (canUsePostMessage()) {
+            // For non-IE10 modern browsers
+            installPostMessageImplementation(attachTo);
+        } else if (canUseMessageChannel()) {
+            // For web workers, where supported
+            installMessageChannelImplementation(attachTo);
+        } else if (canUseReadyStateChange()) {
+            // For IE 6–8
+            installReadyStateChangeImplementation(attachTo);
+        } else {
+            // For older browsers
+            installSetTimeoutImplementation(attachTo);
+        }
+
+        attachTo.clearImmediate = tasks.remove;
+    }
+}(typeof global === "object" && global ? global : this));
+
+/*! lie 1.0.0 2013-08-30*/
+/*! (c)2013 Ruben Verborgh & Calvin Metcalf @license MIT https://github.com/calvinmetcalf/lie*/
+
+	define('shp/lie',[],function(){
+		var func = 'function';
+		// Creates a deferred: an object with a promise and corresponding resolve/reject methods
+		function Deferred() {
+			// The `handler` variable points to the function that will
+			// 1) handle a .then(onFulfilled, onRejected) call
+			// 2) handle a .resolve or .reject call (if not fulfilled)
+			// Before 2), `handler` holds a queue of callbacks.
+			// After 2), `handler` is a simple .then handler.
+			// We use only one function to save memory and complexity.
+			var handler = function(onFulfilled, onRejected, value) {
+				// Case 1) handle a .then(onFulfilled, onRejected) call
+				var createdDeffered;
+				if (onFulfilled !== handler) {
+					createdDeffered = createDeferred();
+					handler.queue.push({
+						deferred: createdDeffered,
+						resolve: onFulfilled,
+						reject: onRejected
+					});
+					return createdDeffered.promise;
+				}
+	
+				// Case 2) handle a .resolve or .reject call
+				// (`onFulfilled` acts as a sentinel)
+				// The actual function signature is
+				// .re[ject|solve](sentinel, success, value)
+				var action = onRejected ? 'resolve' : 'reject',
+					queue, deferred, callback;
+				for (var i = 0, l = handler.queue.length; i < l; i++) {
+					queue = handler.queue[i];
+					deferred = queue.deferred;
+					callback = queue[action];
+					if (typeof callback !== func) {
+						deferred[action](value);
+					}
+					else {
+						execute(callback, value, deferred);
+					}
+				}
+				// Replace this handler with a simple resolved or rejected handler
+				handler = createHandler(promise, value, onRejected);
+			};
+	
+			function Promise() {
+				this.then = function(onFulfilled, onRejected) {
+					return handler(onFulfilled, onRejected);
+				};
+			}
+			var promise = new Promise();
+			this.promise = promise;
+			// The queue of deferreds
+			handler.queue = [];
+	
+			this.resolve = function(value) {
+				if(handler.queue){
+					handler(handler, true, value);
+				}
+			};
+			
+			this.fulfill = this.resolve;
+			
+			this.reject = function(reason) {
+				if(handler.queue){
+					handler(handler, false, reason);
+				}
+			};
+		}
+	
+		function createDeferred() {
+			return new Deferred();
+		}
+	
+		// Creates a fulfilled or rejected .then function
+		function createHandler(promise, value, success) {
+			return function(onFulfilled, onRejected) {
+				var callback = success ? onFulfilled : onRejected,
+					result;
+				if (typeof callback !== func) {
+					return promise;
+				}
+				execute(callback, value, result = createDeferred());
+				return result.promise;
+			};
+		}
+	
+		// Executes the callback with the specified value,
+		// resolving or rejecting the deferred
+		function execute(callback, value, deferred) {
+			setImmediate(function() {
+				var result;
+				try {
+					result = callback(value);
+					if (result && typeof result.then === func) {
+						result.then(deferred.resolve, deferred.reject);
+					}
+					else {
+						deferred.resolve(result);
+					}
+				}
+				catch (error) {
+					deferred.reject(error);
+				}
+			});
+		}
+		// Returns a resolved promise
+		createDeferred.resolve = function(value) {
+			var promise = {};
+			promise.then = createHandler(promise, value, true);
+			return promise;
+		};
+		// Returns a rejected promise
+		createDeferred.reject = function(reason) {
+			var promise = {};
+			promise.then = createHandler(promise, reason, false);
+			return promise;
+		};
+		// Returns a deferred
+		
+	createDeferred.all = function(array) {
+			var promise = createDeferred();
+			var len = array.length;
+			var resolved = 0;
+			var out = [];
+			var onSuccess = function(n) {
+				return function(v) {
+					out[n] = v;
+					resolved++;
+					if (resolved === len) {
+						promise.resolve(out);
+					}
+				};
+			};
+			array.forEach(function(v, i) {
+				v.then(onSuccess(i), function(a) {
+					promise.reject(a);
+				});
+			});
+			return promise.promise;
+		};
+		return createDeferred;
+});
+
+define('shp/binaryajax',['./lie'],function(deferred){
+return function(url){
+    var promise = deferred();
+    var type = url.slice(-3);
+	var ajax = new XMLHttpRequest();
+	ajax.open("GET",url,true);
+	if(type !== 'prj'){
+		ajax.responseType='arraybuffer';
+	}
+	ajax.addEventListener("load",function(){
+		if(ajax.status>399){
+			if(type==='prj'){
+				return promise.resolve(false);
+			}else{
+				return promise.reject(ajax.status);
+			}
+		}
+		promise.resolve(ajax.response);
+	}, false);
+	ajax.send();
+	return promise.promise;
+};
+});
+
+define('shp/parseShp',[],function(){
+var parseHeader = function(buffer){
+	var view = new DataView(buffer,0,100) 
+	//if(view.getInt32(0,false)!==9994){
+	//	return shp.reject("wrong type");
+	//}
+	return /*shp.resolve(*/{
+		length : view.getInt32(6<<2,false),
+		version : view.getInt32(7<<2,true),
+		shpCode : view.getInt32(8<<2,true),
+		bbox : [
+			view.getFloat64(9<<2,true),
+			view.getFloat64(11<<2,true),
+			view.getFloat64(13<<2,true),
+			view.getFloat64(13<<2,true)
+		]
+	}/*)*/;
+}
+function isClockWise(array){
+	var sum = 0;
+	var i = 1;
+	var len = array.length;
+	var prev,cur;
+	while(i<len){
+		prev = cur||array[0];
+		cur = array[i];
+		sum += ((cur[0]-prev[0])*(cur[1]+prev[1]));
+		i++;
+	}
+	return sum > 0;
+}
+function polyReduce(a,b){
+	if(isClockWise(b)||!a.length){
+		a.push([b]);
+	}else{
+		a[a.length-1].push(b);
+	}
+	return a;
+}
+function parsePoint(data,trans){
+	return {
+		"type": "Point",
+		"coordinates":trans(data,0)
+	};
+}
+function parseZPoint(data,trans){
+	var pointXY = parsePoint(data,trans);
+	pointXY.coordinates.push(trans(data,16));
+	return pointXY;
+}
+function parsePointArray(data,offset,num,trans){
+	var out = [];
+	var done = 0;
+	while(done<num){
+		out.push(trans(data,offset));
+		offset += 16;
+		done++;
+	}
+	return out;
+}
+function parseZPointArray(data,zOffset,num,coordinates){
+	var i = 0;
+	while(i<num){
+		coordinates[i].push(data.getFloat64(zOffset,true));
+		i++;
+		zOffset += 8;
+	}
+	return coordinates;
+}
+function parseArrayGroup(data,offset,partOffset,num,tot,trans){
+	var out = [];
+	var done = 0;
+	var curNum,nextNum=0,pointNumber;
+	while(done<num){
+		done++;
+		partOffset += 4;
+		curNum = nextNum;
+		if(done===num){
+			nextNum = tot;
+		}else{
+			nextNum = data.getInt32(partOffset,true);
+		}
+		pointNumber = nextNum - curNum;
+		if(!pointNumber){
+			continue;
+		}
+		out.push(parsePointArray(data,offset,pointNumber,trans));
+		offset += (pointNumber<<4);
+	}
+	return out;
+}
+function parseZArrayGroup(data,zOffset,num,coordinates){
+	var i = 0;
+	while(i<num){
+		coordinates[i] = parseZPointArray(data,zOffset,coordinates[i].length,coordinates[i]);
+		zOffset += (coordinates[i].length<<3);
+		i++;
+	}
+	return coordinates;
+}
+function parseMultiPoint(data,trans){
+	var out = {};
+	out.bbox = [
+		data.getFloat64(0,true),
+		data.getFloat64(8,true),
+		data.getFloat64(16,true),
+		data.getFloat64(24,true)
+	];
+	var num = data.getInt32(32,true);
+	var offset = 36;
+	if(num===1){
+		out.type = "Point";
+		out.coordinates = trans(data,offset);
+	}else{
+		out.type = "MultiPoint";
+		out.coordinates = parsePointArray(data,offset,num,trans);
+	}
+	return out;
+}
+function parseZMultiPoint(data,trans){
+	var geoJson = parseMultiPoint(data,trans);
+	var num;
+	if(geoJson.type === "Point"){
+		geoJson.coordinates.push(data.getFloat64(72,true));
+		return geoJson;
+	}else{
+		num = geoJson.coordinates.length;
+	}
+	var zOffset = 56 + (num<<4);
+	geoJson.coordinates =  parseZPointArray(data,zOffset,num,geoJson.coordinates);
+	return geoJson;
+}
+function parsePolyline(data,trans){
+	var out = {};
+	out.bbox = [
+		data.getFloat64(0,true),
+		data.getFloat64(8,true),
+		data.getFloat64(16,true),
+		data.getFloat64(24,true)
+	];
+	var numParts = data.getInt32(32,true);
+	var num = data.getInt32(36,true);
+	var offset,partOffset;
+	if(numParts === 1){
+		out.type = "LineString";
+		offset = 44;
+		out.coordinates = parsePointArray(data,offset,num,trans);
+	}else{
+		out.type = "MultiLineString";
+		offset = 40 + (numParts<<2);
+		partOffset = 40;
+		out.coordinates = parseArrayGroup(data,offset,partOffset,numParts,num,trans);
+	}
+	return out;
+}
+function parseZPolyline(data,trans){
+	var geoJson = parsePolyline(data,trans);
+	var num = geoJson.coordinates.length;
+	var zOffset = 60 + (num<<4);
+	if(geoJson.type === "LineString"){
+		geoJson.coordinates =  parseZPointArray(data,zOffset,num,geoJson.coordinates);
+		return geoJson;
+	}else{
+		geoJson.coordinates =  parseZArrayGroup(data,zOffset,num,geoJson.coordinates);
+		return geoJson;
+	}
+}
+function polyFuncs(out){
+	if(out.type === "LineString"){
+		out.type = "Polygon";
+		out.coordinates = [out.coordinates];
+		return out;
+	}else{
+		out.coordinates = out.coordinates.reduce(polyReduce,[]);
+		if(out.coordinates.length === 1){
+			out.type = "Polygon";
+			out.coordinates = out.coordinates[0];
+			return out;
+		}else{
+			out.type = "MultiPolygon";
+			return out;
+		}
+	}
+}
+function parsePolygon(data,trans){
+	return polyFuncs(parsePolyline(data,trans));
+}
+function parseZPolygon(data,trans){
+	return polyFuncs(parseZPolyline(data,trans));
+}
+var shpFuncObj = {
+	1:parsePoint,
+	3:parsePolyline,
+	5:parsePolygon,
+	8:parseMultiPoint,
+	11:parseZPoint,
+	13:parseZPolyline,
+	15:parseZPolygon,
+	18:parseZMultiPoint
+};
+function shpFuncs (num,tran){
+	if(num>20){
+		num -= 20;
+	}
+	if(!(num in shpFuncObj)){
+		console.log("I don't know that shp type");
+		return function(){
+			return function(){};
+		};
+	}
+	var shpFunc = shpFuncObj[num];
+	var parseCoord = makeParseCoord(tran);
+	return function(data){
+		return shpFunc(data,parseCoord);
+	};
+}
+var getRow = function(buffer,offset){
+	var view = new DataView(buffer,offset,12);
+	var len = view.getInt32(4,false)<<1;
+	var data = new DataView(buffer,offset+12,len-4);
+	
+	return {
+		id:view.getInt32(0,false),
+		len:len,
+		data:data,
+		type:view.getInt32(8,true)
+	};
+};
+
+var getRows = function(buffer,parseShape){
+	var offset=100;
+	var len = buffer.byteLength;
+	var out = [];
+	var current;
+	while(offset<len){
+		current = getRow(buffer,offset);
+		offset += 8;
+		offset += current.len;
+		if(current.type){
+			out.push(parseShape(current.data));
+		}
+	}
+	return out;
+};
+function makeParseCoord(trans){
+	if(trans){
+		return function(data,offset){
+			return trans.inverse([data.getFloat64(offset,true),data.getFloat64(offset+8,true)]);
+		};
+	}else{
+		return function(data,offset){
+			return [data.getFloat64(offset,true),data.getFloat64(offset+8,true)];
+		};
+	}
+}
+return function(buffer,trans){
+	var headers = parseHeader(buffer);
+	return getRows(buffer,shpFuncs(headers.shpCode,trans));
+};
+});
+
+define('shp/parseDbf',[],function(){
+function dbfHeader(buffer){
+    var data = new DataView(buffer);
+	var out = {}
+	out.lastUpdated = new Date(data.getUint8(1,true)+1900,data.getUint8(2,true),data.getUint8(3,true));
+	out.records = data.getUint32(4,true);
+	out.headerLen = data.getUint16(8,true);
+	out.recLen = data.getUint16(10,true)
+	return out;
+}
+
+function dbfRowHeader(buffer){
+	var data = new DataView(buffer);
+	var out = [];
+	var offset = 32;
+	while(true){
+		out.push({
+			name : String.fromCharCode.apply(this,(new Uint8Array(buffer,offset,10))).replace(/\0|\s+$/g,''),
+			dataType : String.fromCharCode(data.getUint8(offset+11)),
+			len : data.getUint8(offset+16),
+			decimal : data.getUint8(offset+17)
+		});
+		if(data.getUint8(offset+32)===13){
+			break;
+		}else{
+			offset+=32;
+		}
+	}
+	return out;
+}
+var rowFuncs = function(buffer,offset,len,type){
+	var data = (new Uint8Array(buffer,offset,len));
+	var textData = String.fromCharCode.apply(this,data).replace(/\0|\s+$/g,'');
+	if(type === 'N'){
+		return parseFloat(textData,10);
+	} else if (type === 'D') {
+		return new Date(textData.slice(0,4), parseInt(textData.slice(4,6),10)-1, textData.slice(6,8));
+	} else {
+		return textData;
+	}
+}
+function parseRow(buffer,offset,rowHeaders){
+	var out={};
+	var i = 0;
+	var len = rowHeaders.length;
+	var field;
+	var header;
+	while(i<len){
+		header = rowHeaders[i];
+		field = rowFuncs(buffer,offset,header.len,header.dataType);
+		offset += header.len;
+		if(typeof field !== 'undefined'){
+			out[header.name]=field;
+		}
+		i++;
+	}
+	return out;
+}
+return function(buffer){
+	var rowHeaders = dbfRowHeader(buffer);
+	var header = dbfHeader(buffer);
+	var offset = ((rowHeaders.length+1)<<5)+2;
+	var recLen = header.recLen;
+	var records = header.records;
+	var data = new DataView(buffer);
+	var out = [];
+	while(records){
+		out.push(parseRow(buffer,offset,rowHeaders));
+		offset += recLen;
+		records--;
+	}
+	return out;
+}
+});
+
+define('shp',['proj4','shp/unzip','shp/binaryajax','shp/parseShp','shp/parseDbf','shp/lie'],function(proj4,unzip,binaryAjax,parseShp,parseDbf,deferred){
+function shp(base){
+    return shp.getShapefile(base);
+};
+shp.combine=function(arr){
+	var out = {};
+	out.type="FeatureCollection";
+	out.features=[];
+	var i = 0;
+	var len = arr[0].length;
+	while(i<len){
+		out.features.push({
+			"type": "Feature",
+			"geometry": arr[0][i],
+			"properties": arr[1][i]
+		});
+		i++;
+	}
+	return out;
+};
+shp.parseZip = function(buffer){
+		var key;
+		var zip=unzip(buffer);
+		var names = [];
+		for(key in zip){
+			if(key.slice(-3).toLowerCase()==="shp"){
+				names.push(key.slice(0,-4));
+			}else if(key.slice(-3).toLowerCase()==="dbf"){
+				zip[key]=parseDbf(zip[key]);
+			}else if(key.slice(-3).toLowerCase()==="prj"){
+				zip[key]=proj4(String.fromCharCode.apply(null,new Uint8Array(zip[key])));
+			}else if(key.slice(-7).toLowerCase()==="geojson"){
+				names.push(key);
+			}
+		}
+	var geojson = names.map(function(name){
+		var parsed;
+		if(name.slice(-7).toLowerCase()==="geojson"){
+			parsed = JSON.parse(zip[name]);
+			parsed.fileName = name.slice(0,-8);
+		}else{
+			parsed =  shp.combine([parseShp(zip[name +'.shp'],zip[name +'.prj']),zip[name +'.dbf']]);
+			parsed.fileName = name;
+		}
+		return parsed;
+	});
+	if(geojson.length === 1){
+		return geojson[0];
+	}else{
+		return geojson;
+	}
+};
+function getZip(base){
+	return binaryAjax(base).then(shp.parseZip);
+}
+shp.getShapefile = function(base){
+	if(typeof base === 'string'){
+		if(base.slice(-4)==='.zip'){
+			return getZip(base);
+		}else{ 
+		return deferred.all([
+			deferred.all([
+				binaryAjax(base+'.shp'),
+				binaryAjax(base+'.prj')
+			]).then(function(args){
+				return parseShp(args[0],args[1]?proj4(args[1]):false);
+			}),
+			binaryAjax(base+'.dbf').then(parseDbf)
+		]).then(shp.combine)}
+	}else{
+		return deferred.resolve(shp.parseZip(base));
+	}
+};
+return shp;
+});
+  return require('shp');
+}));

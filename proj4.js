@@ -903,7 +903,7 @@ any commodities, software, or technical data.
 
 });
 
-define('proj4/Point',['./mgrs'],function(mgrs) {
+define('proj4/Point',['proj4/mgrs'],function(mgrs) {
   function Point(x, y, z) {
     if (!(this instanceof Point)) {
       return new Point(x, y, z);
@@ -1845,7 +1845,7 @@ define('proj4/global',[],function() {
   };
 });
 
-define('proj4/projString',['./common', './constants'], function(common, constants) {
+define('proj4/projString',['proj4/common', 'proj4/constants'], function(common, constants) {
   return function(defData) {
     var self = {};
 
@@ -1956,13 +1956,211 @@ define('proj4/projString',['./common', './constants'], function(common, constant
     return self;
   };
 });
-define('proj4/defs',['./common','./constants','./global','./projString'],function(common, constants,globals,parseProj) {
+define('proj4/wkt',['proj4/extend','proj4/constants','proj4/common'],function(extend,constants,common) {
+  function mapit(obj, key, v) {
+    obj[key] = v.map(function(aa) {
+      var o = {};
+      sExpr(aa, o);
+      return o;
+    }).reduce(function(a, b) {
+      return extend(a, b);
+    }, {});
+  }
+
+  function sExpr(v, obj) {
+    var key;
+    if (!Array.isArray(v)) {
+      obj[v] = true;
+      return;
+    }
+    else {
+      key = v.shift();
+      if (key === 'PARAMETER') {
+        key = v.shift();
+      }
+      if (v.length === 1) {
+        if (Array.isArray(v[0])) {
+          obj[key] = {};
+          sExpr(v[0], obj[key]);
+        }
+        else {
+          obj[key] = v[0];
+        }
+      }
+      else if (!v.length) {
+        obj[key] = true;
+      }
+      else if (key === 'TOWGS84') {
+        obj[key] = v;
+      }
+      else {
+        obj[key] = {};
+        if (['UNIT', 'PRIMEM', 'VERT_DATUM'].indexOf(key) > -1) {
+          obj[key] = {
+            name: v[0].toLowerCase(),
+            convert: v[1]
+          };
+          if (v.length === 3) {
+            obj[key].auth = v[2];
+          }
+        }
+        else if (key === 'SPHEROID') {
+          obj[key] = {
+            name: v[0],
+            a: v[1],
+            rf: v[2]
+          };
+          if (v.length === 4) {
+            obj[key].auth = v[3];
+          }
+        }
+        else if (['GEOGCS', 'GEOCCS', 'DATUM', 'VERT_CS', 'COMPD_CS', 'LOCAL_CS', 'FITTED_CS', 'LOCAL_DATUM'].indexOf(key) > -1) {
+          v[0] = ['name', v[0]];
+          mapit(obj, key, v);
+        }
+        else if (v.every(function(aa) {
+          return Array.isArray(aa);
+        })) {
+          mapit(obj, key, v);
+        }
+        else {
+          sExpr(v, obj[key]);
+        }
+      }
+    }
+  }
+  function rename(obj, params){
+    var outName=params[0];
+    var inName = params[1];
+    if(!(outName in obj)&&(inName in obj)){
+      obj[outName]=obj[inName];
+      if(params.length===3){
+        obj[outName]=params[2](obj[outName]);
+      }
+    }
+  }
+  function d2r(input){
+    return input*common.D2R;
+  }
+  function cleanWKT(wkt){
+    if(wkt.type === 'GEOGCS'){
+      wkt.projName = 'longlat';
+    }else if(wkt.type === 'LOCAL_CS'){
+      wkt.projName = 'identity';
+      wkt.local=true;
+    }else{
+      wkt.projName = constants.wktProjections[wkt.PROJECTION];
+    }
+    if(wkt.UNIT){
+      wkt.units=wkt.UNIT.name.toLowerCase();
+      if(wkt.units === 'metre'){
+        wkt.units = 'meter';
+      }
+      if(wkt.UNIT.convert){
+        wkt.to_meter=parseFloat(wkt.UNIT.convert,10);
+      }
+    }
+    
+    if(wkt.GEOGCS){
+      //if(wkt.GEOGCS.PRIMEM&&wkt.GEOGCS.PRIMEM.convert){
+      //  wkt.from_greenwich=wkt.GEOGCS.PRIMEM.convert*common.D2R;
+      //}
+      if(wkt.GEOGCS.DATUM){
+        wkt.datumCode=wkt.GEOGCS.DATUM.name.toLowerCase();
+      }else{
+        wkt.datumCode=wkt.GEOGCS.name.toLowerCase();
+      }
+      if(wkt.datumCode.slice(0,2)==='d_'){
+        wkt.datumCode=wkt.datumCode.slice(2);
+      }
+      if(wkt.datumCode==='new_zealand_geodetic_datum_1949' || wkt.datumCode === 'new_zealand_1949'){
+        wkt.datumCode='nzgd49';
+      }
+      if(wkt.datumCode === "wgs_1984"){
+        if(wkt.PROJECTION==='Mercator_Auxiliary_Sphere'){
+          wkt.sphere = true;
+        }
+        wkt.datumCode = 'wgs84';
+      }
+      if(wkt.datumCode.slice(-6)==='_ferro'){
+        wkt.datumCode=wkt.datumCode.slice(0,-6);
+      }
+      if(wkt.datumCode.slice(-8)==='_jakarta'){
+        wkt.datumCode=wkt.datumCode.slice(0,-8);
+      }
+      if(wkt.GEOGCS.DATUM && wkt.GEOGCS.DATUM.SPHEROID){
+        wkt.ellps=wkt.GEOGCS.DATUM.SPHEROID.name.replace('_19','').replace(/[Cc]larke\_18/,'clrk');
+        if(wkt.ellps.toLowerCase().slice(0,13)==="international"){
+          wkt.ellps='intl';
+        }
+
+        wkt.a = wkt.GEOGCS.DATUM.SPHEROID.a;
+        wkt.rf = parseFloat(wkt.GEOGCS.DATUM.SPHEROID.rf,10);
+      }
+    }
+    if(wkt.b && !isFinite(wkt.b)){
+      wkt.b=wkt.a;
+    }
+    function toMeter(input){
+      var ratio = wkt.to_meter||1;
+      return parseFloat(input,10)*ratio;
+    }
+    var renamer = function(a){
+      return rename(wkt,a);
+    };
+    var list = [
+      ['standard_parallel_1','Standard_Parallel_1'],
+      ['standard_parallel_2','Standard_Parallel_2'],
+      ['false_easting','False_Easting'],
+      ['false_northing','False_Northing'],
+      ['central_meridian','Central_Meridian'],
+      ['latitude_of_origin','Latitude_Of_Origin'],
+      ['scale_factor','Scale_Factor'],
+      ['k0','scale_factor'],
+      ['latitude_of_center','Latitude_of_center'],
+      ['lat0','latitude_of_center',d2r],
+      ['longitude_of_center','Longitude_Of_Center'],
+      ['longc','longitude_of_center',d2r],
+      ['x0','false_easting',toMeter],
+      ['y0','false_northing',toMeter],
+      ['long0','central_meridian',d2r],
+      ['lat0','latitude_of_origin',d2r],
+      ['lat0','standard_parallel_1',d2r],
+      ['lat1','standard_parallel_1',d2r],
+      ['lat2','standard_parallel_2',d2r],
+      ['alpha','azimuth',d2r],
+      ['srsCode','name']
+    ];
+    list.forEach(renamer);
+    if(!wkt.long0&&wkt.longc&&(wkt.PROJECTION==='Albers_Conic_Equal_Area'||wkt.PROJECTION==="Lambert_Azimuthal_Equal_Area")){
+      wkt.long0=wkt.longc;
+    }
+  }
+  return function(wkt, self) {
+    var lisp = JSON.parse(("," + wkt).replace(/\,([A-Z_0-9]+?)(\[)/g, ',["$1",').slice(1).replace(/\,([A-Z_0-9]+?)\]/g, ',"$1"]'));
+    var type = lisp.shift();
+    var name = lisp.shift();
+    lisp.unshift(['name', name]);
+    lisp.unshift(['type', type]);
+    lisp.unshift('output');
+    var obj = {};
+    sExpr(lisp, obj);
+    cleanWKT(obj.output);
+    return extend(self,obj.output);
+  };
+});
+
+define('proj4/defs',['proj4/common','proj4/constants','proj4/global','proj4/projString','proj4/wkt'],function(common, constants,globals,parseProj,wkt) {
 
   function defs(name) {
     /*global console*/
     var that = this;
     if (arguments.length === 2) {
-      defs[name] = parseProj(arguments[1]);
+      if(arguments[1][0]==='+'){
+        defs[name] = parseProj(arguments[1]);
+      }else{
+        defs[name] = wkt(arguments[1]);
+      }
     }
     else if (arguments.length === 1) {
       if (Array.isArray(name)) {
@@ -1999,7 +2197,7 @@ define('proj4/defs',['./common','./constants','./global','./projString'],functio
   return defs;
 });
 
-define('proj4/datum',['./common'],function(common) {
+define('proj4/datum',['proj4/common'],function(common) {
   var datum = function(proj) {
     if (!(this instanceof datum)) {
       return new datum(proj);
@@ -2407,7 +2605,7 @@ define('proj4/projCode/longlat',['require','exports','module'],function(require,
   exports.forward = identity;
   exports.inverse = identity;
 });
-define('proj4/projCode/tmerc',['../common'],function(common) {
+define('proj4/projCode/tmerc',['proj4/common'],function(common) {
   return {
     init: function() {
       this.e0 = common.e0fn(this.es);
@@ -2538,7 +2736,7 @@ define('proj4/projCode/tmerc',['../common'],function(common) {
   };
 });
 
-define('proj4/projCode/utm',['../common','./tmerc'],function(common,tmerc) {
+define('proj4/projCode/utm',['proj4/common','proj4/projCode/tmerc'],function(common,tmerc) {
   return {
 
     dependsOn: 'tmerc',
@@ -2561,7 +2759,7 @@ define('proj4/projCode/utm',['../common','./tmerc'],function(common,tmerc) {
   };
 });
 
-define('proj4/projCode/gauss',['../common'],function(common) {
+define('proj4/projCode/gauss',['proj4/common'],function(common) {
   return {
 
     init: function() {
@@ -2609,7 +2807,7 @@ define('proj4/projCode/gauss',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/sterea',['../common','./gauss'],function(common,gauss) {
+define('proj4/projCode/sterea',['proj4/common','proj4/projCode/gauss'],function(common,gauss) {
   return {
 
     init: function() {
@@ -2756,7 +2954,7 @@ define('proj4/projCode/somerc',[],function() {
 
 });
 
-define('proj4/projCode/omerc',['../common'],function(common) {
+define('proj4/projCode/omerc',['proj4/common'],function(common) {
   return {
 
     /* Initialize the Oblique Mercator  projection
@@ -2922,7 +3120,7 @@ define('proj4/projCode/omerc',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/lcc',['../common'],function(common) {
+define('proj4/projCode/lcc',['proj4/common'],function(common) {
   return {
     init: function() {
 
@@ -3055,7 +3253,7 @@ define('proj4/projCode/lcc',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/krovak',['../common'],function(common) {
+define('proj4/projCode/krovak',['proj4/common'],function(common) {
   return {
 
     init: function() {
@@ -3170,7 +3368,7 @@ define('proj4/projCode/krovak',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/cass',['../common'],function(common) {
+define('proj4/projCode/cass',['proj4/common'],function(common) {
   return {
     init: function() {
       if (!this.sphere) {
@@ -3268,7 +3466,7 @@ define('proj4/projCode/cass',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/laea',['../common'],function(common) {
+define('proj4/projCode/laea',['proj4/common'],function(common) {
   /*
   reference
     "New Equal-Area Map Projections for Noncircular Regions", John P. Snyder,
@@ -3609,7 +3807,7 @@ define('proj4/projCode/laea',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/merc',['../common'],function(common) {
+define('proj4/projCode/merc',['proj4/common'],function(common) {
   return {
     init: function() {
       var con = this.b / this.a;
@@ -3700,7 +3898,7 @@ define('proj4/projCode/merc',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/aea',['../common'],function(common) {
+define('proj4/projCode/aea',['proj4/common'],function(common) {
   return {
     init: function() {
 
@@ -3824,7 +4022,7 @@ define('proj4/projCode/aea',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/gnom',['../common'],function(common) {
+define('proj4/projCode/gnom',['proj4/common'],function(common) {
   /*
   reference:
     Wolfram Mathworld "Gnomonic Projection"
@@ -3928,7 +4126,7 @@ define('proj4/projCode/gnom',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/cea',['../common'],function(common) {
+define('proj4/projCode/cea',['proj4/common'],function(common) {
 /*
   reference:  
     "Cartographic Projection Procedures for the UNIX Environment-
@@ -3995,7 +4193,7 @@ define('proj4/projCode/cea',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/eqc',['../common'],function(common) {
+define('proj4/projCode/eqc',['proj4/common'],function(common) {
   return {
     init: function() {
 
@@ -4040,7 +4238,7 @@ define('proj4/projCode/eqc',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/poly',['../common'],function(common) {
+define('proj4/projCode/poly',['proj4/common'],function(common) {
   return {
 
     /* Initialize the POLYCONIC projection
@@ -4166,7 +4364,7 @@ define('proj4/projCode/poly',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/nzmg',['../common'],function(common) {
+define('proj4/projCode/nzmg',['proj4/common'],function(common) {
   /*
   reference
     Department of Land and Survey Technical Circular 1973/32
@@ -4389,7 +4587,7 @@ define('proj4/projCode/nzmg',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/mill',['../common'],function(common) {
+define('proj4/projCode/mill',['proj4/common'],function(common) {
   /*
   reference
     "New Equal-Area Map Projections for Noncircular Regions", John P. Snyder,
@@ -4437,7 +4635,7 @@ define('proj4/projCode/mill',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/sinu',['../common'],function(common) {
+define('proj4/projCode/sinu',['proj4/common'],function(common) {
   return {
 
     /* Initialize the Sinusoidal projection
@@ -4540,7 +4738,7 @@ define('proj4/projCode/sinu',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/moll',['../common'],function(common) {
+define('proj4/projCode/moll',['proj4/common'],function(common) {
   return {
 
     /* Initialize the Mollweide projection
@@ -4630,7 +4828,7 @@ define('proj4/projCode/moll',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/eqdc',['../common'],function(common) {
+define('proj4/projCode/eqdc',['proj4/common'],function(common) {
   return {
 
     /* Initialize the Equidistant Conic projection
@@ -4743,7 +4941,7 @@ define('proj4/projCode/eqdc',['../common'],function(common) {
   };
 });
 
-define('proj4/projCode/vandg',['../common'],function(common) {
+define('proj4/projCode/vandg',['proj4/common'],function(common) {
   return {
 
     /* Initialize the Van Der Grinten projection
@@ -4865,7 +5063,7 @@ define('proj4/projCode/vandg',['../common'],function(common) {
 
 });
 
-define('proj4/projCode/aeqd',['../common'],function(common) {
+define('proj4/projCode/aeqd',['proj4/common'],function(common) {
   return {
 
     init: function() {
@@ -5058,222 +5256,36 @@ define('proj4/projCode/aeqd',['../common'],function(common) {
 
 });
 
-define('proj4/projections',['require','exports','module','./projCode/longlat','./projCode/tmerc','./projCode/utm','./projCode/sterea','./projCode/somerc','./projCode/omerc','./projCode/lcc','./projCode/krovak','./projCode/cass','./projCode/laea','./projCode/merc','./projCode/aea','./projCode/gnom','./projCode/cea','./projCode/eqc','./projCode/poly','./projCode/nzmg','./projCode/mill','./projCode/sinu','./projCode/moll','./projCode/eqdc','./projCode/vandg','./projCode/aeqd','./projCode/longlat'],function(require, exports) {
-  exports.longlat = require('./projCode/longlat');
+define('proj4/projections',['require','exports','module','proj4/projCode/longlat','proj4/projCode/tmerc','proj4/projCode/utm','proj4/projCode/sterea','proj4/projCode/somerc','proj4/projCode/omerc','proj4/projCode/lcc','proj4/projCode/krovak','proj4/projCode/cass','proj4/projCode/laea','proj4/projCode/merc','proj4/projCode/aea','proj4/projCode/gnom','proj4/projCode/cea','proj4/projCode/eqc','proj4/projCode/poly','proj4/projCode/nzmg','proj4/projCode/mill','proj4/projCode/sinu','proj4/projCode/moll','proj4/projCode/eqdc','proj4/projCode/vandg','proj4/projCode/aeqd','proj4/projCode/longlat'],function(require, exports) {
+  exports.longlat = require('proj4/projCode/longlat');
   exports.identity = exports.longlat;
-  exports.tmerc = require('./projCode/tmerc');
-  exports.utm = require('./projCode/utm');
-  exports.sterea = require('./projCode/sterea');
-  exports.somerc = require('./projCode/somerc');
-  exports.omerc = require('./projCode/omerc');
-  exports.lcc = require('./projCode/lcc');
-  exports.krovak = require('./projCode/krovak');
-  exports.cass = require('./projCode/cass');
-  exports.laea = require('./projCode/laea');
-  exports.merc = require('./projCode/merc');
-  exports.aea = require('./projCode/aea');
-  exports.gnom = require('./projCode/gnom');
-  exports.cea = require('./projCode/cea');
-  exports.eqc = require('./projCode/eqc');
-  exports.poly = require('./projCode/poly');
-  exports.nzmg = require('./projCode/nzmg');
-  exports.mill = require('./projCode/mill');
-  exports.sinu = require('./projCode/sinu');
-  exports.moll = require('./projCode/moll');
-  exports.eqdc = require('./projCode/eqdc');
-  exports.vandg = require('./projCode/vandg');
-  exports.aeqd = require('./projCode/aeqd');
-  exports.longlat = require('./projCode/longlat');
+  exports.tmerc = require('proj4/projCode/tmerc');
+  exports.utm = require('proj4/projCode/utm');
+  exports.sterea = require('proj4/projCode/sterea');
+  exports.somerc = require('proj4/projCode/somerc');
+  exports.omerc = require('proj4/projCode/omerc');
+  exports.lcc = require('proj4/projCode/lcc');
+  exports.krovak = require('proj4/projCode/krovak');
+  exports.cass = require('proj4/projCode/cass');
+  exports.laea = require('proj4/projCode/laea');
+  exports.merc = require('proj4/projCode/merc');
+  exports.aea = require('proj4/projCode/aea');
+  exports.gnom = require('proj4/projCode/gnom');
+  exports.cea = require('proj4/projCode/cea');
+  exports.eqc = require('proj4/projCode/eqc');
+  exports.poly = require('proj4/projCode/poly');
+  exports.nzmg = require('proj4/projCode/nzmg');
+  exports.mill = require('proj4/projCode/mill');
+  exports.sinu = require('proj4/projCode/sinu');
+  exports.moll = require('proj4/projCode/moll');
+  exports.eqdc = require('proj4/projCode/eqdc');
+  exports.vandg = require('proj4/projCode/vandg');
+  exports.aeqd = require('proj4/projCode/aeqd');
+  exports.longlat = require('proj4/projCode/longlat');
   exports.identity = exports.longlat;
 });
 
-define('proj4/wkt',['./extend','./constants','./common'],function(extend,constants,common) {
-  function mapit(obj, key, v) {
-    obj[key] = v.map(function(aa) {
-      var o = {};
-      sExpr(aa, o);
-      return o;
-    }).reduce(function(a, b) {
-      return extend(a, b);
-    }, {});
-  }
-
-  function sExpr(v, obj) {
-    var key;
-    if (!Array.isArray(v)) {
-      obj[v] = true;
-      return;
-    }
-    else {
-      key = v.shift();
-      if (key === 'PARAMETER') {
-        key = v.shift();
-      }
-      if (v.length === 1) {
-        if (Array.isArray(v[0])) {
-          obj[key] = {};
-          sExpr(v[0], obj[key]);
-        }
-        else {
-          obj[key] = v[0];
-        }
-      }
-      else if (!v.length) {
-        obj[key] = true;
-      }
-      else if (key === 'TOWGS84') {
-        obj[key] = v;
-      }
-      else {
-        obj[key] = {};
-        if (['UNIT', 'PRIMEM', 'VERT_DATUM'].indexOf(key) > -1) {
-          obj[key] = {
-            name: v[0].toLowerCase(),
-            convert: v[1]
-          };
-          if (v.length === 3) {
-            obj[key].auth = v[2];
-          }
-        }
-        else if (key === 'SPHEROID') {
-          obj[key] = {
-            name: v[0],
-            a: v[1],
-            rf: v[2]
-          };
-          if (v.length === 4) {
-            obj[key].auth = v[3];
-          }
-        }
-        else if (['GEOGCS', 'GEOCCS', 'DATUM', 'VERT_CS', 'COMPD_CS', 'LOCAL_CS', 'FITTED_CS', 'LOCAL_DATUM'].indexOf(key) > -1) {
-          v[0] = ['name', v[0]];
-          mapit(obj, key, v);
-        }
-        else if (v.every(function(aa) {
-          return Array.isArray(aa);
-        })) {
-          mapit(obj, key, v);
-        }
-        else {
-          sExpr(v, obj[key]);
-        }
-      }
-    }
-  }
-  function rename(obj, params){
-    var outName=params[0];
-    var inName = params[1];
-    if(!(outName in obj)&&(inName in obj)){
-      obj[outName]=obj[inName];
-      if(params.length===3){
-        obj[outName]=params[2](obj[outName]);
-      }
-    }
-  }
-  function d2r(input){
-    return input*common.D2R;
-  }
-  function cleanWKT(wkt){
-    if(wkt.type === 'GEOGCS'){
-      wkt.projName = 'longlat';
-    }else if(wkt.type === 'LOCAL_CS'){
-      wkt.projName = 'identity';
-      wkt.local=true;
-    }else{
-      wkt.projName = constants.wktProjections[wkt.PROJECTION];
-    }
-    if(wkt.UNIT){
-      wkt.units=wkt.UNIT.name.toLowerCase();
-      if(wkt.units === 'metre'){
-        wkt.units = 'meter';
-      }
-      if(wkt.UNIT.convert){
-        wkt.to_meter=parseFloat(wkt.UNIT.convert,10);
-      }
-    }
-    
-    if(wkt.GEOGCS){
-      //if(wkt.GEOGCS.PRIMEM&&wkt.GEOGCS.PRIMEM.convert){
-      //  wkt.from_greenwich=wkt.GEOGCS.PRIMEM.convert*common.D2R;
-      //}
-      if(wkt.GEOGCS.DATUM){
-        wkt.datumCode=wkt.GEOGCS.DATUM.name.toLowerCase();
-      }else{
-        wkt.datumCode=wkt.GEOGCS.name.toLowerCase();
-      }
-      if(wkt.datumCode.slice(0,2)==='d_'){
-        wkt.datumCode=wkt.datumCode.slice(2);
-      }
-      if(wkt.datumCode==='new_zealand_geodetic_datum_1949' || wkt.datumCode === 'new_zealand_1949'){
-        wkt.datumCode='nzgd49';
-      }
-      if(wkt.datumCode.slice(-6)==='_ferro'){
-        wkt.datumCode=wkt.datumCode.slice(0,-6);
-      }
-      if(wkt.datumCode.slice(-8)==='_jakarta'){
-        wkt.datumCode=wkt.datumCode.slice(0,-8);
-      }
-      if(wkt.GEOGCS.DATUM && wkt.GEOGCS.DATUM.SPHEROID){
-        wkt.ellps=wkt.GEOGCS.DATUM.SPHEROID.name.replace('_19','').replace(/[Cc]larke\_18/,'clrk');
-        if(wkt.ellps.toLowerCase().slice(0,13)==="international"){
-          wkt.ellps='intl';
-        }
-        
-        wkt.a = wkt.GEOGCS.DATUM.SPHEROID.a;
-        wkt.rf = parseFloat(wkt.GEOGCS.DATUM.SPHEROID.rf,10);
-      }
-    }
-    if(wkt.b && !isFinite(wkt.b)){
-      wkt.b=wkt.a;
-    }
-    function toMeter(input){
-      var ratio = wkt.to_meter||1;
-      return parseFloat(input,10)*ratio;
-    }
-    var renamer = rename.bind(null,wkt);
-    var list = [
-      ['standard_parallel_1','Standard_Parallel_1'],
-      ['standard_parallel_2','Standard_Parallel_2'],
-      ['false_easting','False_Easting'],
-      ['false_northing','False_Northing'],
-      ['central_meridian','Central_Meridian'],
-      ['latitude_of_origin','Latitude_Of_Origin'],
-      ['scale_factor','Scale_Factor'],
-      ['k0','scale_factor'],
-      ['latitude_of_center','Latitude_of_center'],
-      ['lat0','latitude_of_center',d2r],
-      ['longitude_of_center','Longitude_Of_Center'],
-      ['longc','longitude_of_center',d2r],
-      ['x0','false_easting',toMeter],
-      ['y0','false_northing',toMeter],
-      ['long0','central_meridian',d2r],
-      ['lat0','latitude_of_origin',d2r],
-      ['lat0','standard_parallel_1',d2r],
-      ['lat1','standard_parallel_1',d2r],
-      ['lat2','standard_parallel_2',d2r],
-      ['alpha','azimuth',d2r],
-      ['srsCode','name']
-    ];
-    list.forEach(renamer);
-    if(!wkt.long0&&wkt.longc&&(wkt.PROJECTION==='Albers_Conic_Equal_Area'||wkt.PROJECTION==="Lambert_Azimuthal_Equal_Area")){
-      wkt.long0=wkt.longc;
-    }
-  }
-  return function(wkt, self) {
-    var lisp = JSON.parse(("," + wkt).replace(/\,([A-Z_0-9]+?)(\[)/g, ',["$1",').slice(1).replace(/\,([A-Z_0-9]+?)\]/g, ',"$1"]'));
-    var type = lisp.shift();
-    var name = lisp.shift();
-    lisp.unshift(['name', name]);
-    lisp.unshift(['type', type]);
-    lisp.unshift('output');
-    var obj = {};
-    sExpr(lisp, obj);
-    cleanWKT(obj.output);
-    return extend(self,obj.output);
-  };
-});
-
-define('proj4/Proj',['./extend','./common','./defs','./constants','./datum','./projections','./wkt','./projString'],function(extend, common, defs,constants,datum,projections,wkt,projStr) {
+define('proj4/Proj',['proj4/extend','proj4/common','proj4/defs','proj4/constants','proj4/datum','proj4/projections','proj4/wkt','proj4/projString'],function(extend, common, defs,constants,datum,projections,wkt,projStr) {
   
   var proj = function proj(srsCode) {
     if (!(this instanceof proj)) {
@@ -5393,7 +5405,7 @@ define('proj4/Proj',['./extend','./common','./defs','./constants','./datum','./p
 
 });
 
-define('proj4/datum_transform',['./common'],function(common) {
+define('proj4/datum_transform',['proj4/common'],function(common) {
   return function(source, dest, point) {
     var wp, i, l;
 
@@ -5542,7 +5554,7 @@ define('proj4/adjust_axis',[],function() {
   };
 });
 
-define('proj4/transform',['./common','./datum_transform','./adjust_axis','./Proj'],function(common, datum_transform, adjust_axis,proj) {
+define('proj4/transform',['proj4/common','proj4/datum_transform','proj4/adjust_axis','proj4/Proj'],function(common, datum_transform, adjust_axis,proj) {
 
   return function(source, dest, point) {
     var wgs84;
@@ -5608,7 +5620,7 @@ define('proj4/transform',['./common','./datum_transform','./adjust_axis','./Proj
   };
 });
 
-define('proj4/core',['./Point','./Proj','./transform'],function(point,proj,transform) {
+define('proj4/core',['proj4/Point','proj4/Proj','proj4/transform'],function(point,proj,transform) {
   var wgs84 = proj('WGS84');
   return function(fromProj, toProj, coord) {
     var transformer = function(f, t, c) {

@@ -11,7 +11,8 @@ module.exports = function(grunt) {
           },
           name: 'node_modules/almond/almond',
           include: ['shp'],
-          optimize:'uglify2',
+          //optimize:'uglify2',
+          optimize:'none',
           uglify2:{
            mangle: true
           },
