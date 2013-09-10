@@ -29,8 +29,8 @@ describe('Shp', function(){
     	return pandr.then(function(a){return a.features}).should.eventually.deep.equal(pData.features);
     });
   });
-  describe('world boundaries unzipped', function(){
-  		var pandr =  shp('../files/TM_WORLD_BORDERS_SIMPL-0.3');
+  describe('senate unzipped', function(){
+  		var pandr =  shp('data/senate');
     it('should have the right keys', function(){
     	return pandr.should.eventually.contain.keys('type', 'features');
     });
@@ -38,14 +38,14 @@ describe('Shp', function(){
     	return pandr.should.eventually.have.property('type', 'FeatureCollection');
     });
     it('should have the right number of features',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.have.length(246);
+    	return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
     });
     it('should have the right things',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.deep.equal(WB.features);
+    	return pandr.then(function(a){return a.features.slice(0,10)}).should.eventually.deep.equal(senateData.features.slice(0,10));
     });
   });
-  describe('world boundaries zipped', function(){
-  		var pandr =  shp('../files/TM_WORLD_BORDERS_SIMPL-0.3.zip');
+  describe('senate zipped', function(){
+  		var pandr =  shp('data/senate.zip');
     it('should have the right keys', function(){
     	return pandr.should.eventually.contain.keys('type', 'features');
     });
@@ -53,10 +53,40 @@ describe('Shp', function(){
     	return pandr.should.eventually.have.property('type', 'FeatureCollection');
     });
     it('should have the right number of features',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.have.length(246);
+    	return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
     });
     it('should have the right things',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.deep.equal(WB.features);
+    	return pandr.then(function(a){return a.features.slice(0,10)}).should.eventually.deep.equal(senateData.features.slice(0,10));
+    });
+  });
+  describe('county unzipped', function(){
+  		var pandr =  shp('data/counties');
+    it('should have the right keys', function(){
+    	return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type',function(){
+    	return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features',function(){
+    	return pandr.then(function(a){return a.features}).should.eventually.have.length(14);
+    });
+    it('should have the right things',function(){
+    	return pandr.then(function(a){return a.features.slice(0,3)}).should.eventually.deep.equal(countyData.features.slice(0,3));
+    });
+  });
+  describe('county zipped', function(){
+  		var pandr =  shp('data/counties.zip');
+    it('should have the right keys', function(){
+    	return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type',function(){
+    	return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features',function(){
+    	return pandr.then(function(a){return a.features}).should.eventually.have.length(14);
+    });
+    it('should have the right things',function(){
+    	return pandr.then(function(a){return a.features.slice(0,3)}).should.eventually.deep.equal(countyData.features.slice(0,3));
     });
   });
 });

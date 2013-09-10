@@ -18,6 +18,8 @@
     "chai": "~1.7.2",
     "mocha": "~1.12.1",
     "mocha-as-promised": "~1.4.0",
-    "chai-as-promised": "~3.3.1"
+    "chai-as-promised": "~3.3.1",
+    "jszip":"https://github.com/calvinmetcalf/jszip/archive/master.tar.gz",
+    "proj4":"https://github.com/calvinmetcalf/proj4js/archive/abs.tar.gz"
   }
 }

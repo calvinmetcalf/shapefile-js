@@ -1,6 +1,10 @@
 requirejs.config({
     //By default load any module IDs from js/lib
     baseUrl: '..',
+     paths:{
+          	jszip:'node_modules/amdzip/jszip',
+          	proj4:'node_modules/proj4js/proj4'
+          },
     //except, if the module ID starts with "app",
     //load it from the js/app directory. paths
     //config is relative to the baseUrl, and
