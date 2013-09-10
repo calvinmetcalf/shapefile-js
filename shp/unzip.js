@@ -1,4 +1,4 @@
-define(['jszip/main'],function(JSZip){
+define(['jszip'],function(JSZip){
     return function(buffer){
         var zip = new JSZip(buffer);
         var files = zip.file(/.+/);
