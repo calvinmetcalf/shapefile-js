@@ -89,4 +89,19 @@ describe('Shp', function(){
     	return pandr.then(function(a){return a.features.slice(0,3)}).should.eventually.deep.equal(countyData.features.slice(0,3));
     });
   });
+  describe('trains zipped', function(){
+  		var pandr =  shp('data/train_stations.zip');
+    it('should have the right keys', function(){
+    	return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type',function(){
+    	return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features',function(){
+    	return pandr.then(function(a){return a.features}).should.eventually.have.length(361);
+    });
+    it('should have the right things',function(){
+    	return pandr.then(function(a){return a.features}).should.eventually.deep.equal(trainData.features);
+    });
+  });
 });
