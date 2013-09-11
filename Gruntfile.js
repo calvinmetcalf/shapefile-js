@@ -6,7 +6,7 @@ module.exports = function(grunt) {
           out: "./dist/shp.js",
           baseUrl: ".",
           paths:{
-          	jszip:'node_modules/amdzip/jszip',
+          	jszip:'node_modules/jszip/jszip',
           	proj4:'node_modules/proj4js/proj4'
           },
           wrap: {

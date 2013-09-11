@@ -21,11 +21,12 @@
       <script type="text/javascript">
      curl.config({
     //By default load any module IDs from js/lib
-    baseUrl: '..',
-     paths:{
-          	jszip:'node_modules/amdzip/jszip',
-          	proj4:'node_modules/proj4js/proj4'
-          },
+    baseUrl: '../dist',
+     //paths:{
+       //   	jszip:'node_modules/jszip/jszip',
+         // 	proj4:'node_modules/proj4js/proj4'
+          
+          //},
     use: {
         leaflet: {
             attach: 'leaflet'
