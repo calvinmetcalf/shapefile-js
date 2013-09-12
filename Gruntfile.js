@@ -1,4 +1,12 @@
+var estraverse = require('estraverse');
+var esprima = require('esprima');
+var escodegen = require('escodegen');
 module.exports = function(grunt) {
+	function rename(){
+		var ast = esprima.parse(grunt.file.read('./dist/shp.js'));
+		estraverse.traverse(ast,{leave:function(node, parent) {if (node.type == 'Identifier'&&node.name==='require'){node.name = '___forBrowserify___';}}});
+		grunt.file.write('./dist/shp.js',escodegen.generate(ast));
+	}
 	grunt.initConfig({
 		pkg: grunt.file.readJSON('package.json'),
 		requirejs:{
@@ -27,5 +35,6 @@ module.exports = function(grunt) {
       });
 	grunt.loadNpmTasks('grunt-contrib-requirejs');
 	grunt.registerTask('test', ['connect','mocha_phantomjs']);
-	grunt.registerTask('default', ['requirejs']);
+	grunt.registerTask('rename',rename);
+	grunt.registerTask('default', ['requirejs','rename']);
 }

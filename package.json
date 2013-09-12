@@ -1,6 +1,6 @@
 {
-  "name": "shp",
-  "version": "1.3.3",
+  "name": "shpjs",
+  "version": "1.4.0",
   "description": "A binary shapefile loader, for javascript. Many caveats:",
   "main": "dist/shp.js",
   "repository": {
@@ -20,7 +20,13 @@
     "mocha-as-promised": "~1.4.0",
     "chai-as-promised": "~3.3.1",
     "proj4": "https://github.com/calvinmetcalf/proj4js/archive/abs.tar.gz",
-    "jszip": "~0.1.1"
+    "jszip": "~0.1.1",
+    "estraverse": "~1.3.1",
+    "escodegen": "0.0.27",
+    "esprima": "~1.0.4"
+  },
+  "jam": {
+    "name": "shp"
   },
   "categories": [
     "Geographic",
