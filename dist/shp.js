@@ -3214,7 +3214,7 @@
                         this.b = v.finish(), this.c = this.b.length;
                         break;
                     case j:
-                        var I, P, E, k, N, z, L, R, O, T, q, D, F, U, B, G = new e(d ? new Uint8Array(this.b.buffer) : this.b, this.c), H = [
+                        var I, P, E, k, N, z, L, O, R, T, q, D, F, U, B, G = new e(d ? new Uint8Array(this.b.buffer) : this.b, this.c), H = [
                                 16,
                                 17,
                                 18,
@@ -3235,13 +3235,13 @@
                                 1,
                                 15
                             ], J = Array(19);
-                        for (I = j, G.a(1, 1, c), G.a(I, 2, c), P = n(this, a), z = o(this.j, 15), L = l(z), R = o(this.i, 7), O = l(R), E = 286; E > 257 && 0 === z[E - 1]; E--);
-                        for (k = 30; k > 1 && 0 === R[k - 1]; k--);
+                        for (I = j, G.a(1, 1, c), G.a(I, 2, c), P = n(this, a), z = o(this.j, 15), L = l(z), O = o(this.i, 7), R = l(O), E = 286; E > 257 && 0 === z[E - 1]; E--);
+                        for (k = 30; k > 1 && 0 === O[k - 1]; k--);
                         var W, Z, Q, V, X, K, Y = E, $ = k, te = new (d ? Uint32Array : Array)(Y + $), ee = new (d ? Uint32Array : Array)(316), ie = new (d ? Uint8Array : Array)(19);
                         for (W = Z = 0; Y > W; W++)
                             te[Z++] = z[W];
                         for (W = 0; $ > W; W++)
-                            te[Z++] = R[W];
+                            te[Z++] = O[W];
                         if (!d)
                             for (W = 0, V = ie.length; V > W; ++W)
                                 ie[W] = 0;
@@ -3287,8 +3287,8 @@
                                 L,
                                 z
                             ], ce = [
-                                O,
-                                R
+                                R,
+                                O
                             ];
                         for (he = fe[0], oe = fe[1], ue = ce[0], le = ce[1], se = 0, re = P.length; re > se; ++se)
                             if (ae = P[se], G.a(he[ae], oe[ae], c), ae > 256)
@@ -4852,20 +4852,24 @@
             return u;
         };
     }), define('shp', [
+        'require',
         'proj4',
         'shp/unzip',
         'shp/binaryajax',
         'shp/parseShp',
         'shp/parseDbf',
         'shp/lie'
-    ], function (t, e, i, s, r, a) {
-        function n(t) {
-            return n.getShapefile(t);
+    ], function (t) {
+        function e(t, i) {
+            return e.getShapefile(t, i);
         }
-        function h(t) {
-            return i(t).then(n.parseZip);
+        function i(t, i) {
+            return a(t).then(function (t) {
+                return e.parseZip(t, i);
+            });
         }
-        return n.combine = function (t) {
+        var s = t('proj4'), r = t('shp/unzip'), a = t('shp/binaryajax'), n = t('shp/parseShp'), h = t('shp/parseDbf'), o = t('shp/lie');
+        return e.combine = function (t) {
             var e = {};
             e.type = 'FeatureCollection', e.features = [];
             for (var i = 0, s = t[0].length; s > i;)
@@ -4875,28 +4879,29 @@
                     properties: t[1][i]
                 }), i++;
             return e;
-        }, n.parseZip = function (i) {
-            var a, h = e(i), o = [];
-            for (a in h)
-                'shp' === a.slice(-3).toLowerCase() ? o.push(a.slice(0, -4)) : 'dbf' === a.slice(-3).toLowerCase() ? h[a] = r(h[a]) : 'prj' === a.slice(-3).toLowerCase() ? h[a] = t(String.fromCharCode.apply(null, new Uint8Array(h[a]))) : 'geojson' === a.slice(-7).toLowerCase() && o.push(a);
-            var u = o.map(function (t) {
-                    var e;
-                    return 'geojson' === t.slice(-7).toLowerCase() ? (e = JSON.parse(h[t]), e.fileName = t.slice(0, -8)) : (e = n.combine([
-                        s(h[t + '.shp'], h[t + '.prj']),
-                        h[t + '.dbf']
-                    ]), e.fileName = t), e;
+        }, e.parseZip = function (t, i) {
+            var a, o = r(t), u = [];
+            i = i || [];
+            for (a in o)
+                'shp' === a.slice(-3).toLowerCase() ? u.push(a.slice(0, -4)) : 'dbf' === a.slice(-3).toLowerCase() ? o[a] = h(o[a]) : 'prj' === a.slice(-3).toLowerCase() ? o[a] = s(String.fromCharCode.apply(null, new Uint8Array(o[a]))) : ('json' === a.slice(-4).toLowerCase() || i.indexOf(a.split('.').pop()) > -1) && u.push(a);
+            var l = u.map(function (t) {
+                    var s;
+                    return 'json' === t.slice(-4).toLowerCase() ? (s = JSON.parse(o[t]), s.fileName = t.slice(0, -8)) : i.indexOf(a.split('.').pop()) > -1 ? (s = o[t], s.fileName = t) : (s = e.combine([
+                        n(o[t + '.shp'], o[t + '.prj']),
+                        o[t + '.dbf']
+                    ]), s.fileName = t), s;
                 });
-            return 1 === u.length ? u[0] : u;
-        }, n.getShapefile = function (e) {
-            return 'string' == typeof e ? '.zip' === e.slice(-4) ? h(e) : a.all([
-                a.all([
-                    i(e + '.shp'),
-                    i(e + '.prj')
-                ]).then(function (e) {
-                    return s(e[0], e[1] ? t(e[1]) : !1);
+            return 1 === l.length ? l[0] : l;
+        }, e.getShapefile = function (t, r) {
+            return 'string' == typeof t ? '.zip' === t.slice(-4) ? i(t, r) : o.all([
+                o.all([
+                    a(t + '.shp'),
+                    a(t + '.prj')
+                ]).then(function (t) {
+                    return n(t[0], t[1] ? s(t[1]) : !1);
                 }),
-                i(e + '.dbf').then(r)
-            ]).then(n.combine) : a.resolve(n.parseZip(e));
-        }, n;
+                a(t + '.dbf').then(h)
+            ]).then(e.combine) : o.resolve(e.parseZip(t));
+        }, e;
     }), ___forBrowserify___('shp');
 });
