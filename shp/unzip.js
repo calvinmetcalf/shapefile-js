@@ -4,10 +4,10 @@ define(['jszip'],function(JSZip){
         var files = zip.file(/.+/);
         var out = {};
         files.forEach(function(a){
-	        if(a.name.slice(-7).toLowerCase()==="geojson"){
-		        out[a.name]=a.asText();
+	        if(a.name.slice(-3).toLowerCase()==="shp"||a.name.slice(-3).toLowerCase()==="dbf"){
+		        out[a.name]=a.asText();out[a.name]=a.asArrayBuffer();
 	        }else{
-		        out[a.name]=a.asArrayBuffer();
+		        out[a.name]=a.asText();
 	        }
         });
         return out;

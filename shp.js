@@ -35,7 +35,7 @@ shp.parseZip = function(buffer,whiteList){
 			}else if(key.slice(-3).toLowerCase()==="dbf"){
 				zip[key]=parseDbf(zip[key]);
 			}else if(key.slice(-3).toLowerCase()==="prj"){
-				zip[key]=proj4(String.fromCharCode.apply(null,new Uint8Array(zip[key])));
+				zip[key]=proj4(zip[key]);
 			}else if(key.slice(-4).toLowerCase()==="json"||whiteList.indexOf(key.split('.').pop())>-1){
 				names.push(key);
 			}
@@ -44,8 +44,8 @@ shp.parseZip = function(buffer,whiteList){
 		var parsed;
 		if(name.slice(-4).toLowerCase()==="json"){
 			parsed = JSON.parse(zip[name]);
-			parsed.fileName = name.slice(0,-8);
-		}else if(whiteList.indexOf(key.split('.').pop())>-1){
+			parsed.fileName = name.slice(0,name.lastIndexOf('.'));
+		}else if(whiteList.indexOf(name.slice(name.lastIndexOf('.')+1))>-1){
 			parsed = zip[name];
 			parsed.fileName = name;
 		}else{
