@@ -4487,7 +4487,7 @@
         return function (e) {
             var i = new t(e), s = i.file(/.+/), r = {};
             return s.forEach(function (t) {
-                r[t.name] = 'geojson' === t.name.slice(-7).toLowerCase() ? t.asText() : t.asArrayBuffer();
+                'shp' === t.name.slice(-3).toLowerCase() || 'dbf' === t.name.slice(-3).toLowerCase() ? (r[t.name] = t.asText(), r[t.name] = t.asArrayBuffer()) : r[t.name] = t.asText();
             }), r;
         };
     }), function (global, undefined) {
@@ -4883,10 +4883,10 @@
             var a, o = r(t), u = [];
             i = i || [];
             for (a in o)
-                'shp' === a.slice(-3).toLowerCase() ? u.push(a.slice(0, -4)) : 'dbf' === a.slice(-3).toLowerCase() ? o[a] = h(o[a]) : 'prj' === a.slice(-3).toLowerCase() ? o[a] = s(String.fromCharCode.apply(null, new Uint8Array(o[a]))) : ('json' === a.slice(-4).toLowerCase() || i.indexOf(a.split('.').pop()) > -1) && u.push(a);
+                'shp' === a.slice(-3).toLowerCase() ? u.push(a.slice(0, -4)) : 'dbf' === a.slice(-3).toLowerCase() ? o[a] = h(o[a]) : 'prj' === a.slice(-3).toLowerCase() ? o[a] = s(o[a]) : ('json' === a.slice(-4).toLowerCase() || i.indexOf(a.split('.').pop()) > -1) && u.push(a);
             var l = u.map(function (t) {
                     var s;
-                    return 'json' === t.slice(-4).toLowerCase() ? (s = JSON.parse(o[t]), s.fileName = t.slice(0, -8)) : i.indexOf(a.split('.').pop()) > -1 ? (s = o[t], s.fileName = t) : (s = e.combine([
+                    return 'json' === t.slice(-4).toLowerCase() ? (s = JSON.parse(o[t]), s.fileName = t.slice(0, t.lastIndexOf('.'))) : i.indexOf(t.slice(t.lastIndexOf('.') + 1)) > -1 ? (s = o[t], s.fileName = t) : (s = e.combine([
                         n(o[t + '.shp'], o[t + '.prj']),
                         o[t + '.dbf']
                     ]), s.fileName = t), s;
