@@ -1,7 +1,13 @@
-define(['proj4','shp/unzip','shp/binaryajax','shp/parseShp','shp/parseDbf','shp/lie'],function(proj4,unzip,binaryAjax,parseShp,parseDbf,deferred){
-function shp(base){
-    return shp.getShapefile(base);
-};
+define(function(require){
+	var proj4 = require('proj4');
+	var unzip = require('shp/unzip');
+	var binaryAjax = require('shp/binaryajax');
+	var parseShp = require('shp/parseShp');
+	var parseDbf = require('shp/parseDbf');
+	var deferred = require('shp/lie');
+function shp(base,whiteList){
+    return shp.getShapefile(base,whiteList);
+}
 shp.combine=function(arr){
 	var out = {};
 	out.type="FeatureCollection";
@@ -18,10 +24,11 @@ shp.combine=function(arr){
 	}
 	return out;
 };
-shp.parseZip = function(buffer){
+shp.parseZip = function(buffer,whiteList){
 		var key;
 		var zip=unzip(buffer);
 		var names = [];
+		whiteList = whiteList || [];
 		for(key in zip){
 			if(key.slice(-3).toLowerCase()==="shp"){
 				names.push(key.slice(0,-4));
@@ -29,15 +36,18 @@ shp.parseZip = function(buffer){
 				zip[key]=parseDbf(zip[key]);
 			}else if(key.slice(-3).toLowerCase()==="prj"){
 				zip[key]=proj4(String.fromCharCode.apply(null,new Uint8Array(zip[key])));
-			}else if(key.slice(-7).toLowerCase()==="geojson"){
+			}else if(key.slice(-4).toLowerCase()==="json"||whiteList.indexOf(key.split('.').pop())>-1){
 				names.push(key);
 			}
 		}
 	var geojson = names.map(function(name){
 		var parsed;
-		if(name.slice(-7).toLowerCase()==="geojson"){
+		if(name.slice(-4).toLowerCase()==="json"){
 			parsed = JSON.parse(zip[name]);
 			parsed.fileName = name.slice(0,-8);
+		}else if(whiteList.indexOf(key.split('.').pop())>-1){
+			parsed = zip[name];
+			parsed.fileName = name;
 		}else{
 			parsed =  shp.combine([parseShp(zip[name +'.shp'],zip[name +'.prj']),zip[name +'.dbf']]);
 			parsed.fileName = name;
@@ -50,13 +60,15 @@ shp.parseZip = function(buffer){
 		return geojson;
 	}
 };
-function getZip(base){
-	return binaryAjax(base).then(shp.parseZip);
+function getZip(base,whiteList){
+	return binaryAjax(base).then(function(a){
+		return shp.parseZip(a,whiteList);
+	});
 }
-shp.getShapefile = function(base){
+shp.getShapefile = function(base,whiteList){
 	if(typeof base === 'string'){
 		if(base.slice(-4)==='.zip'){
-			return getZip(base);
+			return getZip(base,whiteList);
 		}else{ 
 		return deferred.all([
 			deferred.all([
