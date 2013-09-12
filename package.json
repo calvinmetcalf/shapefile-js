@@ -26,7 +26,11 @@
     "esprima": "~1.0.4"
   },
   "jam": {
-    "name": "shp"
+    "name": "shp",
+    "include":[
+    	"dist/shp.js",
+    	"README.md"
+    ]
   },
   "categories": [
     "Geographic",
