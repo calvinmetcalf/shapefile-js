@@ -4902,6 +4902,6 @@
                 }),
                 a(t + '.dbf').then(h)
             ]).then(e.combine) : o.resolve(e.parseZip(t));
-        }, e;
+        }, e.deferred = o, e;
     }), ___forBrowserify___('shp');
 });

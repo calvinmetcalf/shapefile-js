@@ -83,5 +83,6 @@ shp.getShapefile = function(base,whiteList){
 		return deferred.resolve(shp.parseZip(base));
 	}
 };
+shp.deferred = deferred;
 return shp;
 });
