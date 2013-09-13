@@ -21,7 +21,7 @@
     "chai-as-promised": "~3.3.1",
     "proj4": "https://github.com/calvinmetcalf/proj4js/archive/abs.tar.gz",
     "jszip": "~0.1.1",
-    "grunt-browserifyify": "~0.3.1"
+    "grunt-browserifyify": "~0.3.3"
   },
   "jam": {
     "name": "shp",
