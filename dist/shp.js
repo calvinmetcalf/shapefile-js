@@ -1,7 +1,7 @@
 !function (t, e) {
     'function' == typeof define && define.amd ? define(e) : 'undefined' != typeof module ? module.exports = e() : t.shp = e();
 }(this, function () {
-    var requirejs, ___forBrowserify___, define;
+    var requirejs, ___forBrowserify6945553522091359___, define;
     return function (t) {
         function e(t, e) {
             return M.call(t, e);
@@ -86,7 +86,7 @@
                 p: s
             };
         }, c = {
-            ___forBrowserify___: function (t) {
+            ___forBrowserify6945553522091359___: function (t) {
                 return s(t);
             },
             exports: function (t) {
@@ -110,7 +110,7 @@
                         'module'
                     ] : r, g = 0; g < r.length; g += 1)
                     if (M = f(r[g], o), l = M.f, 'require' === l)
-                        b[g] = c.___forBrowserify___(i);
+                        b[g] = c.___forBrowserify6945553522091359___(i);
                     else if ('exports' === l)
                         b[g] = c.exports(i), _ = !0;
                     else if ('module' === l)
@@ -125,7 +125,7 @@
                 m = h.apply(p[i], b), i && (u && u.exports !== t && u.exports !== p[i] ? p[i] = u.exports : m === t && _ || (p[i] = m));
             } else
                 i && (p[i] = h);
-        }, requirejs = ___forBrowserify___ = l = function (e, i, s, r, a) {
+        }, requirejs = ___forBrowserify6945553522091359___ = l = function (e, i, s, r, a) {
             return 'string' == typeof e ? c[e] ? c[e](i) : n(f(e, i).f) : (e.splice || (m = e, i.splice ? (e = i, i = s, s = null) : e = t), i = i || function () {
             }, 'function' == typeof s && (s = r, r = a), r ? u(t, e, i, s) : setTimeout(function () {
                 u(t, e, i, s);
@@ -4903,5 +4903,5 @@
                 a(t + '.dbf').then(h)
             ]).then(e.combine) : o.resolve(e.parseZip(t));
         }, e.deferred = o, e;
-    }), ___forBrowserify___('shp');
+    }), ___forBrowserify6945553522091359___('shp');
 });

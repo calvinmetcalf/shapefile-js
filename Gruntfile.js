@@ -1,6 +1,4 @@
-var estraverse = require('estraverse');
-var esprima = require('esprima');
-var escodegen = require('escodegen');
+
 module.exports = function(grunt) {
 	function rename(){
 		var ast = esprima.parse(grunt.file.read('./dist/shp.js'));
@@ -31,10 +29,17 @@ module.exports = function(grunt) {
           preserveLicenseComments: false
         }
       }
-      }
+      },browserifyify:{
+        all:{
+            options:{
+                file:"./dist/shp.js"
+            }
+        }
+        }
       });
+    grunt.loadNpmTasks('grunt-browserifyify');
 	grunt.loadNpmTasks('grunt-contrib-requirejs');
 	grunt.registerTask('test', ['connect','mocha_phantomjs']);
-	grunt.registerTask('rename',rename);
+	grunt.registerTask('rename','browserifyify');
 	grunt.registerTask('default', ['requirejs','rename']);
 }
