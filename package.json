@@ -21,15 +21,13 @@
     "chai-as-promised": "~3.3.1",
     "proj4": "https://github.com/calvinmetcalf/proj4js/archive/abs.tar.gz",
     "jszip": "~0.1.1",
-    "estraverse": "~1.3.1",
-    "escodegen": "0.0.27",
-    "esprima": "~1.0.4"
+    "grunt-browserifyify": "~0.3.1"
   },
   "jam": {
     "name": "shp",
-    "include":[
-    	"dist/shp.js",
-    	"README.md"
+    "include": [
+      "dist/shp.js",
+      "README.md"
     ]
   },
   "categories": [
