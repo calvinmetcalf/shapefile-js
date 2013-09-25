@@ -1,7 +1,7 @@
 {
   "name": "shpjs",
-  "version": "1.5.2",
-  "description": "A binary shapefile loader, for javascript. Many caveats:",
+  "version": "2.0.0",
+  "description": "A binary shapefile loader, for javascript. Not many caveats",
   "main": "dist/shp.js",
   "repository": {
     "type": "git",
@@ -13,27 +13,25 @@
   "devDependencies": {
     "grunt-cli": "~0.1.9",
     "grunt": "~0.4.1",
-    "grunt-contrib-requirejs": "~0.4.1",
-    "almond": "~0.2.6",
     "chai": "~1.7.2",
     "mocha": "~1.12.1",
     "mocha-as-promised": "~1.4.0",
     "chai-as-promised": "~3.3.1",
-    "proj4": "https://github.com/calvinmetcalf/proj4js/archive/abs.tar.gz",
-    "jszip": "~0.1.1",
-    "estraverse": "~1.3.1",
-    "escodegen": "0.0.27",
-    "esprima": "~1.0.4"
+    "grunt-component": "~0.1.7"
   },
   "jam": {
     "name": "shp",
-    "include":[
-    	"dist/shp.js",
-    	"README.md"
+    "include": [
+      "dist/shp.js",
+      "README.md"
     ]
   },
   "categories": [
     "Geographic",
     "AJAX & Websockets"
-  ]
+  ],
+  "dependencies": {
+    "proj4": "~1.4.0",
+    "jszip": "~0.2.0"
+  }
 }

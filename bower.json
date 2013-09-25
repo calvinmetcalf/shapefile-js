@@ -1,0 +1,23 @@
+{
+  "name": "shp",
+  "version": "2.0.0",
+  "homepage": "https://github.com/calvinmetcalf/shapefile-js",
+  "authors": [
+    "Calvin Metcalf <calvin.metcalf@state.ma.us>"
+  ],
+  "description": "A binary shapefile loader, for javascript. Not many caveats",
+  "main": "dist/shp.js",
+  "keywords": [
+    "shp",
+    "gis",
+    "geojson"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
