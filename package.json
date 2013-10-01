@@ -17,7 +17,8 @@
     "mocha": "~1.12.1",
     "mocha-as-promised": "~1.4.0",
     "chai-as-promised": "~3.3.1",
-    "grunt-component": "~0.1.7"
+    "grunt-component": "~0.1.7",
+    "grunt-contrib-uglify": "~0.2.4"
   },
   "jam": {
     "name": "shp",
