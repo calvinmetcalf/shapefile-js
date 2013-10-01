@@ -16,7 +16,7 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 
 ##API
 
-Has a function `shp` which accepts a string which is the path the she shapefile minus the extention and returns a promise which resolves into geojson.
+Has a function `shp` which accepts a string which is the path the she shapefile minus the extension and returns a promise which resolves into geojson.
 
 ```javascript
 	//for the shapefiles in the folder called 'files' with the name pandr.shp
@@ -41,7 +41,7 @@ shp(buffer).then(function(geojson){});
 shp.parseZip(buffer)->returns zip
 ```
 If there is only one shp in the zipefile it returns geojson, if there are multiple then it will be an array.  All of the geojson objects have an extra key `fileName` the value of which is the 
-name of the shapefile minus the extention (I.E. the part of the name that's the same for all of them)
+name of the shapefile minus the extension (I.E. the part of the name that's the same for all of them)
 
 You could also load the arraybuffers seperately:
 
@@ -96,7 +96,7 @@ to
 </script>
 ```
 
-to send the worker a buffer from the file api you'd do (I'm omiting where you include the catiline script)
+to send the worker a buffer from the file api you'd do (I'm omitting where you include the catiline script)
 
 ```javascript
 var worker = cw(function(data){
@@ -127,7 +127,7 @@ worker.data(reader.result,[reader.result]).then(function(data){
 
 
 ##LICENSE
-Main library MIT license, origional version was less permisive but there is 0 code shared. Included libraries are under their respective lisenses which are:
+Main library MIT license, original version was less permissive but there is 0 code shared. Included libraries are under their respective lisenses which are:
 - [JSZip](https://github.com/Stuk/jszip/) by @Stuk MIT or GPLv3
 - [lie](https://github.com/calvinmetcalf/lie) by me and @RubenVerborgh MIT 
 - [setImmediate](https://github.com/NobleJS/setImmediate) by @NobleJS et al MIT
