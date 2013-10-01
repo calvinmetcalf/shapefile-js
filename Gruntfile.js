@@ -6,14 +6,24 @@ module.exports = function(grunt) {
 				options: {
 					args: {
 						out: 'dist',
-						name: '<%= pkg.name %>',
-						//"no-require":true,
+						name: 'shp',
 						standalone: 'shp'
 					}
 				}
 			}
-		}
+		},
+		uglify: {
+            options: {
+                report: 'gzip',
+                mangle: true
+            },
+            all: {
+                src: 'dist/shp.js',
+                dest: 'dist/shp.min.js'
+            }
+        }
 	});
+	grunt.loadNpmTasks('grunt-contrib-uglify');
 	grunt.loadNpmTasks('grunt-component');
-	grunt.registerTask('default', ['component']);
+	grunt.registerTask('default', ['component','uglify']);
 };
