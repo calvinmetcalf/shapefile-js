@@ -6,7 +6,7 @@ module.exports = function(grunt) {
 				options: {
 					args: {
 						out: 'dist',
-						name: '<%= pkg.name %>',
+						name: 'shp',
 						//"no-require":true,
 						standalone: 'shp'
 					}

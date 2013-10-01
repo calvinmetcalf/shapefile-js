@@ -1,8 +1,8 @@
 {
   "name": "shpjs",
-  "version": "2.0.0",
+  "version": "2.0.2",
   "description": "A binary shapefile loader, for javascript. Not many caveats",
-  "main": "dist/shp.js",
+  "main": "lib/index.js",
   "repository": {
     "type": "git",
     "url": "git://github.com/calvinmetcalf/shapefile-js.git"
@@ -21,6 +21,7 @@
   },
   "jam": {
     "name": "shp",
+    "main": "dist/shp.js",
     "include": [
       "dist/shp.js",
       "README.md"
@@ -31,7 +32,8 @@
     "AJAX & Websockets"
   ],
   "dependencies": {
-    "proj4": "~1.4.0",
-    "jszip": "~0.2.0"
+    "proj4": "~1.4.1",
+    "jszip": "~0.2.1",
+    "lie": "~2.0.5"
   }
 }
