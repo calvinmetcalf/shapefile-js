@@ -1,6 +1,6 @@
 {
   "name": "shpjs",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "A binary shapefile loader, for javascript. Not many caveats",
   "main": "lib/index.js",
   "repository": {
@@ -18,7 +18,8 @@
     "mocha-as-promised": "~1.4.0",
     "chai-as-promised": "~3.3.1",
     "grunt-component": "~0.1.7",
-    "grunt-contrib-uglify": "~0.2.4"
+    "grunt-contrib-uglify": "~0.2.4",
+    "grunt-contrib-jshint": "~0.6.4"
   },
   "jam": {
     "name": "shp",
@@ -35,6 +36,7 @@
   "dependencies": {
     "proj4": "~1.4.1",
     "jszip": "~0.2.1",
-    "lie": "~2.0.5"
+    "lie": "~2.0.5",
+    "parsedbf": "0.0.1"
   }
 }
