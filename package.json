@@ -1,6 +1,6 @@
 {
   "name": "shpjs",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "A binary shapefile loader, for javascript. Not many caveats",
   "main": "lib/index.js",
   "repository": {
@@ -27,7 +27,8 @@
     "include": [
       "dist/shp.js",
       "README.md"
-    ]
+    ],
+    "dependencies": {}
   },
   "categories": [
     "Geographic",
