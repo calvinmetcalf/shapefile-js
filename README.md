@@ -10,7 +10,7 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 
 - [Countries/zipfile](http://calvinmetcalf.github.io/shapefile-js)
 - [Google maps](http://calvinmetcalf.github.io/shapefile-js/site/map.html)
-- [Local Zipfile](http://calvinmetcalf.github.io/shapefile-js/localfile)
+- [Local Zipfile](http://leaflet.calvinmetcalf.com)
 - [Projected big with web workers](http://calvinmetcalf.github.io/shapefile-js/site/proj.html)
 - [Projected small](http://calvinmetcalf.github.io/shapefile-js/site/proj-small.html)
 
