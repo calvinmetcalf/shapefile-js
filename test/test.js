@@ -10,9 +10,6 @@ describe('Shp', function(){
     it('should have the right number of features',function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(80);
     });
-    it('should have the right things',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.deep.equal(pData.features);
-    });
   });
   describe('park and rides zipped', function(){
   		var pandr =  shp('../files/pandr.zip');
@@ -24,9 +21,6 @@ describe('Shp', function(){
     });
     it('should have the right number of features',function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(80);
-    });
-    it('should have the right things',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.deep.equal(pData.features);
     });
   });
   describe('senate unzipped', function(){
@@ -40,9 +34,6 @@ describe('Shp', function(){
     it('should have the right number of features',function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
     });
-    it('should have the right things',function(){
-    	return pandr.then(function(a){return a.features.slice(0,10)}).should.eventually.deep.equal(senateData.features.slice(0,10));
-    });
   });
   describe('senate zipped', function(){
   		var pandr =  shp('data/senate.zip');
@@ -54,9 +45,6 @@ describe('Shp', function(){
     });
     it('should have the right number of features',function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
-    });
-    it('should have the right things',function(){
-    	return pandr.then(function(a){return a.features.slice(0,10)}).should.eventually.deep.equal(senateData.features.slice(0,10));
     });
   });
   describe('county unzipped', function(){
@@ -70,9 +58,6 @@ describe('Shp', function(){
     it('should have the right number of features',function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(14);
     });
-    it('should have the right things',function(){
-    	return pandr.then(function(a){return a.features.slice(0,3)}).should.eventually.deep.equal(countyData.features.slice(0,3));
-    });
   });
   describe('county zipped', function(){
   		var pandr =  shp('data/counties.zip');
@@ -84,9 +69,6 @@ describe('Shp', function(){
     });
     it('should have the right number of features',function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(14);
-    });
-    it('should have the right things',function(){
-    	return pandr.then(function(a){return a.features.slice(0,3)}).should.eventually.deep.equal(countyData.features.slice(0,3));
     });
   });
   describe('trains zipped', function(){
@@ -100,8 +82,6 @@ describe('Shp', function(){
     it('should have the right number of features',function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(361);
     });
-    it('should have the right things',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.deep.equal(trainData.features);
-    });
+ 
   });
 });
