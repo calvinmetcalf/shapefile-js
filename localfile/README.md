@@ -1,1 +1,0 @@
-still early, be like a successful doctor and have lots of patients.
