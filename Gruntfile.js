@@ -1,14 +1,13 @@
 module.exports = function(grunt) {
 	grunt.initConfig({
 		pkg: grunt.file.readJSON('package.json'),
-		component: {
+		browserify: {
 			build: {
+				files: {
+					'dist/shp.js': ['lib/index.js']
+				},
 				options: {
-					args: {
-						out: 'dist',
-						name: 'shp',
-						standalone: 'shp'
-					}
+					standalone: 'shp',
 				}
 			}
 		},
@@ -31,6 +30,6 @@ module.exports = function(grunt) {
 	});
 	grunt.loadNpmTasks('grunt-contrib-jshint');
 	grunt.loadNpmTasks('grunt-contrib-uglify');
-	grunt.loadNpmTasks('grunt-component');
-	grunt.registerTask('default', ['jshint','component','uglify']);
+	grunt.loadNpmTasks('grunt-browserify');
+	grunt.registerTask('default', ['jshint','browserify','uglify']);
 };

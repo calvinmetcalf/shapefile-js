@@ -1,509 +1,2849 @@
-;(function(){
-
-/**
- * Require the given path.
- *
- * @param {String} path
- * @return {Object} exports
- * @api public
- */
-
-function require(path, parent, orig) {
-  var resolved = require.resolve(path);
-
-  // lookup failed
-  if (null == resolved) {
-    orig = orig || path;
-    parent = parent || 'root';
-    var err = new Error('Failed to require "' + orig + '" from "' + parent + '"');
-    err.path = orig;
-    err.parent = parent;
-    err.require = true;
-    throw err;
-  }
-
-  var module = require.modules[resolved];
-
-  // perform real require()
-  // by invoking the module's
-  // registered function
-  if (!module.exports) {
-    module.exports = {};
-    module.client = module.component = true;
-    module.call(this, module.exports, require.relative(resolved), module);
-  }
-
-  return module.exports;
+!function(e){"object"==typeof exports?module.exports=e():"function"==typeof define&&define.amd?define(e):"undefined"!=typeof window?window.shp=e():"undefined"!=typeof global?global.shp=e():"undefined"!=typeof self&&(self.shp=e())}(function(){var define,module,exports;
+return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+var promise = require('lie');
+function binaryAjax(url){
+	return promise(function(resolve,reject){
+		var type = url.slice(-3);
+		var ajax = new XMLHttpRequest();
+		ajax.open("GET",url,true);
+		if(type !== 'prj'){
+			ajax.responseType='arraybuffer';
+		}
+		ajax.addEventListener("load",function(){
+			if(ajax.status>399){
+				if(type==='prj'){
+					return resolve(false);
+				}else{
+					return reject(ajax.status);
+				}
+			}
+			resolve(ajax.response);
+		}, false);
+		ajax.send();
+	});
 }
+module.exports = binaryAjax;
 
-/**
- * Registered modules.
- */
+},{"lie":42}],2:[function(require,module,exports){
+var proj4 = require('proj4');
+var unzip = require('./unzip');
+var binaryAjax = require('./binaryajax');
+var all = require('lie-all');
+var parseShp = require('./parseShp');
+var parseDbf = require('parsedbf');
+var promise = require('lie');
 
-require.modules = {};
-
-/**
- * Registered aliases.
- */
-
-require.aliases = {};
-
-/**
- * Resolve `path`.
- *
- * Lookup:
- *
- *   - PATH/index.js
- *   - PATH.js
- *   - PATH
- *
- * @param {String} path
- * @return {String} path or null
- * @api private
- */
-
-require.resolve = function(path) {
-  if (path.charAt(0) === '/') path = path.slice(1);
-
-  var paths = [
-    path,
-    path + '.js',
-    path + '.json',
-    path + '/index.js',
-    path + '/index.json'
-  ];
-
-  for (var i = 0; i < paths.length; i++) {
-    var path = paths[i];
-    if (require.modules.hasOwnProperty(path)) return path;
-    if (require.aliases.hasOwnProperty(path)) return require.aliases[path];
-  }
+function shp(base, whiteList) {
+	return shp.getShapefile(base, whiteList);
+}
+shp.combine = function(arr) {
+	var out = {};
+	out.type = "FeatureCollection";
+	out.features = [];
+	var i = 0;
+	var len = arr[0].length;
+	while (i < len) {
+		out.features.push({
+			"type": "Feature",
+			"geometry": arr[0][i],
+			"properties": arr[1][i]
+		});
+		i++;
+	}
+	return out;
+};
+shp.parseZip = function(buffer, whiteList) {
+	var key;
+	var zip = unzip(buffer);
+	var names = [];
+	whiteList = whiteList || [];
+	for (key in zip) {
+		if (key.slice(-3).toLowerCase() === "shp") {
+			names.push(key.slice(0, - 4));
+		}
+		else if (key.slice(-3).toLowerCase() === "dbf") {
+			zip[key] = parseDbf(zip[key]);
+		}
+		else if (key.slice(-3).toLowerCase() === "prj") {
+			zip[key] = proj4(zip[key]);
+		}
+		else if (key.slice(-4).toLowerCase() === "json" || whiteList.indexOf(key.split('.').pop()) > -1) {
+			names.push(key);
+		}
+	}
+	var geojson = names.map(function(name) {
+		var parsed;
+		if (name.slice(-4).toLowerCase() === "json") {
+			parsed = JSON.parse(zip[name]);
+			parsed.fileName = name.slice(0, name.lastIndexOf('.'));
+		}
+		else if (whiteList.indexOf(name.slice(name.lastIndexOf('.') + 1)) > -1) {
+			parsed = zip[name];
+			parsed.fileName = name;
+		}
+		else {
+			parsed = shp.combine([parseShp(zip[name + '.shp'], zip[name + '.prj']), zip[name + '.dbf']]);
+			parsed.fileName = name;
+		}
+		return parsed;
+	});
+	if (geojson.length === 1) {
+		return geojson[0];
+	}
+	else {
+		return geojson;
+	}
 };
 
-/**
- * Normalize `path` relative to the current path.
- *
- * @param {String} curr
- * @param {String} path
- * @return {String}
- * @api private
- */
+function getZip(base, whiteList) {
+	return binaryAjax(base).then(function(a) {
+		return shp.parseZip(a, whiteList);
+	});
+}
+shp.getShapefile = function(base, whiteList) {
+	if (typeof base === 'string') {
+		if (base.slice(-4) === '.zip') {
+			return getZip(base, whiteList);
+		}
+		else {
+			return all([
+				all([
+				binaryAjax(base + '.shp'),
+				binaryAjax(base + '.prj')]).then(function(args) {
+					return parseShp(args[0], args[1] ? proj4(args[1]) : false);
+				}),
+				binaryAjax(base + '.dbf').then(parseDbf)
+			]).then(shp.combine);
+		}
+	}
+	else {
+		return promise(function(resolve) {
+			resolve(shp.parseZip(base));
+		});
+	}
+};
+module.exports = shp;
 
-require.normalize = function(curr, path) {
-  var segs = [];
+},{"./binaryajax":1,"./parseShp":3,"./unzip":4,"lie":42,"lie-all":26,"parsedbf":52,"proj4":68}],3:[function(require,module,exports){
 
-  if ('.' != path.charAt(0)) return path;
-
-  curr = curr.split('/');
-  path = path.split('/');
-
-  for (var i = 0; i < path.length; ++i) {
-    if ('..' == path[i]) {
-      curr.pop();
-    } else if ('.' != path[i] && '' != path[i]) {
-      segs.push(path[i]);
-    }
-  }
-
-  return curr.concat(segs).join('/');
+function isClockWise(array){
+	var sum = 0;
+	var i = 1;
+	var len = array.length;
+	var prev,cur;
+	while(i<len){
+		prev = cur||array[0];
+		cur = array[i];
+		sum += ((cur[0]-prev[0])*(cur[1]+prev[1]));
+		i++;
+	}
+	return sum > 0;
+}
+function polyReduce(a,b){
+	if(isClockWise(b)||!a.length){
+		a.push([b]);
+	}else{
+		a[a.length-1].push(b);
+	}
+	return a;
+}
+ParseShp.prototype.parsePoint = function (data){
+	return {
+		"type": "Point",
+		"coordinates":this.parseCoord(data,0)
+	};
+};
+ParseShp.prototype.parseZPoint = function (data){
+	var pointXY = this.parsePoint(data);
+	pointXY.coordinates.push(this.parseCoord(data,16));
+	return pointXY;
+};
+ParseShp.prototype.parsePointArray = function (data,offset,num){
+	var out = [];
+	var done = 0;
+	while(done<num){
+		out.push(this.parseCoord(data,offset));
+		offset += 16;
+		done++;
+	}
+	return out;
+};
+ParseShp.prototype.parseZPointArray = function (data,zOffset,num,coordinates){
+	var i = 0;
+	while(i<num){
+		coordinates[i].push(data.getFloat64(zOffset,true));
+		i++;
+		zOffset += 8;
+	}
+	return coordinates;
+};
+ParseShp.prototype.parseArrayGroup = function (data,offset,partOffset,num,tot){
+	var out = [];
+	var done = 0;
+	var curNum,nextNum=0,pointNumber;
+	while(done<num){
+		done++;
+		partOffset += 4;
+		curNum = nextNum;
+		if(done===num){
+			nextNum = tot;
+		}else{
+			nextNum = data.getInt32(partOffset,true);
+		}
+		pointNumber = nextNum - curNum;
+		if(!pointNumber){
+			continue;
+		}
+		out.push(this.parsePointArray(data,offset,pointNumber));
+		offset += (pointNumber<<4);
+	}
+	return out;
+};
+ParseShp.prototype.parseZArrayGroup = function(data,zOffset,num,coordinates){
+	var i = 0;
+	while(i<num){
+		coordinates[i] = this.parseZPointArray(data,zOffset,coordinates[i].length,coordinates[i]);
+		zOffset += (coordinates[i].length<<3);
+		i++;
+	}
+	return coordinates;
+};
+ParseShp.prototype.parseMultiPoint = function (data){
+	var out = {};
+	out.bbox = [
+		data.getFloat64(0,true),
+		data.getFloat64(8,true),
+		data.getFloat64(16,true),
+		data.getFloat64(24,true)
+	];
+	var num = data.getInt32(32,true);
+	var offset = 36;
+	if(num===1){
+		out.type = "Point";
+		out.coordinates = this.parseCoord(data,offset);
+	}else{
+		out.type = "MultiPoint";
+		out.coordinates = this.parsePointArray(data,offset,num);
+	}
+	return out;
+};
+ParseShp.prototype.parseZMultiPoint = function(data){
+	var geoJson = this.parseMultiPoint(data);
+	var num;
+	if(geoJson.type === "Point"){
+		geoJson.coordinates.push(data.getFloat64(72,true));
+		return geoJson;
+	}else{
+		num = geoJson.coordinates.length;
+	}
+	var zOffset = 56 + (num<<4);
+	geoJson.coordinates =  this.parseZPointArray(data,zOffset,num,geoJson.coordinates);
+	return geoJson;
+};
+ParseShp.prototype.parsePolyline = function (data){
+	var out = {};
+	out.bbox = [
+		data.getFloat64(0,true),
+		data.getFloat64(8,true),
+		data.getFloat64(16,true),
+		data.getFloat64(24,true)
+	];
+	var numParts = data.getInt32(32,true);
+	var num = data.getInt32(36,true);
+	var offset,partOffset;
+	if(numParts === 1){
+		out.type = "LineString";
+		offset = 44;
+		out.coordinates = this.parsePointArray(data,offset,num);
+	}else{
+		out.type = "MultiLineString";
+		offset = 40 + (numParts<<2);
+		partOffset = 40;
+		out.coordinates = this.parseArrayGroup(data,offset,partOffset,numParts,num);
+	}
+	return out;
+};
+ParseShp.prototype.parseZPolyline = function(data){
+	var geoJson = this.parsePolyline(data);
+	var num = geoJson.coordinates.length;
+	var zOffset = 60 + (num<<4);
+	if(geoJson.type === "LineString"){
+		geoJson.coordinates =  this.parseZPointArray(data,zOffset,num,geoJson.coordinates);
+		return geoJson;
+	}else{
+		geoJson.coordinates =  this.parseZArrayGroup(data,zOffset,num,geoJson.coordinates);
+		return geoJson;
+	}
+};
+ParseShp.prototype.polyFuncs = function (out){
+	if(out.type === "LineString"){
+		out.type = "Polygon";
+		out.coordinates = [out.coordinates];
+		return out;
+	}else{
+		out.coordinates = out.coordinates.reduce(polyReduce,[]);
+		if(out.coordinates.length === 1){
+			out.type = "Polygon";
+			out.coordinates = out.coordinates[0];
+			return out;
+		}else{
+			out.type = "MultiPolygon";
+			return out;
+		}
+	}
+};
+ParseShp.prototype.parsePolygon = function (data){
+	return this.polyFuncs(this.parsePolyline(data));
+};
+ParseShp.prototype.parseZPolygon = function(data){
+	return this.polyFuncs(this.parseZPolyline(data));
+};
+var shpFuncObj = {
+	1:'parsePoint',
+	3:'parsePolyline',
+	5:'parsePolygon',
+	8:'parseMultiPoint',
+	11:'parseZPoint',
+	13:'parseZPolyline',
+	15:'parseZPolygon',
+	18:'parseZMultiPoint'
 };
 
-/**
- * Register module at `path` with callback `definition`.
- *
- * @param {String} path
- * @param {Function} definition
- * @api private
- */
 
-require.register = function(path, definition) {
-  require.modules[path] = definition;
-};
 
-/**
- * Alias a module definition.
- *
- * @param {String} from
- * @param {String} to
- * @api private
- */
-
-require.alias = function(from, to) {
-  if (!require.modules.hasOwnProperty(from)) {
-    throw new Error('Failed to alias "' + from + '", it does not exist');
-  }
-  require.aliases[to] = from;
-};
-
-/**
- * Return a require function relative to the `parent` path.
- *
- * @param {String} parent
- * @return {Function}
- * @api private
- */
-
-require.relative = function(parent) {
-  var p = require.normalize(parent, '..');
-
-  /**
-   * lastIndexOf helper.
-   */
-
-  function lastIndexOf(arr, obj) {
-    var i = arr.length;
-    while (i--) {
-      if (arr[i] === obj) return i;
-    }
-    return -1;
-  }
-
-  /**
-   * The relative require() itself.
-   */
-
-  function localRequire(path) {
-    var resolved = localRequire.resolve(path);
-    return require(resolved, parent, path);
-  }
-
-  /**
-   * Resolve relative to the parent.
-   */
-
-  localRequire.resolve = function(path) {
-    var c = path.charAt(0);
-    if ('/' == c) return path.slice(1);
-    if ('.' == c) return require.normalize(p, path);
-
-    // resolve deps by returning
-    // the dep in the nearest "deps"
-    // directory
-    var segs = parent.split('/');
-    var i = lastIndexOf(segs, 'deps') + 1;
-    if (!i) i = 0;
-    path = segs.slice(0, i + 1).join('/') + '/deps/' + path;
-    return path;
-  };
-
-  /**
-   * Check if module is defined at `path`.
-   */
-
-  localRequire.exists = function(path) {
-    return require.modules.hasOwnProperty(localRequire.resolve(path));
-  };
-
-  return localRequire;
-};
-require.register("calvinmetcalf-setImmediate/lib/index.js", function(exports, require, module){
-"use strict";
-var types = [
-    require("./nextTick"),
-    require("./mutation"),
-    require("./realSetImmediate"),
-    require("./postMessage"),
-    require("./messageChannel"),
-    require("./stateChange"),
-    require("./timeout")
-];
-var handlerQueue = [];
-
-function drainQueue() {
-    var i = 0,
-        task,
-        innerQueue = handlerQueue;
-	handlerQueue = [];
-	/*jslint boss: true */
-	while (task = innerQueue[i++]) {
-		task();
+function makeParseCoord(trans){
+	if(trans){
+		return function(data,offset){
+			return trans.inverse([data.getFloat64(offset,true),data.getFloat64(offset+8,true)]);
+		};
+	}else{
+		return function(data,offset){
+			return [data.getFloat64(offset,true),data.getFloat64(offset+8,true)];
+		};
 	}
 }
-var nextTick;
-types.some(function (obj) {
-    var t = obj.test();
-    if (t) {
-        nextTick = obj.install(drainQueue);
-    }
-    return t;
-});
-var retFunc = function (task) {
-    var len, args;
-    if (arguments.length > 1 && typeof task === "function") {
-        args = Array.prototype.slice.call(arguments, 1);
-        args.unshift(undefined);
-        task = task.bind.apply(task, args);
-    }
-    if ((len = handlerQueue.push(task)) === 1) {
-        nextTick(drainQueue);
-    }
-    return len;
+function ParseShp(buffer,trans){
+	if(!(this instanceof ParseShp)){
+		return new ParseShp(buffer,trans);
+	}
+	this.buffer = buffer;
+	this.shpFuncs(trans);
+	this.rows = this.getRows();
+}
+ParseShp.prototype.shpFuncs = function (tran){
+	var num = this.getShpCode();
+	if(num>20){
+		num -= 20;
+	}
+	if(!(num in shpFuncObj)){
+		console.log("I don't know that shp type");
+		return function(){
+			return function(){};
+		};
+	}
+	this.parseFunc = this[shpFuncObj[num]];
+	this.parseCoord = makeParseCoord(tran);
 };
-retFunc.clear = function (n) {
-    if (n <= handlerQueue.length) {
-        handlerQueue[n - 1] = function () {};
+ParseShp.prototype.getShpCode = function(){
+	return this.parseHeader().shpCode;
+};
+ParseShp.prototype.parseHeader = function (){
+	var view = new DataView(this.buffer,0,100) ;
+	return {
+		length : view.getInt32(6<<2,false),
+		version : view.getInt32(7<<2,true),
+		shpCode : view.getInt32(8<<2,true),
+		bbox : [
+			view.getFloat64(9<<2,true),
+			view.getFloat64(11<<2,true),
+			view.getFloat64(13<<2,true),
+			view.getFloat64(13<<2,true)
+		]
+	};
+};
+ParseShp.prototype.getRows = function(){
+	var offset=100;
+	var len = this.buffer.byteLength;
+	var out = [];
+	var current;
+	while(offset<len){
+		current = this.getRow(offset);
+		offset += 8;
+		offset += current.len;
+		if(current.type){
+			out.push(this.parseFunc(current.data));
+		}
+	}
+	return out;
+};
+ParseShp.prototype.getRow = function(offset){
+	var view = new DataView(this.buffer,offset,12);
+	var len = view.getInt32(4,false)<<1;
+	var data = new DataView(this.buffer,offset+12,len-4);
+	
+	return {
+		id:view.getInt32(0,false),
+		len:len,
+		data:data,
+		type:view.getInt32(8,true)
+	};
+};
+module.exports = function(buffer,trans){
+	return ParseShp(buffer,trans).rows;
+};
+},{}],4:[function(require,module,exports){
+var JSZip = require('jszip');
+module.exports = function(buffer) {
+	var zip = new JSZip(buffer);
+	var files = zip.file(/.+/);
+	var out = {};
+	files.forEach(function(a) {
+		if (a.name.slice(-3).toLowerCase() === "shp" || a.name.slice(-3).toLowerCase() === "dbf") {
+			out[a.name] = a.asText();
+			out[a.name] = a.asArrayBuffer();
+		}
+		else {
+			out[a.name] = a.asText();
+		}
+	});
+	return out;
+};
+
+},{"jszip":15}],5:[function(require,module,exports){
+require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+exports.readIEEE754 = function(buffer, offset, isBE, mLen, nBytes) {
+  var e, m,
+      eLen = nBytes * 8 - mLen - 1,
+      eMax = (1 << eLen) - 1,
+      eBias = eMax >> 1,
+      nBits = -7,
+      i = isBE ? 0 : (nBytes - 1),
+      d = isBE ? 1 : -1,
+      s = buffer[offset + i];
+
+  i += d;
+
+  e = s & ((1 << (-nBits)) - 1);
+  s >>= (-nBits);
+  nBits += eLen;
+  for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8);
+
+  m = e & ((1 << (-nBits)) - 1);
+  e >>= (-nBits);
+  nBits += mLen;
+  for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8);
+
+  if (e === 0) {
+    e = 1 - eBias;
+  } else if (e === eMax) {
+    return m ? NaN : ((s ? -1 : 1) * Infinity);
+  } else {
+    m = m + Math.pow(2, mLen);
+    e = e - eBias;
+  }
+  return (s ? -1 : 1) * m * Math.pow(2, e - mLen);
+};
+
+exports.writeIEEE754 = function(buffer, value, offset, isBE, mLen, nBytes) {
+  var e, m, c,
+      eLen = nBytes * 8 - mLen - 1,
+      eMax = (1 << eLen) - 1,
+      eBias = eMax >> 1,
+      rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0),
+      i = isBE ? (nBytes - 1) : 0,
+      d = isBE ? -1 : 1,
+      s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0;
+
+  value = Math.abs(value);
+
+  if (isNaN(value) || value === Infinity) {
+    m = isNaN(value) ? 1 : 0;
+    e = eMax;
+  } else {
+    e = Math.floor(Math.log(value) / Math.LN2);
+    if (value * (c = Math.pow(2, -e)) < 1) {
+      e--;
+      c *= 2;
     }
-    return this;
-};
-module.exports = retFunc;
-
-});
-require.register("calvinmetcalf-setImmediate/lib/nextTick.js", function(exports, require, module){
-"use strict";
-exports.test = function () {
-    // Don't get fooled by e.g. browserify environments.
-    return typeof process === "object" && Object.prototype.toString.call(process) === "[object process]";
-};
-
-exports.install = function () {
-    return process.nextTick;
-};
-});
-require.register("calvinmetcalf-setImmediate/lib/postMessage.js", function(exports, require, module){
-"use strict";
-var globe = require("./global");
-exports.test = function () {
-    // The test against `importScripts` prevents this implementation from being installed inside a web worker,
-    // where `global.postMessage` means something completely different and can"t be used for this purpose.
-
-    if (!globe.postMessage || globe.importScripts) {
-        return false;
-    }
-
-    var postMessageIsAsynchronous = true;
-    var oldOnMessage = globe.onmessage;
-    globe.onmessage = function () {
-        postMessageIsAsynchronous = false;
-    };
-    globe.postMessage("", "*");
-    globe.onmessage = oldOnMessage;
-
-    return postMessageIsAsynchronous;
-};
-
-exports.install = function (func) {
-    var codeWord = "com.calvinmetcalf.setImmediate" + Math.random();
-    function globalMessage(event) {
-        if (event.source === globe && event.data === codeWord) {
-            func();
-        }
-    }
-    if (globe.addEventListener) {
-        globe.addEventListener("message", globalMessage, false);
+    if (e + eBias >= 1) {
+      value += rt / c;
     } else {
-        globe.attachEvent("onmessage", globalMessage);
+      value += rt * Math.pow(2, 1 - eBias);
     }
-    return function () {
-        globe.postMessage(codeWord, "*");
+    if (value * c >= 2) {
+      e++;
+      c /= 2;
+    }
+
+    if (e + eBias >= eMax) {
+      m = 0;
+      e = eMax;
+    } else if (e + eBias >= 1) {
+      m = (value * c - 1) * Math.pow(2, mLen);
+      e = e + eBias;
+    } else {
+      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen);
+      e = 0;
+    }
+  }
+
+  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8);
+
+  e = (e << mLen) | m;
+  eLen += mLen;
+  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8);
+
+  buffer[offset + i - d] |= s * 128;
+};
+
+},{}],"q9TxCC":[function(require,module,exports){
+var assert;
+exports.Buffer = Buffer;
+exports.SlowBuffer = Buffer;
+Buffer.poolSize = 8192;
+exports.INSPECT_MAX_BYTES = 50;
+
+function stringtrim(str) {
+  if (str.trim) return str.trim();
+  return str.replace(/^\s+|\s+$/g, '');
+}
+
+function Buffer(subject, encoding, offset) {
+  if(!assert) assert= require('assert');
+  if (!(this instanceof Buffer)) {
+    return new Buffer(subject, encoding, offset);
+  }
+  this.parent = this;
+  this.offset = 0;
+
+  // Work-around: node's base64 implementation
+  // allows for non-padded strings while base64-js
+  // does not..
+  if (encoding == "base64" && typeof subject == "string") {
+    subject = stringtrim(subject);
+    while (subject.length % 4 != 0) {
+      subject = subject + "="; 
+    }
+  }
+
+  var type;
+
+  // Are we slicing?
+  if (typeof offset === 'number') {
+    this.length = coerce(encoding);
+    // slicing works, with limitations (no parent tracking/update)
+    // check https://github.com/toots/buffer-browserify/issues/19
+    for (var i = 0; i < this.length; i++) {
+        this[i] = subject.get(i+offset);
+    }
+  } else {
+    // Find the length
+    switch (type = typeof subject) {
+      case 'number':
+        this.length = coerce(subject);
+        break;
+
+      case 'string':
+        this.length = Buffer.byteLength(subject, encoding);
+        break;
+
+      case 'object': // Assume object is an array
+        this.length = coerce(subject.length);
+        break;
+
+      default:
+        throw new Error('First argument needs to be a number, ' +
+                        'array or string.');
+    }
+
+    // Treat array-ish objects as a byte array.
+    if (isArrayIsh(subject)) {
+      for (var i = 0; i < this.length; i++) {
+        if (subject instanceof Buffer) {
+          this[i] = subject.readUInt8(i);
+        }
+        else {
+          this[i] = subject[i];
+        }
+      }
+    } else if (type == 'string') {
+      // We are a string
+      this.length = this.write(subject, 0, encoding);
+    } else if (type === 'number') {
+      for (var i = 0; i < this.length; i++) {
+        this[i] = 0;
+      }
+    }
+  }
+}
+
+Buffer.prototype.get = function get(i) {
+  if (i < 0 || i >= this.length) throw new Error('oob');
+  return this[i];
+};
+
+Buffer.prototype.set = function set(i, v) {
+  if (i < 0 || i >= this.length) throw new Error('oob');
+  return this[i] = v;
+};
+
+Buffer.byteLength = function (str, encoding) {
+  switch (encoding || "utf8") {
+    case 'hex':
+      return str.length / 2;
+
+    case 'utf8':
+    case 'utf-8':
+      return utf8ToBytes(str).length;
+
+    case 'ascii':
+    case 'binary':
+      return str.length;
+
+    case 'base64':
+      return base64ToBytes(str).length;
+
+    default:
+      throw new Error('Unknown encoding');
+  }
+};
+
+Buffer.prototype.utf8Write = function (string, offset, length) {
+  var bytes, pos;
+  return Buffer._charsWritten =  blitBuffer(utf8ToBytes(string), this, offset, length);
+};
+
+Buffer.prototype.asciiWrite = function (string, offset, length) {
+  var bytes, pos;
+  return Buffer._charsWritten =  blitBuffer(asciiToBytes(string), this, offset, length);
+};
+
+Buffer.prototype.binaryWrite = Buffer.prototype.asciiWrite;
+
+Buffer.prototype.base64Write = function (string, offset, length) {
+  var bytes, pos;
+  return Buffer._charsWritten = blitBuffer(base64ToBytes(string), this, offset, length);
+};
+
+Buffer.prototype.base64Slice = function (start, end) {
+  var bytes = Array.prototype.slice.apply(this, arguments)
+  return require("base64-js").fromByteArray(bytes);
+};
+
+Buffer.prototype.utf8Slice = function () {
+  var bytes = Array.prototype.slice.apply(this, arguments);
+  var res = "";
+  var tmp = "";
+  var i = 0;
+  while (i < bytes.length) {
+    if (bytes[i] <= 0x7F) {
+      res += decodeUtf8Char(tmp) + String.fromCharCode(bytes[i]);
+      tmp = "";
+    } else
+      tmp += "%" + bytes[i].toString(16);
+
+    i++;
+  }
+
+  return res + decodeUtf8Char(tmp);
+}
+
+Buffer.prototype.asciiSlice = function () {
+  var bytes = Array.prototype.slice.apply(this, arguments);
+  var ret = "";
+  for (var i = 0; i < bytes.length; i++)
+    ret += String.fromCharCode(bytes[i]);
+  return ret;
+}
+
+Buffer.prototype.binarySlice = Buffer.prototype.asciiSlice;
+
+Buffer.prototype.inspect = function() {
+  var out = [],
+      len = this.length;
+  for (var i = 0; i < len; i++) {
+    out[i] = toHex(this[i]);
+    if (i == exports.INSPECT_MAX_BYTES) {
+      out[i + 1] = '...';
+      break;
+    }
+  }
+  return '<Buffer ' + out.join(' ') + '>';
+};
+
+
+Buffer.prototype.hexSlice = function(start, end) {
+  var len = this.length;
+
+  if (!start || start < 0) start = 0;
+  if (!end || end < 0 || end > len) end = len;
+
+  var out = '';
+  for (var i = start; i < end; i++) {
+    out += toHex(this[i]);
+  }
+  return out;
+};
+
+
+Buffer.prototype.toString = function(encoding, start, end) {
+  encoding = String(encoding || 'utf8').toLowerCase();
+  start = +start || 0;
+  if (typeof end == 'undefined') end = this.length;
+
+  // Fastpath empty strings
+  if (+end == start) {
+    return '';
+  }
+
+  switch (encoding) {
+    case 'hex':
+      return this.hexSlice(start, end);
+
+    case 'utf8':
+    case 'utf-8':
+      return this.utf8Slice(start, end);
+
+    case 'ascii':
+      return this.asciiSlice(start, end);
+
+    case 'binary':
+      return this.binarySlice(start, end);
+
+    case 'base64':
+      return this.base64Slice(start, end);
+
+    case 'ucs2':
+    case 'ucs-2':
+      return this.ucs2Slice(start, end);
+
+    default:
+      throw new Error('Unknown encoding');
+  }
+};
+
+
+Buffer.prototype.hexWrite = function(string, offset, length) {
+  offset = +offset || 0;
+  var remaining = this.length - offset;
+  if (!length) {
+    length = remaining;
+  } else {
+    length = +length;
+    if (length > remaining) {
+      length = remaining;
+    }
+  }
+
+  // must be an even number of digits
+  var strLen = string.length;
+  if (strLen % 2) {
+    throw new Error('Invalid hex string');
+  }
+  if (length > strLen / 2) {
+    length = strLen / 2;
+  }
+  for (var i = 0; i < length; i++) {
+    var byte = parseInt(string.substr(i * 2, 2), 16);
+    if (isNaN(byte)) throw new Error('Invalid hex string');
+    this[offset + i] = byte;
+  }
+  Buffer._charsWritten = i * 2;
+  return i;
+};
+
+
+Buffer.prototype.write = function(string, offset, length, encoding) {
+  // Support both (string, offset, length, encoding)
+  // and the legacy (string, encoding, offset, length)
+  if (isFinite(offset)) {
+    if (!isFinite(length)) {
+      encoding = length;
+      length = undefined;
+    }
+  } else {  // legacy
+    var swap = encoding;
+    encoding = offset;
+    offset = length;
+    length = swap;
+  }
+
+  offset = +offset || 0;
+  var remaining = this.length - offset;
+  if (!length) {
+    length = remaining;
+  } else {
+    length = +length;
+    if (length > remaining) {
+      length = remaining;
+    }
+  }
+  encoding = String(encoding || 'utf8').toLowerCase();
+
+  switch (encoding) {
+    case 'hex':
+      return this.hexWrite(string, offset, length);
+
+    case 'utf8':
+    case 'utf-8':
+      return this.utf8Write(string, offset, length);
+
+    case 'ascii':
+      return this.asciiWrite(string, offset, length);
+
+    case 'binary':
+      return this.binaryWrite(string, offset, length);
+
+    case 'base64':
+      return this.base64Write(string, offset, length);
+
+    case 'ucs2':
+    case 'ucs-2':
+      return this.ucs2Write(string, offset, length);
+
+    default:
+      throw new Error('Unknown encoding');
+  }
+};
+
+// slice(start, end)
+function clamp(index, len, defaultValue) {
+  if (typeof index !== 'number') return defaultValue;
+  index = ~~index;  // Coerce to integer.
+  if (index >= len) return len;
+  if (index >= 0) return index;
+  index += len;
+  if (index >= 0) return index;
+  return 0;
+}
+
+Buffer.prototype.slice = function(start, end) {
+  var len = this.length;
+  start = clamp(start, len, 0);
+  end = clamp(end, len, len);
+  return new Buffer(this, end - start, +start);
+};
+
+// copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
+Buffer.prototype.copy = function(target, target_start, start, end) {
+  var source = this;
+  start || (start = 0);
+  if (end === undefined || isNaN(end)) {
+    end = this.length;
+  }
+  target_start || (target_start = 0);
+
+  if (end < start) throw new Error('sourceEnd < sourceStart');
+
+  // Copy 0 bytes; we're done
+  if (end === start) return 0;
+  if (target.length == 0 || source.length == 0) return 0;
+
+  if (target_start < 0 || target_start >= target.length) {
+    throw new Error('targetStart out of bounds');
+  }
+
+  if (start < 0 || start >= source.length) {
+    throw new Error('sourceStart out of bounds');
+  }
+
+  if (end < 0 || end > source.length) {
+    throw new Error('sourceEnd out of bounds');
+  }
+
+  // Are we oob?
+  if (end > this.length) {
+    end = this.length;
+  }
+
+  if (target.length - target_start < end - start) {
+    end = target.length - target_start + start;
+  }
+
+  var temp = [];
+  for (var i=start; i<end; i++) {
+    assert.ok(typeof this[i] !== 'undefined', "copying undefined buffer bytes!");
+    temp.push(this[i]);
+  }
+
+  for (var i=target_start; i<target_start+temp.length; i++) {
+    target[i] = temp[i-target_start];
+  }
+};
+
+// fill(value, start=0, end=buffer.length)
+Buffer.prototype.fill = function fill(value, start, end) {
+  value || (value = 0);
+  start || (start = 0);
+  end || (end = this.length);
+
+  if (typeof value === 'string') {
+    value = value.charCodeAt(0);
+  }
+  if (!(typeof value === 'number') || isNaN(value)) {
+    throw new Error('value is not a number');
+  }
+
+  if (end < start) throw new Error('end < start');
+
+  // Fill 0 bytes; we're done
+  if (end === start) return 0;
+  if (this.length == 0) return 0;
+
+  if (start < 0 || start >= this.length) {
+    throw new Error('start out of bounds');
+  }
+
+  if (end < 0 || end > this.length) {
+    throw new Error('end out of bounds');
+  }
+
+  for (var i = start; i < end; i++) {
+    this[i] = value;
+  }
+}
+
+// Static methods
+Buffer.isBuffer = function isBuffer(b) {
+  return b instanceof Buffer || b instanceof Buffer;
+};
+
+Buffer.concat = function (list, totalLength) {
+  if (!isArray(list)) {
+    throw new Error("Usage: Buffer.concat(list, [totalLength])\n \
+      list should be an Array.");
+  }
+
+  if (list.length === 0) {
+    return new Buffer(0);
+  } else if (list.length === 1) {
+    return list[0];
+  }
+
+  if (typeof totalLength !== 'number') {
+    totalLength = 0;
+    for (var i = 0; i < list.length; i++) {
+      var buf = list[i];
+      totalLength += buf.length;
+    }
+  }
+
+  var buffer = new Buffer(totalLength);
+  var pos = 0;
+  for (var i = 0; i < list.length; i++) {
+    var buf = list[i];
+    buf.copy(buffer, pos);
+    pos += buf.length;
+  }
+  return buffer;
+};
+
+Buffer.isEncoding = function(encoding) {
+  switch ((encoding + '').toLowerCase()) {
+    case 'hex':
+    case 'utf8':
+    case 'utf-8':
+    case 'ascii':
+    case 'binary':
+    case 'base64':
+    case 'ucs2':
+    case 'ucs-2':
+    case 'utf16le':
+    case 'utf-16le':
+    case 'raw':
+      return true;
+
+    default:
+      return false;
+  }
+};
+
+// helpers
+
+function coerce(length) {
+  // Coerce length to a number (possibly NaN), round up
+  // in case it's fractional (e.g. 123.456) then do a
+  // double negate to coerce a NaN to 0. Easy, right?
+  length = ~~Math.ceil(+length);
+  return length < 0 ? 0 : length;
+}
+
+function isArray(subject) {
+  return (Array.isArray ||
+    function(subject){
+      return {}.toString.apply(subject) == '[object Array]'
+    })
+    (subject)
+}
+
+function isArrayIsh(subject) {
+  return isArray(subject) || Buffer.isBuffer(subject) ||
+         subject && typeof subject === 'object' &&
+         typeof subject.length === 'number';
+}
+
+function toHex(n) {
+  if (n < 16) return '0' + n.toString(16);
+  return n.toString(16);
+}
+
+function utf8ToBytes(str) {
+  var byteArray = [];
+  for (var i = 0; i < str.length; i++)
+    if (str.charCodeAt(i) <= 0x7F)
+      byteArray.push(str.charCodeAt(i));
+    else {
+      var h = encodeURIComponent(str.charAt(i)).substr(1).split('%');
+      for (var j = 0; j < h.length; j++)
+        byteArray.push(parseInt(h[j], 16));
+    }
+
+  return byteArray;
+}
+
+function asciiToBytes(str) {
+  var byteArray = []
+  for (var i = 0; i < str.length; i++ )
+    // Node's code seems to be doing this and not & 0x7F..
+    byteArray.push( str.charCodeAt(i) & 0xFF );
+
+  return byteArray;
+}
+
+function base64ToBytes(str) {
+  return require("base64-js").toByteArray(str);
+}
+
+function blitBuffer(src, dst, offset, length) {
+  var pos, i = 0;
+  while (i < length) {
+    if ((i+offset >= dst.length) || (i >= src.length))
+      break;
+
+    dst[i + offset] = src[i];
+    i++;
+  }
+  return i;
+}
+
+function decodeUtf8Char(str) {
+  try {
+    return decodeURIComponent(str);
+  } catch (err) {
+    return String.fromCharCode(0xFFFD); // UTF 8 invalid char
+  }
+}
+
+// read/write bit-twiddling
+
+Buffer.prototype.readUInt8 = function(offset, noAssert) {
+  var buffer = this;
+
+  if (!noAssert) {
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset < buffer.length,
+        'Trying to read beyond buffer length');
+  }
+
+  if (offset >= buffer.length) return;
+
+  return buffer[offset];
+};
+
+function readUInt16(buffer, offset, isBigEndian, noAssert) {
+  var val = 0;
+
+
+  if (!noAssert) {
+    assert.ok(typeof (isBigEndian) === 'boolean',
+        'missing or invalid endian');
+
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset + 1 < buffer.length,
+        'Trying to read beyond buffer length');
+  }
+
+  if (offset >= buffer.length) return 0;
+
+  if (isBigEndian) {
+    val = buffer[offset] << 8;
+    if (offset + 1 < buffer.length) {
+      val |= buffer[offset + 1];
+    }
+  } else {
+    val = buffer[offset];
+    if (offset + 1 < buffer.length) {
+      val |= buffer[offset + 1] << 8;
+    }
+  }
+
+  return val;
+}
+
+Buffer.prototype.readUInt16LE = function(offset, noAssert) {
+  return readUInt16(this, offset, false, noAssert);
+};
+
+Buffer.prototype.readUInt16BE = function(offset, noAssert) {
+  return readUInt16(this, offset, true, noAssert);
+};
+
+function readUInt32(buffer, offset, isBigEndian, noAssert) {
+  var val = 0;
+
+  if (!noAssert) {
+    assert.ok(typeof (isBigEndian) === 'boolean',
+        'missing or invalid endian');
+
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset + 3 < buffer.length,
+        'Trying to read beyond buffer length');
+  }
+
+  if (offset >= buffer.length) return 0;
+
+  if (isBigEndian) {
+    if (offset + 1 < buffer.length)
+      val = buffer[offset + 1] << 16;
+    if (offset + 2 < buffer.length)
+      val |= buffer[offset + 2] << 8;
+    if (offset + 3 < buffer.length)
+      val |= buffer[offset + 3];
+    val = val + (buffer[offset] << 24 >>> 0);
+  } else {
+    if (offset + 2 < buffer.length)
+      val = buffer[offset + 2] << 16;
+    if (offset + 1 < buffer.length)
+      val |= buffer[offset + 1] << 8;
+    val |= buffer[offset];
+    if (offset + 3 < buffer.length)
+      val = val + (buffer[offset + 3] << 24 >>> 0);
+  }
+
+  return val;
+}
+
+Buffer.prototype.readUInt32LE = function(offset, noAssert) {
+  return readUInt32(this, offset, false, noAssert);
+};
+
+Buffer.prototype.readUInt32BE = function(offset, noAssert) {
+  return readUInt32(this, offset, true, noAssert);
+};
+
+
+/*
+ * Signed integer types, yay team! A reminder on how two's complement actually
+ * works. The first bit is the signed bit, i.e. tells us whether or not the
+ * number should be positive or negative. If the two's complement value is
+ * positive, then we're done, as it's equivalent to the unsigned representation.
+ *
+ * Now if the number is positive, you're pretty much done, you can just leverage
+ * the unsigned translations and return those. Unfortunately, negative numbers
+ * aren't quite that straightforward.
+ *
+ * At first glance, one might be inclined to use the traditional formula to
+ * translate binary numbers between the positive and negative values in two's
+ * complement. (Though it doesn't quite work for the most negative value)
+ * Mainly:
+ *  - invert all the bits
+ *  - add one to the result
+ *
+ * Of course, this doesn't quite work in Javascript. Take for example the value
+ * of -128. This could be represented in 16 bits (big-endian) as 0xff80. But of
+ * course, Javascript will do the following:
+ *
+ * > ~0xff80
+ * -65409
+ *
+ * Whoh there, Javascript, that's not quite right. But wait, according to
+ * Javascript that's perfectly correct. When Javascript ends up seeing the
+ * constant 0xff80, it has no notion that it is actually a signed number. It
+ * assumes that we've input the unsigned value 0xff80. Thus, when it does the
+ * binary negation, it casts it into a signed value, (positive 0xff80). Then
+ * when you perform binary negation on that, it turns it into a negative number.
+ *
+ * Instead, we're going to have to use the following general formula, that works
+ * in a rather Javascript friendly way. I'm glad we don't support this kind of
+ * weird numbering scheme in the kernel.
+ *
+ * (BIT-MAX - (unsigned)val + 1) * -1
+ *
+ * The astute observer, may think that this doesn't make sense for 8-bit numbers
+ * (really it isn't necessary for them). However, when you get 16-bit numbers,
+ * you do. Let's go back to our prior example and see how this will look:
+ *
+ * (0xffff - 0xff80 + 1) * -1
+ * (0x007f + 1) * -1
+ * (0x0080) * -1
+ */
+Buffer.prototype.readInt8 = function(offset, noAssert) {
+  var buffer = this;
+  var neg;
+
+  if (!noAssert) {
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset < buffer.length,
+        'Trying to read beyond buffer length');
+  }
+
+  if (offset >= buffer.length) return;
+
+  neg = buffer[offset] & 0x80;
+  if (!neg) {
+    return (buffer[offset]);
+  }
+
+  return ((0xff - buffer[offset] + 1) * -1);
+};
+
+function readInt16(buffer, offset, isBigEndian, noAssert) {
+  var neg, val;
+
+  if (!noAssert) {
+    assert.ok(typeof (isBigEndian) === 'boolean',
+        'missing or invalid endian');
+
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset + 1 < buffer.length,
+        'Trying to read beyond buffer length');
+  }
+
+  val = readUInt16(buffer, offset, isBigEndian, noAssert);
+  neg = val & 0x8000;
+  if (!neg) {
+    return val;
+  }
+
+  return (0xffff - val + 1) * -1;
+}
+
+Buffer.prototype.readInt16LE = function(offset, noAssert) {
+  return readInt16(this, offset, false, noAssert);
+};
+
+Buffer.prototype.readInt16BE = function(offset, noAssert) {
+  return readInt16(this, offset, true, noAssert);
+};
+
+function readInt32(buffer, offset, isBigEndian, noAssert) {
+  var neg, val;
+
+  if (!noAssert) {
+    assert.ok(typeof (isBigEndian) === 'boolean',
+        'missing or invalid endian');
+
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset + 3 < buffer.length,
+        'Trying to read beyond buffer length');
+  }
+
+  val = readUInt32(buffer, offset, isBigEndian, noAssert);
+  neg = val & 0x80000000;
+  if (!neg) {
+    return (val);
+  }
+
+  return (0xffffffff - val + 1) * -1;
+}
+
+Buffer.prototype.readInt32LE = function(offset, noAssert) {
+  return readInt32(this, offset, false, noAssert);
+};
+
+Buffer.prototype.readInt32BE = function(offset, noAssert) {
+  return readInt32(this, offset, true, noAssert);
+};
+
+function readFloat(buffer, offset, isBigEndian, noAssert) {
+  if (!noAssert) {
+    assert.ok(typeof (isBigEndian) === 'boolean',
+        'missing or invalid endian');
+
+    assert.ok(offset + 3 < buffer.length,
+        'Trying to read beyond buffer length');
+  }
+
+  return require('./buffer_ieee754').readIEEE754(buffer, offset, isBigEndian,
+      23, 4);
+}
+
+Buffer.prototype.readFloatLE = function(offset, noAssert) {
+  return readFloat(this, offset, false, noAssert);
+};
+
+Buffer.prototype.readFloatBE = function(offset, noAssert) {
+  return readFloat(this, offset, true, noAssert);
+};
+
+function readDouble(buffer, offset, isBigEndian, noAssert) {
+  if (!noAssert) {
+    assert.ok(typeof (isBigEndian) === 'boolean',
+        'missing or invalid endian');
+
+    assert.ok(offset + 7 < buffer.length,
+        'Trying to read beyond buffer length');
+  }
+
+  return require('./buffer_ieee754').readIEEE754(buffer, offset, isBigEndian,
+      52, 8);
+}
+
+Buffer.prototype.readDoubleLE = function(offset, noAssert) {
+  return readDouble(this, offset, false, noAssert);
+};
+
+Buffer.prototype.readDoubleBE = function(offset, noAssert) {
+  return readDouble(this, offset, true, noAssert);
+};
+
+
+/*
+ * We have to make sure that the value is a valid integer. This means that it is
+ * non-negative. It has no fractional component and that it does not exceed the
+ * maximum allowed value.
+ *
+ *      value           The number to check for validity
+ *
+ *      max             The maximum value
+ */
+function verifuint(value, max) {
+  assert.ok(typeof (value) == 'number',
+      'cannot write a non-number as a number');
+
+  assert.ok(value >= 0,
+      'specified a negative value for writing an unsigned value');
+
+  assert.ok(value <= max, 'value is larger than maximum value for type');
+
+  assert.ok(Math.floor(value) === value, 'value has a fractional component');
+}
+
+Buffer.prototype.writeUInt8 = function(value, offset, noAssert) {
+  var buffer = this;
+
+  if (!noAssert) {
+    assert.ok(value !== undefined && value !== null,
+        'missing value');
+
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset < buffer.length,
+        'trying to write beyond buffer length');
+
+    verifuint(value, 0xff);
+  }
+
+  if (offset < buffer.length) {
+    buffer[offset] = value;
+  }
+};
+
+function writeUInt16(buffer, value, offset, isBigEndian, noAssert) {
+  if (!noAssert) {
+    assert.ok(value !== undefined && value !== null,
+        'missing value');
+
+    assert.ok(typeof (isBigEndian) === 'boolean',
+        'missing or invalid endian');
+
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset + 1 < buffer.length,
+        'trying to write beyond buffer length');
+
+    verifuint(value, 0xffff);
+  }
+
+  for (var i = 0; i < Math.min(buffer.length - offset, 2); i++) {
+    buffer[offset + i] =
+        (value & (0xff << (8 * (isBigEndian ? 1 - i : i)))) >>>
+            (isBigEndian ? 1 - i : i) * 8;
+  }
+
+}
+
+Buffer.prototype.writeUInt16LE = function(value, offset, noAssert) {
+  writeUInt16(this, value, offset, false, noAssert);
+};
+
+Buffer.prototype.writeUInt16BE = function(value, offset, noAssert) {
+  writeUInt16(this, value, offset, true, noAssert);
+};
+
+function writeUInt32(buffer, value, offset, isBigEndian, noAssert) {
+  if (!noAssert) {
+    assert.ok(value !== undefined && value !== null,
+        'missing value');
+
+    assert.ok(typeof (isBigEndian) === 'boolean',
+        'missing or invalid endian');
+
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset + 3 < buffer.length,
+        'trying to write beyond buffer length');
+
+    verifuint(value, 0xffffffff);
+  }
+
+  for (var i = 0; i < Math.min(buffer.length - offset, 4); i++) {
+    buffer[offset + i] =
+        (value >>> (isBigEndian ? 3 - i : i) * 8) & 0xff;
+  }
+}
+
+Buffer.prototype.writeUInt32LE = function(value, offset, noAssert) {
+  writeUInt32(this, value, offset, false, noAssert);
+};
+
+Buffer.prototype.writeUInt32BE = function(value, offset, noAssert) {
+  writeUInt32(this, value, offset, true, noAssert);
+};
+
+
+/*
+ * We now move onto our friends in the signed number category. Unlike unsigned
+ * numbers, we're going to have to worry a bit more about how we put values into
+ * arrays. Since we are only worrying about signed 32-bit values, we're in
+ * slightly better shape. Unfortunately, we really can't do our favorite binary
+ * & in this system. It really seems to do the wrong thing. For example:
+ *
+ * > -32 & 0xff
+ * 224
+ *
+ * What's happening above is really: 0xe0 & 0xff = 0xe0. However, the results of
+ * this aren't treated as a signed number. Ultimately a bad thing.
+ *
+ * What we're going to want to do is basically create the unsigned equivalent of
+ * our representation and pass that off to the wuint* functions. To do that
+ * we're going to do the following:
+ *
+ *  - if the value is positive
+ *      we can pass it directly off to the equivalent wuint
+ *  - if the value is negative
+ *      we do the following computation:
+ *         mb + val + 1, where
+ *         mb   is the maximum unsigned value in that byte size
+ *         val  is the Javascript negative integer
+ *
+ *
+ * As a concrete value, take -128. In signed 16 bits this would be 0xff80. If
+ * you do out the computations:
+ *
+ * 0xffff - 128 + 1
+ * 0xffff - 127
+ * 0xff80
+ *
+ * You can then encode this value as the signed version. This is really rather
+ * hacky, but it should work and get the job done which is our goal here.
+ */
+
+/*
+ * A series of checks to make sure we actually have a signed 32-bit number
+ */
+function verifsint(value, max, min) {
+  assert.ok(typeof (value) == 'number',
+      'cannot write a non-number as a number');
+
+  assert.ok(value <= max, 'value larger than maximum allowed value');
+
+  assert.ok(value >= min, 'value smaller than minimum allowed value');
+
+  assert.ok(Math.floor(value) === value, 'value has a fractional component');
+}
+
+function verifIEEE754(value, max, min) {
+  assert.ok(typeof (value) == 'number',
+      'cannot write a non-number as a number');
+
+  assert.ok(value <= max, 'value larger than maximum allowed value');
+
+  assert.ok(value >= min, 'value smaller than minimum allowed value');
+}
+
+Buffer.prototype.writeInt8 = function(value, offset, noAssert) {
+  var buffer = this;
+
+  if (!noAssert) {
+    assert.ok(value !== undefined && value !== null,
+        'missing value');
+
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset < buffer.length,
+        'Trying to write beyond buffer length');
+
+    verifsint(value, 0x7f, -0x80);
+  }
+
+  if (value >= 0) {
+    buffer.writeUInt8(value, offset, noAssert);
+  } else {
+    buffer.writeUInt8(0xff + value + 1, offset, noAssert);
+  }
+};
+
+function writeInt16(buffer, value, offset, isBigEndian, noAssert) {
+  if (!noAssert) {
+    assert.ok(value !== undefined && value !== null,
+        'missing value');
+
+    assert.ok(typeof (isBigEndian) === 'boolean',
+        'missing or invalid endian');
+
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset + 1 < buffer.length,
+        'Trying to write beyond buffer length');
+
+    verifsint(value, 0x7fff, -0x8000);
+  }
+
+  if (value >= 0) {
+    writeUInt16(buffer, value, offset, isBigEndian, noAssert);
+  } else {
+    writeUInt16(buffer, 0xffff + value + 1, offset, isBigEndian, noAssert);
+  }
+}
+
+Buffer.prototype.writeInt16LE = function(value, offset, noAssert) {
+  writeInt16(this, value, offset, false, noAssert);
+};
+
+Buffer.prototype.writeInt16BE = function(value, offset, noAssert) {
+  writeInt16(this, value, offset, true, noAssert);
+};
+
+function writeInt32(buffer, value, offset, isBigEndian, noAssert) {
+  if (!noAssert) {
+    assert.ok(value !== undefined && value !== null,
+        'missing value');
+
+    assert.ok(typeof (isBigEndian) === 'boolean',
+        'missing or invalid endian');
+
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset + 3 < buffer.length,
+        'Trying to write beyond buffer length');
+
+    verifsint(value, 0x7fffffff, -0x80000000);
+  }
+
+  if (value >= 0) {
+    writeUInt32(buffer, value, offset, isBigEndian, noAssert);
+  } else {
+    writeUInt32(buffer, 0xffffffff + value + 1, offset, isBigEndian, noAssert);
+  }
+}
+
+Buffer.prototype.writeInt32LE = function(value, offset, noAssert) {
+  writeInt32(this, value, offset, false, noAssert);
+};
+
+Buffer.prototype.writeInt32BE = function(value, offset, noAssert) {
+  writeInt32(this, value, offset, true, noAssert);
+};
+
+function writeFloat(buffer, value, offset, isBigEndian, noAssert) {
+  if (!noAssert) {
+    assert.ok(value !== undefined && value !== null,
+        'missing value');
+
+    assert.ok(typeof (isBigEndian) === 'boolean',
+        'missing or invalid endian');
+
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset + 3 < buffer.length,
+        'Trying to write beyond buffer length');
+
+    verifIEEE754(value, 3.4028234663852886e+38, -3.4028234663852886e+38);
+  }
+
+  require('./buffer_ieee754').writeIEEE754(buffer, value, offset, isBigEndian,
+      23, 4);
+}
+
+Buffer.prototype.writeFloatLE = function(value, offset, noAssert) {
+  writeFloat(this, value, offset, false, noAssert);
+};
+
+Buffer.prototype.writeFloatBE = function(value, offset, noAssert) {
+  writeFloat(this, value, offset, true, noAssert);
+};
+
+function writeDouble(buffer, value, offset, isBigEndian, noAssert) {
+  if (!noAssert) {
+    assert.ok(value !== undefined && value !== null,
+        'missing value');
+
+    assert.ok(typeof (isBigEndian) === 'boolean',
+        'missing or invalid endian');
+
+    assert.ok(offset !== undefined && offset !== null,
+        'missing offset');
+
+    assert.ok(offset + 7 < buffer.length,
+        'Trying to write beyond buffer length');
+
+    verifIEEE754(value, 1.7976931348623157E+308, -1.7976931348623157E+308);
+  }
+
+  require('./buffer_ieee754').writeIEEE754(buffer, value, offset, isBigEndian,
+      52, 8);
+}
+
+Buffer.prototype.writeDoubleLE = function(value, offset, noAssert) {
+  writeDouble(this, value, offset, false, noAssert);
+};
+
+Buffer.prototype.writeDoubleBE = function(value, offset, noAssert) {
+  writeDouble(this, value, offset, true, noAssert);
+};
+
+},{"./buffer_ieee754":1,"assert":6,"base64-js":4}],"buffer-browserify":[function(require,module,exports){
+module.exports=require('q9TxCC');
+},{}],4:[function(require,module,exports){
+(function (exports) {
+	'use strict';
+
+	var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+	function b64ToByteArray(b64) {
+		var i, j, l, tmp, placeHolders, arr;
+	
+		if (b64.length % 4 > 0) {
+			throw 'Invalid string. Length must be a multiple of 4';
+		}
+
+		// the number of equal signs (place holders)
+		// if there are two placeholders, than the two characters before it
+		// represent one byte
+		// if there is only one, then the three characters before it represent 2 bytes
+		// this is just a cheap hack to not do indexOf twice
+		placeHolders = b64.indexOf('=');
+		placeHolders = placeHolders > 0 ? b64.length - placeHolders : 0;
+
+		// base64 is 4/3 + up to two characters of the original data
+		arr = [];//new Uint8Array(b64.length * 3 / 4 - placeHolders);
+
+		// if there are placeholders, only get up to the last complete 4 chars
+		l = placeHolders > 0 ? b64.length - 4 : b64.length;
+
+		for (i = 0, j = 0; i < l; i += 4, j += 3) {
+			tmp = (lookup.indexOf(b64[i]) << 18) | (lookup.indexOf(b64[i + 1]) << 12) | (lookup.indexOf(b64[i + 2]) << 6) | lookup.indexOf(b64[i + 3]);
+			arr.push((tmp & 0xFF0000) >> 16);
+			arr.push((tmp & 0xFF00) >> 8);
+			arr.push(tmp & 0xFF);
+		}
+
+		if (placeHolders === 2) {
+			tmp = (lookup.indexOf(b64[i]) << 2) | (lookup.indexOf(b64[i + 1]) >> 4);
+			arr.push(tmp & 0xFF);
+		} else if (placeHolders === 1) {
+			tmp = (lookup.indexOf(b64[i]) << 10) | (lookup.indexOf(b64[i + 1]) << 4) | (lookup.indexOf(b64[i + 2]) >> 2);
+			arr.push((tmp >> 8) & 0xFF);
+			arr.push(tmp & 0xFF);
+		}
+
+		return arr;
+	}
+
+	function uint8ToBase64(uint8) {
+		var i,
+			extraBytes = uint8.length % 3, // if we have 1 byte left, pad 2 bytes
+			output = "",
+			temp, length;
+
+		function tripletToBase64 (num) {
+			return lookup[num >> 18 & 0x3F] + lookup[num >> 12 & 0x3F] + lookup[num >> 6 & 0x3F] + lookup[num & 0x3F];
+		};
+
+		// go through the array every three bytes, we'll deal with trailing stuff later
+		for (i = 0, length = uint8.length - extraBytes; i < length; i += 3) {
+			temp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2]);
+			output += tripletToBase64(temp);
+		}
+
+		// pad the end with zeros, but make sure to not forget the extra bytes
+		switch (extraBytes) {
+			case 1:
+				temp = uint8[uint8.length - 1];
+				output += lookup[temp >> 2];
+				output += lookup[(temp << 4) & 0x3F];
+				output += '==';
+				break;
+			case 2:
+				temp = (uint8[uint8.length - 2] << 8) + (uint8[uint8.length - 1]);
+				output += lookup[temp >> 10];
+				output += lookup[(temp >> 4) & 0x3F];
+				output += lookup[(temp << 2) & 0x3F];
+				output += '=';
+				break;
+		}
+
+		return output;
+	}
+
+	module.exports.toByteArray = b64ToByteArray;
+	module.exports.fromByteArray = uint8ToBase64;
+}());
+
+},{}],5:[function(require,module,exports){
+
+
+//
+// The shims in this file are not fully implemented shims for the ES5
+// features, but do work for the particular usecases there is in
+// the other modules.
+//
+
+var toString = Object.prototype.toString;
+var hasOwnProperty = Object.prototype.hasOwnProperty;
+
+// Array.isArray is supported in IE9
+function isArray(xs) {
+  return toString.call(xs) === '[object Array]';
+}
+exports.isArray = typeof Array.isArray === 'function' ? Array.isArray : isArray;
+
+// Array.prototype.indexOf is supported in IE9
+exports.indexOf = function indexOf(xs, x) {
+  if (xs.indexOf) return xs.indexOf(x);
+  for (var i = 0; i < xs.length; i++) {
+    if (x === xs[i]) return i;
+  }
+  return -1;
+};
+
+// Array.prototype.filter is supported in IE9
+exports.filter = function filter(xs, fn) {
+  if (xs.filter) return xs.filter(fn);
+  var res = [];
+  for (var i = 0; i < xs.length; i++) {
+    if (fn(xs[i], i, xs)) res.push(xs[i]);
+  }
+  return res;
+};
+
+// Array.prototype.forEach is supported in IE9
+exports.forEach = function forEach(xs, fn, self) {
+  if (xs.forEach) return xs.forEach(fn, self);
+  for (var i = 0; i < xs.length; i++) {
+    fn.call(self, xs[i], i, xs);
+  }
+};
+
+// Array.prototype.map is supported in IE9
+exports.map = function map(xs, fn) {
+  if (xs.map) return xs.map(fn);
+  var out = new Array(xs.length);
+  for (var i = 0; i < xs.length; i++) {
+    out[i] = fn(xs[i], i, xs);
+  }
+  return out;
+};
+
+// Array.prototype.reduce is supported in IE9
+exports.reduce = function reduce(array, callback, opt_initialValue) {
+  if (array.reduce) return array.reduce(callback, opt_initialValue);
+  var value, isValueSet = false;
+
+  if (2 < arguments.length) {
+    value = opt_initialValue;
+    isValueSet = true;
+  }
+  for (var i = 0, l = array.length; l > i; ++i) {
+    if (array.hasOwnProperty(i)) {
+      if (isValueSet) {
+        value = callback(value, array[i], i, array);
+      }
+      else {
+        value = array[i];
+        isValueSet = true;
+      }
+    }
+  }
+
+  return value;
+};
+
+// String.prototype.substr - negative index don't work in IE8
+if ('ab'.substr(-1) !== 'b') {
+  exports.substr = function (str, start, length) {
+    // did we get a negative start, calculate how much it is from the beginning of the string
+    if (start < 0) start = str.length + start;
+
+    // call the original function
+    return str.substr(start, length);
+  };
+} else {
+  exports.substr = function (str, start, length) {
+    return str.substr(start, length);
+  };
+}
+
+// String.prototype.trim is supported in IE9
+exports.trim = function (str) {
+  if (str.trim) return str.trim();
+  return str.replace(/^\s+|\s+$/g, '');
+};
+
+// Function.prototype.bind is supported in IE9
+exports.bind = function () {
+  var args = Array.prototype.slice.call(arguments);
+  var fn = args.shift();
+  if (fn.bind) return fn.bind.apply(fn, args);
+  var self = args.shift();
+  return function () {
+    fn.apply(self, args.concat([Array.prototype.slice.call(arguments)]));
+  };
+};
+
+// Object.create is supported in IE9
+function create(prototype, properties) {
+  var object;
+  if (prototype === null) {
+    object = { '__proto__' : null };
+  }
+  else {
+    if (typeof prototype !== 'object') {
+      throw new TypeError(
+        'typeof prototype[' + (typeof prototype) + '] != \'object\''
+      );
+    }
+    var Type = function () {};
+    Type.prototype = prototype;
+    object = new Type();
+    object.__proto__ = prototype;
+  }
+  if (typeof properties !== 'undefined' && Object.defineProperties) {
+    Object.defineProperties(object, properties);
+  }
+  return object;
+}
+exports.create = typeof Object.create === 'function' ? Object.create : create;
+
+// Object.keys and Object.getOwnPropertyNames is supported in IE9 however
+// they do show a description and number property on Error objects
+function notObject(object) {
+  return ((typeof object != "object" && typeof object != "function") || object === null);
+}
+
+function keysShim(object) {
+  if (notObject(object)) {
+    throw new TypeError("Object.keys called on a non-object");
+  }
+
+  var result = [];
+  for (var name in object) {
+    if (hasOwnProperty.call(object, name)) {
+      result.push(name);
+    }
+  }
+  return result;
+}
+
+// getOwnPropertyNames is almost the same as Object.keys one key feature
+//  is that it returns hidden properties, since that can't be implemented,
+//  this feature gets reduced so it just shows the length property on arrays
+function propertyShim(object) {
+  if (notObject(object)) {
+    throw new TypeError("Object.getOwnPropertyNames called on a non-object");
+  }
+
+  var result = keysShim(object);
+  if (exports.isArray(object) && exports.indexOf(object, 'length') === -1) {
+    result.push('length');
+  }
+  return result;
+}
+
+var keys = typeof Object.keys === 'function' ? Object.keys : keysShim;
+var getOwnPropertyNames = typeof Object.getOwnPropertyNames === 'function' ?
+  Object.getOwnPropertyNames : propertyShim;
+
+if (new Error().hasOwnProperty('description')) {
+  var ERROR_PROPERTY_FILTER = function (obj, array) {
+    if (toString.call(obj) === '[object Error]') {
+      array = exports.filter(array, function (name) {
+        return name !== 'description' && name !== 'number' && name !== 'message';
+      });
+    }
+    return array;
+  };
+
+  exports.keys = function (object) {
+    return ERROR_PROPERTY_FILTER(object, keys(object));
+  };
+  exports.getOwnPropertyNames = function (object) {
+    return ERROR_PROPERTY_FILTER(object, getOwnPropertyNames(object));
+  };
+} else {
+  exports.keys = keys;
+  exports.getOwnPropertyNames = getOwnPropertyNames;
+}
+
+// Object.getOwnPropertyDescriptor - supported in IE8 but only on dom elements
+function valueObject(value, key) {
+  return { value: value[key] };
+}
+
+if (typeof Object.getOwnPropertyDescriptor === 'function') {
+  try {
+    Object.getOwnPropertyDescriptor({'a': 1}, 'a');
+    exports.getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+  } catch (e) {
+    // IE8 dom element issue - use a try catch and default to valueObject
+    exports.getOwnPropertyDescriptor = function (value, key) {
+      try {
+        return Object.getOwnPropertyDescriptor(value, key);
+      } catch (e) {
+        return valueObject(value, key);
+      }
     };
-};
-});
-require.register("calvinmetcalf-setImmediate/lib/messageChannel.js", function(exports, require, module){
-"use strict";
-var globe = require("./global");
-exports.test = function () {
-    return !!globe.MessageChannel;
+  }
+} else {
+  exports.getOwnPropertyDescriptor = valueObject;
+}
+
+},{}],6:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// UTILITY
+var util = require('util');
+var shims = require('_shims');
+var pSlice = Array.prototype.slice;
+
+// 1. The assert module provides functions that throw
+// AssertionError's when particular conditions are not met. The
+// assert module must conform to the following interface.
+
+var assert = module.exports = ok;
+
+// 2. The AssertionError is defined in assert.
+// new assert.AssertionError({ message: message,
+//                             actual: actual,
+//                             expected: expected })
+
+assert.AssertionError = function AssertionError(options) {
+  this.name = 'AssertionError';
+  this.actual = options.actual;
+  this.expected = options.expected;
+  this.operator = options.operator;
+  this.message = options.message || getMessage(this);
 };
 
-exports.install = function (func) {
-    var channel = new globe.MessageChannel();
-    channel.port1.onmessage = func;
-    return function () {
-        channel.port2.postMessage(0);
-    };
+// assert.AssertionError instanceof Error
+util.inherits(assert.AssertionError, Error);
+
+function replacer(key, value) {
+  if (util.isUndefined(value)) {
+    return '' + value;
+  }
+  if (util.isNumber(value) && (isNaN(value) || !isFinite(value))) {
+    return value.toString();
+  }
+  if (util.isFunction(value) || util.isRegExp(value)) {
+    return value.toString();
+  }
+  return value;
+}
+
+function truncate(s, n) {
+  if (util.isString(s)) {
+    return s.length < n ? s : s.slice(0, n);
+  } else {
+    return s;
+  }
+}
+
+function getMessage(self) {
+  return truncate(JSON.stringify(self.actual, replacer), 128) + ' ' +
+         self.operator + ' ' +
+         truncate(JSON.stringify(self.expected, replacer), 128);
+}
+
+// At present only the three keys mentioned above are used and
+// understood by the spec. Implementations or sub modules can pass
+// other keys to the AssertionError's constructor - they will be
+// ignored.
+
+// 3. All of the following functions must throw an AssertionError
+// when a corresponding condition is not met, with a message that
+// may be undefined if not provided.  All assertion methods provide
+// both the actual and expected values to the assertion error for
+// display purposes.
+
+function fail(actual, expected, message, operator, stackStartFunction) {
+  throw new assert.AssertionError({
+    message: message,
+    actual: actual,
+    expected: expected,
+    operator: operator,
+    stackStartFunction: stackStartFunction
+  });
+}
+
+// EXTENSION! allows for well behaved errors defined elsewhere.
+assert.fail = fail;
+
+// 4. Pure assertion tests whether a value is truthy, as determined
+// by !!guard.
+// assert.ok(guard, message_opt);
+// This statement is equivalent to assert.equal(true, !!guard,
+// message_opt);. To test strictly for the value true, use
+// assert.strictEqual(true, guard, message_opt);.
+
+function ok(value, message) {
+  if (!value) fail(value, true, message, '==', assert.ok);
+}
+assert.ok = ok;
+
+// 5. The equality assertion tests shallow, coercive equality with
+// ==.
+// assert.equal(actual, expected, message_opt);
+
+assert.equal = function equal(actual, expected, message) {
+  if (actual != expected) fail(actual, expected, message, '==', assert.equal);
 };
-});
-require.register("calvinmetcalf-setImmediate/lib/stateChange.js", function(exports, require, module){
-"use strict";
-var globe = require("./global");
-exports.test = function () {
-    return "document" in globe && "onreadystatechange" in globe.document.createElement("script");
+
+// 6. The non-equality assertion tests for whether two objects are not equal
+// with != assert.notEqual(actual, expected, message_opt);
+
+assert.notEqual = function notEqual(actual, expected, message) {
+  if (actual == expected) {
+    fail(actual, expected, message, '!=', assert.notEqual);
+  }
 };
 
-exports.install = function (handle) {
-    return function () {
+// 7. The equivalence assertion tests a deep equality relation.
+// assert.deepEqual(actual, expected, message_opt);
 
-        // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
-        // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
-        var scriptEl = globe.document.createElement("script");
-        scriptEl.onreadystatechange = function () {
-            handle();
-
-            scriptEl.onreadystatechange = null;
-            scriptEl.parentNode.removeChild(scriptEl);
-            scriptEl = null;
-        };
-        globe.document.documentElement.appendChild(scriptEl);
-
-        return handle;
-    };
+assert.deepEqual = function deepEqual(actual, expected, message) {
+  if (!_deepEqual(actual, expected)) {
+    fail(actual, expected, message, 'deepEqual', assert.deepEqual);
+  }
 };
-});
-require.register("calvinmetcalf-setImmediate/lib/timeout.js", function(exports, require, module){
-"use strict";
-exports.test = function () {
+
+function _deepEqual(actual, expected) {
+  // 7.1. All identical values are equivalent, as determined by ===.
+  if (actual === expected) {
     return true;
-};
 
-exports.install = function (t) {
-    return function () {
-        setTimeout(t, 0);
-    };
-};
-});
-require.register("calvinmetcalf-setImmediate/lib/global.js", function(exports, require, module){
-module.exports = typeof global === "object" && global ? global : this;
-});
-require.register("calvinmetcalf-setImmediate/lib/mutation.js", function(exports, require, module){
-"use strict";
-//based off rsvp
-//https://github.com/tildeio/rsvp.js/blob/master/lib/rsvp/async.js
-var globe = require("./global");
+  } else if (util.isBuffer(actual) && util.isBuffer(expected)) {
+    if (actual.length != expected.length) return false;
 
-var MutationObserver = globe.MutationObserver || globe.WebKitMutationObserver;
+    for (var i = 0; i < actual.length; i++) {
+      if (actual[i] !== expected[i]) return false;
+    }
 
-exports.test = function () {
-    return MutationObserver;
-};
+    return true;
 
-exports.install = function (handle) {
-    var observer = new MutationObserver(handle);
-    var element = globe.document.createElement("div");
-    observer.observe(element, { attributes: true });
+  // 7.2. If the expected value is a Date object, the actual value is
+  // equivalent if it is also a Date object that refers to the same time.
+  } else if (util.isDate(actual) && util.isDate(expected)) {
+    return actual.getTime() === expected.getTime();
 
-    // Chrome Memory Leak: https://bugs.webkit.org/show_bug.cgi?id=93661
-    globe.addEventListener("unload", function () {
-        observer.disconnect();
-        observer = null;
-    }, false);
-    return function () {
-        element.setAttribute("drainQueue", "drainQueue");
-    };
-};
-});
-require.register("calvinmetcalf-setImmediate/lib/realSetImmediate.js", function(exports, require, module){
-"use strict";
-var globe = require("./global");
-exports.test = function () {
-    return  globe.setImmediate;
-};
+  // 7.3 If the expected value is a RegExp object, the actual value is
+  // equivalent if it is also a RegExp object with the same source and
+  // properties (`global`, `multiline`, `lastIndex`, `ignoreCase`).
+  } else if (util.isRegExp(actual) && util.isRegExp(expected)) {
+    return actual.source === expected.source &&
+           actual.global === expected.global &&
+           actual.multiline === expected.multiline &&
+           actual.lastIndex === expected.lastIndex &&
+           actual.ignoreCase === expected.ignoreCase;
 
-exports.install = function (handle) {
-    //return globe.setImmediate.bind(globe, handle);
-    return globe.setTimeout.bind(globe,handle,0);
-};
+  // 7.4. Other pairs that do not both pass typeof value == 'object',
+  // equivalence is determined by ==.
+  } else if (!util.isObject(actual) && !util.isObject(expected)) {
+    return actual == expected;
 
-});
-require.register("calvinmetcalf-lie/lie.js", function(exports, require, module){
-var immediate = require('immediate');
-// Creates a deferred: an object with a promise and corresponding resolve/reject methods
-function Promise(resolver) {
-     if (!(this instanceof Promise)) {
-        return new Promise(resolver);
-    }
-    var queue = [];
-    var resolved = false;
-    // The `handler` variable points to the function that will
-    // 1) handle a .then(onFulfilled, onRejected) call
-    // 2) handle a .resolve or .reject call (if not fulfilled)
-    // Before 2), `handler` holds a queue of callbacks.
-    // After 2), `handler` is a simple .then handler.
-    // We use only one function to save memory and complexity.
-     // Case 1) handle a .then(onFulfilled, onRejected) call
-    function pending(onFulfilled, onRejected){
-        return Promise(function(resolver,rejecter){
-            queue.push({
-                resolve: onFulfilled,
-                reject: onRejected,
-                resolver:resolver,
-                rejecter:rejecter
-            });
-        });
-    }
-    function then(onFulfilled, onRejected) {
-        return resolved?resolved(onFulfilled, onRejected):pending(onFulfilled, onRejected);
-    }
-    // Case 2) handle a .resolve or .reject call
-        // (`onFulfilled` acts as a sentinel)
-        // The actual function signature is
-        // .re[ject|solve](sentinel, success, value)
-    function resolve(success, value){
-        var action = success ? 'resolve' : 'reject';
-        var queued;
-        var callback;
-        for (var i = 0, l = queue.length; i < l; i++) {
-            queued = queue[i];
-            callback = queued[action];
-            if (typeof callback === 'function') {
-                immediate(execute,callback, value, queued.resolver, queued.rejecter);
-            }else if(success){
-                queued.resolver(value);
-            }else{
-                queued.rejecter(value);
-            }
-        }
-        // Replace this handler with a simple resolved or rejected handler
-        resolved = createHandler(then, value, success);
-    }
-    this.then = then;
-    function yes(value) {
-        if (!resolved) {
-            resolve(true, value);
-        }
-    }
-    function no (reason) {
-        if (!resolved) {
-            resolve(false, reason);
-        }
-    }
-    try{
-        resolver(function(a){
-            if(a && typeof a.then==='function'){
-                a.then(yes,no);
-            }else{
-                yes(a);
-            }
-        },no);
-    }catch(e){
-        no(e);
-    }
+  // 7.5 For all other Object pairs, including Array objects, equivalence is
+  // determined by having the same number of owned properties (as verified
+  // with Object.prototype.hasOwnProperty.call), the same set of keys
+  // (although not necessarily the same order), equivalent values for every
+  // corresponding key, and an identical 'prototype' property. Note: this
+  // accounts for both named and indexed properties on Arrays.
+  } else {
+    return objEquiv(actual, expected);
+  }
 }
 
-// Creates a fulfilled or rejected .then function
-function createHandler(then, value, success) {
-    return function(onFulfilled, onRejected) {
-        var callback = success ? onFulfilled : onRejected;
-        if (typeof callback !== 'function') {
-            return Promise(function(resolve,reject){
-                then(resolve,reject);
-            });
-        }
-        return Promise(function(resolve,reject){
-            immediate(execute,callback,value,resolve,reject);
-       });
-    };
+function isArguments(object) {
+  return Object.prototype.toString.call(object) == '[object Arguments]';
 }
 
-// Executes the callback with the specified value,
-// resolving or rejecting the deferred
-function execute(callback, value, resolve, reject) {
+function objEquiv(a, b) {
+  if (util.isNullOrUndefined(a) || util.isNullOrUndefined(b))
+    return false;
+  // an identical 'prototype' property.
+  if (a.prototype !== b.prototype) return false;
+  //~~~I've managed to break Object.keys through screwy arguments passing.
+  //   Converting to array solves the problem.
+  if (isArguments(a)) {
+    if (!isArguments(b)) {
+      return false;
+    }
+    a = pSlice.call(a);
+    b = pSlice.call(b);
+    return _deepEqual(a, b);
+  }
+  try {
+    var ka = shims.keys(a),
+        kb = shims.keys(b),
+        key, i;
+  } catch (e) {//happens when one is a string literal and the other isn't
+    return false;
+  }
+  // having the same number of owned properties (keys incorporates
+  // hasOwnProperty)
+  if (ka.length != kb.length)
+    return false;
+  //the same set of keys (although not necessarily the same order),
+  ka.sort();
+  kb.sort();
+  //~~~cheap key test
+  for (i = ka.length - 1; i >= 0; i--) {
+    if (ka[i] != kb[i])
+      return false;
+  }
+  //equivalent values for every corresponding key, and
+  //~~~possibly expensive deep test
+  for (i = ka.length - 1; i >= 0; i--) {
+    key = ka[i];
+    if (!_deepEqual(a[key], b[key])) return false;
+  }
+  return true;
+}
+
+// 8. The non-equivalence assertion tests for any deep inequality.
+// assert.notDeepEqual(actual, expected, message_opt);
+
+assert.notDeepEqual = function notDeepEqual(actual, expected, message) {
+  if (_deepEqual(actual, expected)) {
+    fail(actual, expected, message, 'notDeepEqual', assert.notDeepEqual);
+  }
+};
+
+// 9. The strict equality assertion tests strict equality, as determined by ===.
+// assert.strictEqual(actual, expected, message_opt);
+
+assert.strictEqual = function strictEqual(actual, expected, message) {
+  if (actual !== expected) {
+    fail(actual, expected, message, '===', assert.strictEqual);
+  }
+};
+
+// 10. The strict non-equality assertion tests for strict inequality, as
+// determined by !==.  assert.notStrictEqual(actual, expected, message_opt);
+
+assert.notStrictEqual = function notStrictEqual(actual, expected, message) {
+  if (actual === expected) {
+    fail(actual, expected, message, '!==', assert.notStrictEqual);
+  }
+};
+
+function expectedException(actual, expected) {
+  if (!actual || !expected) {
+    return false;
+  }
+
+  if (Object.prototype.toString.call(expected) == '[object RegExp]') {
+    return expected.test(actual);
+  } else if (actual instanceof expected) {
+    return true;
+  } else if (expected.call({}, actual) === true) {
+    return true;
+  }
+
+  return false;
+}
+
+function _throws(shouldThrow, block, expected, message) {
+  var actual;
+
+  if (util.isString(expected)) {
+    message = expected;
+    expected = null;
+  }
+
+  try {
+    block();
+  } catch (e) {
+    actual = e;
+  }
+
+  message = (expected && expected.name ? ' (' + expected.name + ').' : '.') +
+            (message ? ' ' + message : '.');
+
+  if (shouldThrow && !actual) {
+    fail(actual, expected, 'Missing expected exception' + message);
+  }
+
+  if (!shouldThrow && expectedException(actual, expected)) {
+    fail(actual, expected, 'Got unwanted exception' + message);
+  }
+
+  if ((shouldThrow && actual && expected &&
+      !expectedException(actual, expected)) || (!shouldThrow && actual)) {
+    throw actual;
+  }
+}
+
+// 11. Expected to throw an error:
+// assert.throws(block, Error_opt, message_opt);
+
+assert.throws = function(block, /*optional*/error, /*optional*/message) {
+  _throws.apply(this, [true].concat(pSlice.call(arguments)));
+};
+
+// EXTENSION! This is annoying to write outside this module.
+assert.doesNotThrow = function(block, /*optional*/message) {
+  _throws.apply(this, [false].concat(pSlice.call(arguments)));
+};
+
+assert.ifError = function(err) { if (err) {throw err;}};
+},{"_shims":5,"util":7}],7:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var shims = require('_shims');
+
+var formatRegExp = /%[sdj%]/g;
+exports.format = function(f) {
+  if (!isString(f)) {
+    var objects = [];
+    for (var i = 0; i < arguments.length; i++) {
+      objects.push(inspect(arguments[i]));
+    }
+    return objects.join(' ');
+  }
+
+  var i = 1;
+  var args = arguments;
+  var len = args.length;
+  var str = String(f).replace(formatRegExp, function(x) {
+    if (x === '%%') return '%';
+    if (i >= len) return x;
+    switch (x) {
+      case '%s': return String(args[i++]);
+      case '%d': return Number(args[i++]);
+      case '%j':
         try {
-            var result = callback(value);
-            if (result && typeof result.then === 'function') {
-                result.then(resolve, reject);
-            }
-            else {
-                resolve(result);
-            }
+          return JSON.stringify(args[i++]);
+        } catch (_) {
+          return '[Circular]';
         }
-        catch (error) {
-            reject(error);
-        }
-}
-module.exports = Promise;
+      default:
+        return x;
+    }
+  });
+  for (var x = args[i]; i < len; x = args[++i]) {
+    if (isNull(x) || !isObject(x)) {
+      str += ' ' + x;
+    } else {
+      str += ' ' + inspect(x);
+    }
+  }
+  return str;
+};
 
-});
-require.register("calvinmetcalf-jszip/lib/base64.js", function(exports, require, module){
+/**
+ * Echos the value of a value. Trys to print the value out
+ * in the best way possible given the different types.
+ *
+ * @param {Object} obj The object to print out.
+ * @param {Object} opts Optional options object that alters the output.
+ */
+/* legacy: obj, showHidden, depth, colors*/
+function inspect(obj, opts) {
+  // default options
+  var ctx = {
+    seen: [],
+    stylize: stylizeNoColor
+  };
+  // legacy...
+  if (arguments.length >= 3) ctx.depth = arguments[2];
+  if (arguments.length >= 4) ctx.colors = arguments[3];
+  if (isBoolean(opts)) {
+    // legacy...
+    ctx.showHidden = opts;
+  } else if (opts) {
+    // got an "options" object
+    exports._extend(ctx, opts);
+  }
+  // set default options
+  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
+  if (isUndefined(ctx.depth)) ctx.depth = 2;
+  if (isUndefined(ctx.colors)) ctx.colors = false;
+  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
+  if (ctx.colors) ctx.stylize = stylizeWithColor;
+  return formatValue(ctx, obj, ctx.depth);
+}
+exports.inspect = inspect;
+
+
+// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
+inspect.colors = {
+  'bold' : [1, 22],
+  'italic' : [3, 23],
+  'underline' : [4, 24],
+  'inverse' : [7, 27],
+  'white' : [37, 39],
+  'grey' : [90, 39],
+  'black' : [30, 39],
+  'blue' : [34, 39],
+  'cyan' : [36, 39],
+  'green' : [32, 39],
+  'magenta' : [35, 39],
+  'red' : [31, 39],
+  'yellow' : [33, 39]
+};
+
+// Don't use 'blue' not visible on cmd.exe
+inspect.styles = {
+  'special': 'cyan',
+  'number': 'yellow',
+  'boolean': 'yellow',
+  'undefined': 'grey',
+  'null': 'bold',
+  'string': 'green',
+  'date': 'magenta',
+  // "name": intentionally not styling
+  'regexp': 'red'
+};
+
+
+function stylizeWithColor(str, styleType) {
+  var style = inspect.styles[styleType];
+
+  if (style) {
+    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
+           '\u001b[' + inspect.colors[style][1] + 'm';
+  } else {
+    return str;
+  }
+}
+
+
+function stylizeNoColor(str, styleType) {
+  return str;
+}
+
+
+function arrayToHash(array) {
+  var hash = {};
+
+  shims.forEach(array, function(val, idx) {
+    hash[val] = true;
+  });
+
+  return hash;
+}
+
+
+function formatValue(ctx, value, recurseTimes) {
+  // Provide a hook for user-specified inspect functions.
+  // Check that value is an object with an inspect function on it
+  if (ctx.customInspect &&
+      value &&
+      isFunction(value.inspect) &&
+      // Filter out the util module, it's inspect function is special
+      value.inspect !== exports.inspect &&
+      // Also filter out any prototype objects using the circular check.
+      !(value.constructor && value.constructor.prototype === value)) {
+    var ret = value.inspect(recurseTimes);
+    if (!isString(ret)) {
+      ret = formatValue(ctx, ret, recurseTimes);
+    }
+    return ret;
+  }
+
+  // Primitive types cannot have properties
+  var primitive = formatPrimitive(ctx, value);
+  if (primitive) {
+    return primitive;
+  }
+
+  // Look up the keys of the object.
+  var keys = shims.keys(value);
+  var visibleKeys = arrayToHash(keys);
+
+  if (ctx.showHidden) {
+    keys = shims.getOwnPropertyNames(value);
+  }
+
+  // Some type of object without properties can be shortcutted.
+  if (keys.length === 0) {
+    if (isFunction(value)) {
+      var name = value.name ? ': ' + value.name : '';
+      return ctx.stylize('[Function' + name + ']', 'special');
+    }
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    }
+    if (isDate(value)) {
+      return ctx.stylize(Date.prototype.toString.call(value), 'date');
+    }
+    if (isError(value)) {
+      return formatError(value);
+    }
+  }
+
+  var base = '', array = false, braces = ['{', '}'];
+
+  // Make Array say that they are Array
+  if (isArray(value)) {
+    array = true;
+    braces = ['[', ']'];
+  }
+
+  // Make functions say that they are functions
+  if (isFunction(value)) {
+    var n = value.name ? ': ' + value.name : '';
+    base = ' [Function' + n + ']';
+  }
+
+  // Make RegExps say that they are RegExps
+  if (isRegExp(value)) {
+    base = ' ' + RegExp.prototype.toString.call(value);
+  }
+
+  // Make dates with properties first say the date
+  if (isDate(value)) {
+    base = ' ' + Date.prototype.toUTCString.call(value);
+  }
+
+  // Make error with message first say the error
+  if (isError(value)) {
+    base = ' ' + formatError(value);
+  }
+
+  if (keys.length === 0 && (!array || value.length == 0)) {
+    return braces[0] + base + braces[1];
+  }
+
+  if (recurseTimes < 0) {
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    } else {
+      return ctx.stylize('[Object]', 'special');
+    }
+  }
+
+  ctx.seen.push(value);
+
+  var output;
+  if (array) {
+    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
+  } else {
+    output = keys.map(function(key) {
+      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
+    });
+  }
+
+  ctx.seen.pop();
+
+  return reduceToSingleString(output, base, braces);
+}
+
+
+function formatPrimitive(ctx, value) {
+  if (isUndefined(value))
+    return ctx.stylize('undefined', 'undefined');
+  if (isString(value)) {
+    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
+                                             .replace(/'/g, "\\'")
+                                             .replace(/\\"/g, '"') + '\'';
+    return ctx.stylize(simple, 'string');
+  }
+  if (isNumber(value))
+    return ctx.stylize('' + value, 'number');
+  if (isBoolean(value))
+    return ctx.stylize('' + value, 'boolean');
+  // For some reason typeof null is "object", so special case here.
+  if (isNull(value))
+    return ctx.stylize('null', 'null');
+}
+
+
+function formatError(value) {
+  return '[' + Error.prototype.toString.call(value) + ']';
+}
+
+
+function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
+  var output = [];
+  for (var i = 0, l = value.length; i < l; ++i) {
+    if (hasOwnProperty(value, String(i))) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          String(i), true));
+    } else {
+      output.push('');
+    }
+  }
+
+  shims.forEach(keys, function(key) {
+    if (!key.match(/^\d+$/)) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          key, true));
+    }
+  });
+  return output;
+}
+
+
+function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
+  var name, str, desc;
+  desc = shims.getOwnPropertyDescriptor(value, key) || { value: value[key] };
+  if (desc.get) {
+    if (desc.set) {
+      str = ctx.stylize('[Getter/Setter]', 'special');
+    } else {
+      str = ctx.stylize('[Getter]', 'special');
+    }
+  } else {
+    if (desc.set) {
+      str = ctx.stylize('[Setter]', 'special');
+    }
+  }
+
+  if (!hasOwnProperty(visibleKeys, key)) {
+    name = '[' + key + ']';
+  }
+  if (!str) {
+    if (shims.indexOf(ctx.seen, desc.value) < 0) {
+      if (isNull(recurseTimes)) {
+        str = formatValue(ctx, desc.value, null);
+      } else {
+        str = formatValue(ctx, desc.value, recurseTimes - 1);
+      }
+      if (str.indexOf('\n') > -1) {
+        if (array) {
+          str = str.split('\n').map(function(line) {
+            return '  ' + line;
+          }).join('\n').substr(2);
+        } else {
+          str = '\n' + str.split('\n').map(function(line) {
+            return '   ' + line;
+          }).join('\n');
+        }
+      }
+    } else {
+      str = ctx.stylize('[Circular]', 'special');
+    }
+  }
+  if (isUndefined(name)) {
+    if (array && key.match(/^\d+$/)) {
+      return str;
+    }
+    name = JSON.stringify('' + key);
+    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
+      name = name.substr(1, name.length - 2);
+      name = ctx.stylize(name, 'name');
+    } else {
+      name = name.replace(/'/g, "\\'")
+                 .replace(/\\"/g, '"')
+                 .replace(/(^"|"$)/g, "'");
+      name = ctx.stylize(name, 'string');
+    }
+  }
+
+  return name + ': ' + str;
+}
+
+
+function reduceToSingleString(output, base, braces) {
+  var numLinesEst = 0;
+  var length = shims.reduce(output, function(prev, cur) {
+    numLinesEst++;
+    if (cur.indexOf('\n') >= 0) numLinesEst++;
+    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
+  }, 0);
+
+  if (length > 60) {
+    return braces[0] +
+           (base === '' ? '' : base + '\n ') +
+           ' ' +
+           output.join(',\n  ') +
+           ' ' +
+           braces[1];
+  }
+
+  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
+}
+
+
+// NOTE: These type checking functions intentionally don't use `instanceof`
+// because it is fragile and can be easily faked with `Object.create()`.
+function isArray(ar) {
+  return shims.isArray(ar);
+}
+exports.isArray = isArray;
+
+function isBoolean(arg) {
+  return typeof arg === 'boolean';
+}
+exports.isBoolean = isBoolean;
+
+function isNull(arg) {
+  return arg === null;
+}
+exports.isNull = isNull;
+
+function isNullOrUndefined(arg) {
+  return arg == null;
+}
+exports.isNullOrUndefined = isNullOrUndefined;
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+exports.isNumber = isNumber;
+
+function isString(arg) {
+  return typeof arg === 'string';
+}
+exports.isString = isString;
+
+function isSymbol(arg) {
+  return typeof arg === 'symbol';
+}
+exports.isSymbol = isSymbol;
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+exports.isUndefined = isUndefined;
+
+function isRegExp(re) {
+  return isObject(re) && objectToString(re) === '[object RegExp]';
+}
+exports.isRegExp = isRegExp;
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg;
+}
+exports.isObject = isObject;
+
+function isDate(d) {
+  return isObject(d) && objectToString(d) === '[object Date]';
+}
+exports.isDate = isDate;
+
+function isError(e) {
+  return isObject(e) && objectToString(e) === '[object Error]';
+}
+exports.isError = isError;
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+exports.isFunction = isFunction;
+
+function isPrimitive(arg) {
+  return arg === null ||
+         typeof arg === 'boolean' ||
+         typeof arg === 'number' ||
+         typeof arg === 'string' ||
+         typeof arg === 'symbol' ||  // ES6 symbol
+         typeof arg === 'undefined';
+}
+exports.isPrimitive = isPrimitive;
+
+function isBuffer(arg) {
+  return arg instanceof Buffer;
+}
+exports.isBuffer = isBuffer;
+
+function objectToString(o) {
+  return Object.prototype.toString.call(o);
+}
+
+
+function pad(n) {
+  return n < 10 ? '0' + n.toString(10) : n.toString(10);
+}
+
+
+var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+              'Oct', 'Nov', 'Dec'];
+
+// 26 Feb 16:19:34
+function timestamp() {
+  var d = new Date();
+  var time = [pad(d.getHours()),
+              pad(d.getMinutes()),
+              pad(d.getSeconds())].join(':');
+  return [d.getDate(), months[d.getMonth()], time].join(' ');
+}
+
+
+// log is just a thin wrapper to console.log that prepends a timestamp
+exports.log = function() {
+  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
+};
+
+
+/**
+ * Inherit the prototype methods from one constructor into another.
+ *
+ * The Function.prototype.inherits from lang.js rewritten as a standalone
+ * function (not on Function.prototype). NOTE: If this file is to be loaded
+ * during bootstrapping this function needs to be rewritten using some native
+ * functions as prototype setup using normal JavaScript does not work as
+ * expected during bootstrapping (see mirror.js in r114903).
+ *
+ * @param {function} ctor Constructor function which needs to inherit the
+ *     prototype.
+ * @param {function} superCtor Constructor function to inherit prototype from.
+ */
+exports.inherits = function(ctor, superCtor) {
+  ctor.super_ = superCtor;
+  ctor.prototype = shims.create(superCtor.prototype, {
+    constructor: {
+      value: ctor,
+      enumerable: false,
+      writable: true,
+      configurable: true
+    }
+  });
+};
+
+exports._extend = function(origin, add) {
+  // Don't do anything if add isn't an object
+  if (!add || !isObject(add)) return origin;
+
+  var keys = shims.keys(add);
+  var i = keys.length;
+  while (i--) {
+    origin[keys[i]] = add[keys[i]];
+  }
+  return origin;
+};
+
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+},{"_shims":5}]},{},[])
+;;module.exports=require("buffer-browserify")
+
+},{}],6:[function(require,module,exports){
+// shim for using process in browser
+
+var process = module.exports = {};
+
+process.nextTick = (function () {
+    var canSetImmediate = typeof window !== 'undefined'
+    && window.setImmediate;
+    var canPost = typeof window !== 'undefined'
+    && window.postMessage && window.addEventListener
+    ;
+
+    if (canSetImmediate) {
+        return function (f) { return window.setImmediate(f) };
+    }
+
+    if (canPost) {
+        var queue = [];
+        window.addEventListener('message', function (ev) {
+            if (ev.source === window && ev.data === 'process-tick') {
+                ev.stopPropagation();
+                if (queue.length > 0) {
+                    var fn = queue.shift();
+                    fn();
+                }
+            }
+        }, true);
+
+        return function nextTick(fn) {
+            queue.push(fn);
+            window.postMessage('process-tick', '*');
+        };
+    }
+
+    return function nextTick(fn) {
+        setTimeout(fn, 0);
+    };
+})();
+
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+}
+
+// TODO(shtylman)
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+
+},{}],7:[function(require,module,exports){
 // private property
 var _keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
 
@@ -574,8 +2914,7 @@ exports.decode = function(input, utf8) {
 
 };
 
-});
-require.register("calvinmetcalf-jszip/lib/compressedObject.js", function(exports, require, module){
+},{}],8:[function(require,module,exports){
 function CompressedObject() {
     this.compressedSize = 0;
     this.uncompressedSize = 0;
@@ -604,8 +2943,7 @@ CompressedObject.prototype = {
 };
 module.exports = CompressedObject;
 
-});
-require.register("calvinmetcalf-jszip/lib/compressions.js", function(exports, require, module){
+},{}],9:[function(require,module,exports){
 exports.STORE = {
     magic: "\x00\x00",
     compress: function(content) {
@@ -619,8 +2957,7 @@ exports.STORE = {
 };
 exports.DEFLATE = require('./flate');
 
-});
-require.register("calvinmetcalf-jszip/lib/dataReader.js", function(exports, require, module){
+},{"./flate":13}],10:[function(require,module,exports){
 var utils = require('./utils');
 
 function DataReader(data) {
@@ -728,15 +3065,959 @@ DataReader.prototype = {
 };
 module.exports = DataReader;
 
-});
-require.register("calvinmetcalf-jszip/lib/defaults.js", function(exports, require, module){
+},{"./utils":23}],11:[function(require,module,exports){
 exports.base64 = false;
 exports.binary = false;
 exports.dir = false;
 exports.date = null;
 exports.compression = null;
-});
-require.register("calvinmetcalf-jszip/lib/index.js", function(exports, require, module){
+},{}],12:[function(require,module,exports){
+var context = {};
+(function() {
+
+    // https://github.com/imaya/zlib.js
+    // tag 0.1.6
+    // file bin/deflate.min.js
+
+    /** @license zlib.js 2012 - imaya [ https://github.com/imaya/zlib.js ] The MIT License */
+    (function() {
+        'use strict';
+        var n = void 0,
+            u = !0,
+            aa = this;
+
+        function ba(e, d) {
+            var c = e.split("."),
+                f = aa;
+            !(c[0] in f) && f.execScript && f.execScript("var " + c[0]);
+            for (var a; c.length && (a = c.shift());)!c.length && d !== n ? f[a] = d : f = f[a] ? f[a] : f[a] = {}
+        };
+        var C = "undefined" !== typeof Uint8Array && "undefined" !== typeof Uint16Array && "undefined" !== typeof Uint32Array;
+
+        function K(e, d) {
+            this.index = "number" === typeof d ? d : 0;
+            this.d = 0;
+            this.buffer = e instanceof(C ? Uint8Array : Array) ? e : new(C ? Uint8Array : Array)(32768);
+            if (2 * this.buffer.length <= this.index) throw Error("invalid index");
+            this.buffer.length <= this.index && ca(this)
+        }
+        function ca(e) {
+            var d = e.buffer,
+                c, f = d.length,
+                a = new(C ? Uint8Array : Array)(f << 1);
+            if (C) a.set(d);
+            else for (c = 0; c < f; ++c) a[c] = d[c];
+            return e.buffer = a
+        }
+        K.prototype.a = function(e, d, c) {
+            var f = this.buffer,
+                a = this.index,
+                b = this.d,
+                k = f[a],
+                m;
+            c && 1 < d && (e = 8 < d ? (L[e & 255] << 24 | L[e >>> 8 & 255] << 16 | L[e >>> 16 & 255] << 8 | L[e >>> 24 & 255]) >> 32 - d : L[e] >> 8 - d);
+            if (8 > d + b) k = k << d | e, b += d;
+            else for (m = 0; m < d; ++m) k = k << 1 | e >> d - m - 1 & 1, 8 === ++b && (b = 0, f[a++] = L[k], k = 0, a === f.length && (f = ca(this)));
+            f[a] = k;
+            this.buffer = f;
+            this.d = b;
+            this.index = a
+        };
+        K.prototype.finish = function() {
+            var e = this.buffer,
+                d = this.index,
+                c;
+            0 < this.d && (e[d] <<= 8 - this.d, e[d] = L[e[d]], d++);
+            C ? c = e.subarray(0, d) : (e.length = d, c = e);
+            return c
+        };
+        var ga = new(C ? Uint8Array : Array)(256),
+            M;
+        for (M = 0; 256 > M; ++M) {
+            for (var R = M, S = R, ha = 7, R = R >>> 1; R; R >>>= 1) S <<= 1, S |= R & 1, --ha;
+            ga[M] = (S << ha & 255) >>> 0
+        }
+        var L = ga;
+
+        function ja(e) {
+            this.buffer = new(C ? Uint16Array : Array)(2 * e);
+            this.length = 0
+        }
+        ja.prototype.getParent = function(e) {
+            return 2 * ((e - 2) / 4 | 0)
+        };
+        ja.prototype.push = function(e, d) {
+            var c, f, a = this.buffer,
+                b;
+            c = this.length;
+            a[this.length++] = d;
+            for (a[this.length++] = e; 0 < c;) if (f = this.getParent(c), a[c] > a[f]) b = a[c], a[c] = a[f], a[f] = b, b = a[c + 1], a[c + 1] = a[f + 1], a[f + 1] = b, c = f;
+            else break;
+            return this.length
+        };
+        ja.prototype.pop = function() {
+            var e, d, c = this.buffer,
+                f, a, b;
+            d = c[0];
+            e = c[1];
+            this.length -= 2;
+            c[0] = c[this.length];
+            c[1] = c[this.length + 1];
+            for (b = 0;;) {
+                a = 2 * b + 2;
+                if (a >= this.length) break;
+                a + 2 < this.length && c[a + 2] > c[a] && (a += 2);
+                if (c[a] > c[b]) f = c[b], c[b] = c[a], c[a] = f, f = c[b + 1], c[b + 1] = c[a + 1], c[a + 1] = f;
+                else break;
+                b = a
+            }
+            return {
+                index: e,
+                value: d,
+                length: this.length
+            }
+        };
+
+        function ka(e, d) {
+            this.e = ma;
+            this.f = 0;
+            this.input = C && e instanceof Array ? new Uint8Array(e) : e;
+            this.c = 0;
+            d && (d.lazy && (this.f = d.lazy), "number" === typeof d.compressionType && (this.e = d.compressionType), d.outputBuffer && (this.b = C && d.outputBuffer instanceof Array ? new Uint8Array(d.outputBuffer) : d.outputBuffer), "number" === typeof d.outputIndex && (this.c = d.outputIndex));
+            this.b || (this.b = new(C ? Uint8Array : Array)(32768))
+        }
+        var ma = 2,
+            T = [],
+            U;
+        for (U = 0; 288 > U; U++) switch (u) {
+        case 143 >= U:
+            T.push([U + 48, 8]);
+            break;
+        case 255 >= U:
+            T.push([U - 144 + 400, 9]);
+            break;
+        case 279 >= U:
+            T.push([U - 256 + 0, 7]);
+            break;
+        case 287 >= U:
+            T.push([U - 280 + 192, 8]);
+            break;
+        default:
+            throw "invalid literal: " + U;
+        }
+        ka.prototype.h = function() {
+            var e, d, c, f, a = this.input;
+            switch (this.e) {
+            case 0:
+                c = 0;
+                for (f = a.length; c < f;) {
+                    d = C ? a.subarray(c, c + 65535) : a.slice(c, c + 65535);
+                    c += d.length;
+                    var b = d,
+                        k = c === f,
+                        m = n,
+                        g = n,
+                        p = n,
+                        v = n,
+                        x = n,
+                        l = this.b,
+                        h = this.c;
+                    if (C) {
+                        for (l = new Uint8Array(this.b.buffer); l.length <= h + b.length + 5;) l = new Uint8Array(l.length << 1);
+                        l.set(this.b)
+                    }
+                    m = k ? 1 : 0;
+                    l[h++] = m | 0;
+                    g = b.length;
+                    p = ~g + 65536 & 65535;
+                    l[h++] = g & 255;
+                    l[h++] = g >>> 8 & 255;
+                    l[h++] = p & 255;
+                    l[h++] = p >>> 8 & 255;
+                    if (C) l.set(b, h), h += b.length, l = l.subarray(0, h);
+                    else {
+                        v = 0;
+                        for (x = b.length; v < x; ++v) l[h++] = b[v];
+                        l.length = h
+                    }
+                    this.c = h;
+                    this.b = l
+                }
+                break;
+            case 1:
+                var q = new K(C ? new Uint8Array(this.b.buffer) : this.b, this.c);
+                q.a(1, 1, u);
+                q.a(1, 2, u);
+                var t = na(this, a),
+                    w, da, z;
+                w = 0;
+                for (da = t.length; w < da; w++) if (z = t[w], K.prototype.a.apply(q, T[z]), 256 < z) q.a(t[++w], t[++w], u), q.a(t[++w], 5), q.a(t[++w], t[++w], u);
+                else if (256 === z) break;
+                this.b = q.finish();
+                this.c = this.b.length;
+                break;
+            case ma:
+                var B = new K(C ? new Uint8Array(this.b.buffer) : this.b, this.c),
+                    ra, J, N, O, P, Ia = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15],
+                    W, sa, X, ta, ea, ia = Array(19),
+                    ua, Q, fa, y, va;
+                ra = ma;
+                B.a(1, 1, u);
+                B.a(ra, 2, u);
+                J = na(this, a);
+                W = oa(this.j, 15);
+                sa = pa(W);
+                X = oa(this.i, 7);
+                ta = pa(X);
+                for (N = 286; 257 < N && 0 === W[N - 1]; N--);
+                for (O = 30; 1 < O && 0 === X[O - 1]; O--);
+                var wa = N,
+                    xa = O,
+                    F = new(C ? Uint32Array : Array)(wa + xa),
+                    r, G, s, Y, E = new(C ? Uint32Array : Array)(316),
+                    D, A, H = new(C ? Uint8Array : Array)(19);
+                for (r = G = 0; r < wa; r++) F[G++] = W[r];
+                for (r = 0; r < xa; r++) F[G++] = X[r];
+                if (!C) {
+                    r = 0;
+                    for (Y = H.length; r < Y; ++r) H[r] = 0
+                }
+                r = D = 0;
+                for (Y = F.length; r < Y; r += G) {
+                    for (G = 1; r + G < Y && F[r + G] === F[r]; ++G);
+                    s = G;
+                    if (0 === F[r]) if (3 > s) for (; 0 < s--;) E[D++] = 0,
+                    H[0]++;
+                    else for (; 0 < s;) A = 138 > s ? s : 138, A > s - 3 && A < s && (A = s - 3), 10 >= A ? (E[D++] = 17, E[D++] = A - 3, H[17]++) : (E[D++] = 18, E[D++] = A - 11, H[18]++), s -= A;
+                    else if (E[D++] = F[r], H[F[r]]++, s--, 3 > s) for (; 0 < s--;) E[D++] = F[r], H[F[r]]++;
+                    else for (; 0 < s;) A = 6 > s ? s : 6, A > s - 3 && A < s && (A = s - 3), E[D++] = 16, E[D++] = A - 3, H[16]++, s -= A
+                }
+                e = C ? E.subarray(0, D) : E.slice(0, D);
+                ea = oa(H, 7);
+                for (y = 0; 19 > y; y++) ia[y] = ea[Ia[y]];
+                for (P = 19; 4 < P && 0 === ia[P - 1]; P--);
+                ua = pa(ea);
+                B.a(N - 257, 5, u);
+                B.a(O - 1, 5, u);
+                B.a(P - 4, 4, u);
+                for (y = 0; y < P; y++) B.a(ia[y], 3, u);
+                y = 0;
+                for (va = e.length; y < va; y++) if (Q = e[y], B.a(ua[Q], ea[Q], u), 16 <= Q) {
+                    y++;
+                    switch (Q) {
+                    case 16:
+                        fa = 2;
+                        break;
+                    case 17:
+                        fa = 3;
+                        break;
+                    case 18:
+                        fa = 7;
+                        break;
+                    default:
+                        throw "invalid code: " + Q;
+                    }
+                    B.a(e[y], fa, u)
+                }
+                var ya = [sa, W],
+                    za = [ta, X],
+                    I, Aa, Z, la, Ba, Ca, Da, Ea;
+                Ba = ya[0];
+                Ca = ya[1];
+                Da = za[0];
+                Ea = za[1];
+                I = 0;
+                for (Aa = J.length; I < Aa; ++I) if (Z = J[I], B.a(Ba[Z], Ca[Z], u), 256 < Z) B.a(J[++I], J[++I], u), la = J[++I], B.a(Da[la], Ea[la], u), B.a(J[++I], J[++I], u);
+                else if (256 === Z) break;
+                this.b = B.finish();
+                this.c = this.b.length;
+                break;
+            default:
+                throw "invalid compression type";
+            }
+            return this.b
+        };
+
+        function qa(e, d) {
+            this.length = e;
+            this.g = d
+        }
+        var Fa = function() {
+            function e(a) {
+                switch (u) {
+                case 3 === a:
+                    return [257, a - 3, 0];
+                case 4 === a:
+                    return [258, a - 4, 0];
+                case 5 === a:
+                    return [259, a - 5, 0];
+                case 6 === a:
+                    return [260, a - 6, 0];
+                case 7 === a:
+                    return [261, a - 7, 0];
+                case 8 === a:
+                    return [262, a - 8, 0];
+                case 9 === a:
+                    return [263, a - 9, 0];
+                case 10 === a:
+                    return [264, a - 10, 0];
+                case 12 >= a:
+                    return [265, a - 11, 1];
+                case 14 >= a:
+                    return [266, a - 13, 1];
+                case 16 >= a:
+                    return [267, a - 15, 1];
+                case 18 >= a:
+                    return [268, a - 17, 1];
+                case 22 >= a:
+                    return [269, a - 19, 2];
+                case 26 >= a:
+                    return [270, a - 23, 2];
+                case 30 >= a:
+                    return [271, a - 27, 2];
+                case 34 >= a:
+                    return [272,
+                    a - 31, 2];
+                case 42 >= a:
+                    return [273, a - 35, 3];
+                case 50 >= a:
+                    return [274, a - 43, 3];
+                case 58 >= a:
+                    return [275, a - 51, 3];
+                case 66 >= a:
+                    return [276, a - 59, 3];
+                case 82 >= a:
+                    return [277, a - 67, 4];
+                case 98 >= a:
+                    return [278, a - 83, 4];
+                case 114 >= a:
+                    return [279, a - 99, 4];
+                case 130 >= a:
+                    return [280, a - 115, 4];
+                case 162 >= a:
+                    return [281, a - 131, 5];
+                case 194 >= a:
+                    return [282, a - 163, 5];
+                case 226 >= a:
+                    return [283, a - 195, 5];
+                case 257 >= a:
+                    return [284, a - 227, 5];
+                case 258 === a:
+                    return [285, a - 258, 0];
+                default:
+                    throw "invalid length: " + a;
+                }
+            }
+            var d = [],
+                c, f;
+            for (c = 3; 258 >= c; c++) f = e(c), d[c] = f[2] << 24 | f[1] << 16 | f[0];
+            return d
+        }(),
+            Ga = C ? new Uint32Array(Fa) : Fa;
+
+        function na(e, d) {
+            function c(a, c) {
+                var b = a.g,
+                    d = [],
+                    f = 0,
+                    e;
+                e = Ga[a.length];
+                d[f++] = e & 65535;
+                d[f++] = e >> 16 & 255;
+                d[f++] = e >> 24;
+                var g;
+                switch (u) {
+                case 1 === b:
+                    g = [0, b - 1, 0];
+                    break;
+                case 2 === b:
+                    g = [1, b - 2, 0];
+                    break;
+                case 3 === b:
+                    g = [2, b - 3, 0];
+                    break;
+                case 4 === b:
+                    g = [3, b - 4, 0];
+                    break;
+                case 6 >= b:
+                    g = [4, b - 5, 1];
+                    break;
+                case 8 >= b:
+                    g = [5, b - 7, 1];
+                    break;
+                case 12 >= b:
+                    g = [6, b - 9, 2];
+                    break;
+                case 16 >= b:
+                    g = [7, b - 13, 2];
+                    break;
+                case 24 >= b:
+                    g = [8, b - 17, 3];
+                    break;
+                case 32 >= b:
+                    g = [9, b - 25, 3];
+                    break;
+                case 48 >= b:
+                    g = [10, b - 33, 4];
+                    break;
+                case 64 >= b:
+                    g = [11, b - 49, 4];
+                    break;
+                case 96 >= b:
+                    g = [12, b - 65, 5];
+                    break;
+                case 128 >= b:
+                    g = [13, b - 97, 5];
+                    break;
+                case 192 >= b:
+                    g = [14, b - 129, 6];
+                    break;
+                case 256 >= b:
+                    g = [15, b - 193, 6];
+                    break;
+                case 384 >= b:
+                    g = [16, b - 257, 7];
+                    break;
+                case 512 >= b:
+                    g = [17, b - 385, 7];
+                    break;
+                case 768 >= b:
+                    g = [18, b - 513, 8];
+                    break;
+                case 1024 >= b:
+                    g = [19, b - 769, 8];
+                    break;
+                case 1536 >= b:
+                    g = [20, b - 1025, 9];
+                    break;
+                case 2048 >= b:
+                    g = [21, b - 1537, 9];
+                    break;
+                case 3072 >= b:
+                    g = [22, b - 2049, 10];
+                    break;
+                case 4096 >= b:
+                    g = [23, b - 3073, 10];
+                    break;
+                case 6144 >= b:
+                    g = [24, b - 4097, 11];
+                    break;
+                case 8192 >= b:
+                    g = [25, b - 6145, 11];
+                    break;
+                case 12288 >= b:
+                    g = [26, b - 8193, 12];
+                    break;
+                case 16384 >= b:
+                    g = [27, b - 12289, 12];
+                    break;
+                case 24576 >= b:
+                    g = [28, b - 16385, 13];
+                    break;
+                case 32768 >= b:
+                    g = [29, b - 24577, 13];
+                    break;
+                default:
+                    throw "invalid distance";
+                }
+                e = g;
+                d[f++] = e[0];
+                d[f++] = e[1];
+                d[f++] = e[2];
+                var k, m;
+                k = 0;
+                for (m = d.length; k < m; ++k) l[h++] = d[k];
+                t[d[0]]++;
+                w[d[3]]++;
+                q = a.length + c - 1;
+                x = null
+            }
+            var f, a, b, k, m, g = {}, p, v, x, l = C ? new Uint16Array(2 * d.length) : [],
+                h = 0,
+                q = 0,
+                t = new(C ? Uint32Array : Array)(286),
+                w = new(C ? Uint32Array : Array)(30),
+                da = e.f,
+                z;
+            if (!C) {
+                for (b = 0; 285 >= b;) t[b++] = 0;
+                for (b = 0; 29 >= b;) w[b++] = 0
+            }
+            t[256] = 1;
+            f = 0;
+            for (a = d.length; f < a; ++f) {
+                b = m = 0;
+                for (k = 3; b < k && f + b !== a; ++b) m = m << 8 | d[f + b];
+                g[m] === n && (g[m] = []);
+                p = g[m];
+                if (!(0 < q--)) {
+                    for (; 0 < p.length && 32768 < f - p[0];) p.shift();
+                    if (f + 3 >= a) {
+                        x && c(x, - 1);
+                        b = 0;
+                        for (k = a - f; b < k; ++b) z = d[f + b], l[h++] = z, ++t[z];
+                        break
+                    }
+                    0 < p.length ? (v = Ha(d, f, p), x ? x.length < v.length ? (z = d[f - 1], l[h++] = z, ++t[z], c(v, 0)) : c(x, - 1) : v.length < da ? x = v : c(v, 0)) : x ? c(x, - 1) : (z = d[f], l[h++] = z, ++t[z])
+                }
+                p.push(f)
+            }
+            l[h++] = 256;
+            t[256]++;
+            e.j = t;
+            e.i = w;
+            return C ? l.subarray(0, h) : l
+        }
+
+        function Ha(e, d, c) {
+            var f, a, b = 0,
+                k, m, g, p, v = e.length;
+            m = 0;
+            p = c.length;
+            a: for (; m < p; m++) {
+                f = c[p - m - 1];
+                k = 3;
+                if (3 < b) {
+                    for (g = b; 3 < g; g--) if (e[f + g - 1] !== e[d + g - 1]) continue a;
+                    k = b
+                }
+                for (; 258 > k && d + k < v && e[f + k] === e[d + k];)++k;
+                k > b && (a = f, b = k);
+                if (258 === k) break
+            }
+            return new qa(b, d - a)
+        }
+
+        function oa(e, d) {
+            var c = e.length,
+                f = new ja(572),
+                a = new(C ? Uint8Array : Array)(c),
+                b, k, m, g, p;
+            if (!C) for (g = 0; g < c; g++) a[g] = 0;
+            for (g = 0; g < c; ++g) 0 < e[g] && f.push(g, e[g]);
+            b = Array(f.length / 2);
+            k = new(C ? Uint32Array : Array)(f.length / 2);
+            if (1 === b.length) return a[f.pop().index] = 1, a;
+            g = 0;
+            for (p = f.length / 2; g < p; ++g) b[g] = f.pop(), k[g] = b[g].value;
+            m = Ja(k, k.length, d);
+            g = 0;
+            for (p = b.length; g < p; ++g) a[b[g].index] = m[g];
+            return a
+        }
+
+        function Ja(e, d, c) {
+            function f(a) {
+                var b = g[a][p[a]];
+                b === d ? (f(a + 1), f(a + 1)) : --k[b];
+                ++p[a]
+            }
+            var a = new(C ? Uint16Array : Array)(c),
+                b = new(C ? Uint8Array : Array)(c),
+                k = new(C ? Uint8Array : Array)(d),
+                m = Array(c),
+                g = Array(c),
+                p = Array(c),
+                v = (1 << c) - d,
+                x = 1 << c - 1,
+                l, h, q, t, w;
+            a[c - 1] = d;
+            for (h = 0; h < c; ++h) v < x ? b[h] = 0 : (b[h] = 1, v -= x), v <<= 1, a[c - 2 - h] = (a[c - 1 - h] / 2 | 0) + d;
+            a[0] = b[0];
+            m[0] = Array(a[0]);
+            g[0] = Array(a[0]);
+            for (h = 1; h < c; ++h) a[h] > 2 * a[h - 1] + b[h] && (a[h] = 2 * a[h - 1] + b[h]), m[h] = Array(a[h]), g[h] = Array(a[h]);
+            for (l = 0; l < d; ++l) k[l] = c;
+            for (q = 0; q < a[c - 1]; ++q) m[c - 1][q] = e[q], g[c - 1][q] = q;
+            for (l = 0; l < c; ++l) p[l] = 0;
+            1 === b[c - 1] && (--k[0], ++p[c - 1]);
+            for (h = c - 2; 0 <= h; --h) {
+                t = l = 0;
+                w = p[h + 1];
+                for (q = 0; q < a[h]; q++) t = m[h + 1][w] + m[h + 1][w + 1], t > e[l] ? (m[h][q] = t, g[h][q] = d, w += 2) : (m[h][q] = e[l], g[h][q] = l, ++l);
+                p[h] = 0;
+                1 === b[h] && f(h)
+            }
+            return k
+        }
+
+        function pa(e) {
+            var d = new(C ? Uint16Array : Array)(e.length),
+                c = [],
+                f = [],
+                a = 0,
+                b, k, m, g;
+            b = 0;
+            for (k = e.length; b < k; b++) c[e[b]] = (c[e[b]] | 0) + 1;
+            b = 1;
+            for (k = 16; b <= k; b++) f[b] = a, a += c[b] | 0, a <<= 1;
+            b = 0;
+            for (k = e.length; b < k; b++) {
+                a = f[e[b]];
+                f[e[b]] += 1;
+                m = d[b] = 0;
+                for (g = e[b]; m < g; m++) d[b] = d[b] << 1 | a & 1, a >>>= 1
+            }
+            return d
+        };
+        ba("Zlib.RawDeflate", ka);
+        ba("Zlib.RawDeflate.prototype.compress", ka.prototype.h);
+        var Ka = {
+            NONE: 0,
+            FIXED: 1,
+            DYNAMIC: ma
+        }, V, La, $, Ma;
+        if (Object.keys) V = Object.keys(Ka);
+        else for (La in V = [], $ = 0, Ka) V[$++] = La;
+        $ = 0;
+        for (Ma = V.length; $ < Ma; ++$) La = V[$], ba("Zlib.RawDeflate.CompressionType." + La, Ka[La]);
+    }).call(this);
+
+
+}).call(context);
+
+module.exports = function(input) {
+    var deflate = new context.Zlib.RawDeflate(input);
+    return deflate.compress();
+};
+
+},{}],13:[function(require,module,exports){
+var USE_TYPEDARRAY = (typeof Uint8Array !== 'undefined') && (typeof Uint16Array !== 'undefined') && (typeof Uint32Array !== 'undefined');
+exports.magic = "\x08\x00";
+exports.uncompress = require('./inflate');
+exports.uncompressInputType = USE_TYPEDARRAY ? "uint8array" : "array";
+exports.compress = require('./deflate');
+exports.compressInputType = USE_TYPEDARRAY ? "uint8array" : "array";
+
+},{"./deflate":12,"./inflate":14}],14:[function(require,module,exports){
+var context = {};
+(function() {
+
+    // https://github.com/imaya/zlib.js
+    // tag 0.1.6
+    // file bin/deflate.min.js
+
+    /** @license zlib.js 2012 - imaya [ https://github.com/imaya/zlib.js ] The MIT License */ (function() {
+        'use strict';
+        var l = void 0,
+            p = this;
+
+        function q(c, d) {
+            var a = c.split("."),
+                b = p;
+            !(a[0] in b) && b.execScript && b.execScript("var " + a[0]);
+            for (var e; a.length && (e = a.shift());)!a.length && d !== l ? b[e] = d : b = b[e] ? b[e] : b[e] = {}
+        };
+        var r = "undefined" !== typeof Uint8Array && "undefined" !== typeof Uint16Array && "undefined" !== typeof Uint32Array;
+
+        function u(c) {
+            var d = c.length,
+                a = 0,
+                b = Number.POSITIVE_INFINITY,
+                e, f, g, h, k, m, s, n, t;
+            for (n = 0; n < d; ++n) c[n] > a && (a = c[n]), c[n] < b && (b = c[n]);
+            e = 1 << a;
+            f = new(r ? Uint32Array : Array)(e);
+            g = 1;
+            h = 0;
+            for (k = 2; g <= a;) {
+                for (n = 0; n < d; ++n) if (c[n] === g) {
+                    m = 0;
+                    s = h;
+                    for (t = 0; t < g; ++t) m = m << 1 | s & 1, s >>= 1;
+                    for (t = m; t < e; t += k) f[t] = g << 16 | n;
+                    ++h
+                }++g;
+                h <<= 1;
+                k <<= 1
+            }
+            return [f, a, b]
+        };
+
+        function v(c, d) {
+            this.g = [];
+            this.h = 32768;
+            this.c = this.f = this.d = this.k = 0;
+            this.input = r ? new Uint8Array(c) : c;
+            this.l = !1;
+            this.i = w;
+            this.p = !1;
+            if (d || !(d = {})) d.index && (this.d = d.index), d.bufferSize && (this.h = d.bufferSize), d.bufferType && (this.i = d.bufferType), d.resize && (this.p = d.resize);
+            switch (this.i) {
+            case x:
+                this.a = 32768;
+                this.b = new(r ? Uint8Array : Array)(32768 + this.h + 258);
+                break;
+            case w:
+                this.a = 0;
+                this.b = new(r ? Uint8Array : Array)(this.h);
+                this.e = this.u;
+                this.m = this.r;
+                this.j = this.s;
+                break;
+            default:
+                throw Error("invalid inflate mode");
+            }
+        }
+        var x = 0,
+            w = 1;
+        v.prototype.t = function() {
+            for (; !this.l;) {
+                var c = y(this, 3);
+                c & 1 && (this.l = !0);
+                c >>>= 1;
+                switch (c) {
+                case 0:
+                    var d = this.input,
+                        a = this.d,
+                        b = this.b,
+                        e = this.a,
+                        f = l,
+                        g = l,
+                        h = l,
+                        k = b.length,
+                        m = l;
+                    this.c = this.f = 0;
+                    f = d[a++];
+                    if (f === l) throw Error("invalid uncompressed block header: LEN (first byte)");
+                    g = f;
+                    f = d[a++];
+                    if (f === l) throw Error("invalid uncompressed block header: LEN (second byte)");
+                    g |= f << 8;
+                    f = d[a++];
+                    if (f === l) throw Error("invalid uncompressed block header: NLEN (first byte)");
+                    h = f;
+                    f = d[a++];
+                    if (f === l) throw Error("invalid uncompressed block header: NLEN (second byte)");
+                    h |= f << 8;
+                    if (g === ~h) throw Error("invalid uncompressed block header: length verify");
+                    if (a + g > d.length) throw Error("input buffer is broken");
+                    switch (this.i) {
+                    case x:
+                        for (; e + g > b.length;) {
+                            m = k - e;
+                            g -= m;
+                            if (r) b.set(d.subarray(a, a + m), e), e += m, a += m;
+                            else for (; m--;) b[e++] = d[a++];
+                            this.a = e;
+                            b = this.e();
+                            e = this.a
+                        }
+                        break;
+                    case w:
+                        for (; e + g > b.length;) b = this.e({
+                            o: 2
+                        });
+                        break;
+                    default:
+                        throw Error("invalid inflate mode");
+                    }
+                    if (r) b.set(d.subarray(a, a + g), e), e += g, a += g;
+                    else for (; g--;) b[e++] = d[a++];
+                    this.d = a;
+                    this.a = e;
+                    this.b = b;
+                    break;
+                case 1:
+                    this.j(z,
+                    A);
+                    break;
+                case 2:
+                    B(this);
+                    break;
+                default:
+                    throw Error("unknown BTYPE: " + c);
+                }
+            }
+            return this.m()
+        };
+        var C = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15],
+            D = r ? new Uint16Array(C) : C,
+            E = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258, 258, 258],
+            F = r ? new Uint16Array(E) : E,
+            G = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, 0, 0],
+            H = r ? new Uint8Array(G) : G,
+            I = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577],
+            J = r ? new Uint16Array(I) : I,
+            K = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13,
+            13],
+            L = r ? new Uint8Array(K) : K,
+            M = new(r ? Uint8Array : Array)(288),
+            N, O;
+        N = 0;
+        for (O = M.length; N < O; ++N) M[N] = 143 >= N ? 8 : 255 >= N ? 9 : 279 >= N ? 7 : 8;
+        var z = u(M),
+            P = new(r ? Uint8Array : Array)(30),
+            Q, R;
+        Q = 0;
+        for (R = P.length; Q < R; ++Q) P[Q] = 5;
+        var A = u(P);
+
+        function y(c, d) {
+            for (var a = c.f, b = c.c, e = c.input, f = c.d, g; b < d;) {
+                g = e[f++];
+                if (g === l) throw Error("input buffer is broken");
+                a |= g << b;
+                b += 8
+            }
+            g = a & (1 << d) - 1;
+            c.f = a >>> d;
+            c.c = b - d;
+            c.d = f;
+            return g
+        }
+
+        function S(c, d) {
+            for (var a = c.f, b = c.c, e = c.input, f = c.d, g = d[0], h = d[1], k, m, s; b < h;) {
+                k = e[f++];
+                if (k === l) break;
+                a |= k << b;
+                b += 8
+            }
+            m = g[a & (1 << h) - 1];
+            s = m >>> 16;
+            c.f = a >> s;
+            c.c = b - s;
+            c.d = f;
+            return m & 65535
+        }
+
+        function B(c) {
+            function d(a, c, b) {
+                var d, f, e, g;
+                for (g = 0; g < a;) switch (d = S(this, c), d) {
+                case 16:
+                    for (e = 3 + y(this, 2); e--;) b[g++] = f;
+                    break;
+                case 17:
+                    for (e = 3 + y(this, 3); e--;) b[g++] = 0;
+                    f = 0;
+                    break;
+                case 18:
+                    for (e = 11 + y(this, 7); e--;) b[g++] = 0;
+                    f = 0;
+                    break;
+                default:
+                    f = b[g++] = d
+                }
+                return b
+            }
+            var a = y(c, 5) + 257,
+                b = y(c, 5) + 1,
+                e = y(c, 4) + 4,
+                f = new(r ? Uint8Array : Array)(D.length),
+                g, h, k, m;
+            for (m = 0; m < e; ++m) f[D[m]] = y(c, 3);
+            g = u(f);
+            h = new(r ? Uint8Array : Array)(a);
+            k = new(r ? Uint8Array : Array)(b);
+            c.j(u(d.call(c, a, g, h)), u(d.call(c, b, g, k)))
+        }
+        v.prototype.j = function(c, d) {
+            var a = this.b,
+                b = this.a;
+            this.n = c;
+            for (var e = a.length - 258, f, g, h, k; 256 !== (f = S(this, c));) if (256 > f) b >= e && (this.a = b, a = this.e(), b = this.a), a[b++] = f;
+            else {
+                g = f - 257;
+                k = F[g];
+                0 < H[g] && (k += y(this, H[g]));
+                f = S(this, d);
+                h = J[f];
+                0 < L[f] && (h += y(this, L[f]));
+                b >= e && (this.a = b, a = this.e(), b = this.a);
+                for (; k--;) a[b] = a[b++-h]
+            }
+            for (; 8 <= this.c;) this.c -= 8, this.d--;
+            this.a = b
+        };
+        v.prototype.s = function(c, d) {
+            var a = this.b,
+                b = this.a;
+            this.n = c;
+            for (var e = a.length, f, g, h, k; 256 !== (f = S(this, c));) if (256 > f) b >= e && (a = this.e(), e = a.length), a[b++] = f;
+            else {
+                g = f - 257;
+                k = F[g];
+                0 < H[g] && (k += y(this, H[g]));
+                f = S(this, d);
+                h = J[f];
+                0 < L[f] && (h += y(this, L[f]));
+                b + k > e && (a = this.e(), e = a.length);
+                for (; k--;) a[b] = a[b++-h]
+            }
+            for (; 8 <= this.c;) this.c -= 8, this.d--;
+            this.a = b
+        };
+        v.prototype.e = function() {
+            var c = new(r ? Uint8Array : Array)(this.a - 32768),
+                d = this.a - 32768,
+                a, b, e = this.b;
+            if (r) c.set(e.subarray(32768, c.length));
+            else {
+                a = 0;
+                for (b = c.length; a < b; ++a) c[a] = e[a + 32768]
+            }
+            this.g.push(c);
+            this.k += c.length;
+            if (r) e.set(e.subarray(d, d + 32768));
+            else for (a = 0; 32768 > a; ++a) e[a] = e[d + a];
+            this.a = 32768;
+            return e
+        };
+        v.prototype.u = function(c) {
+            var d, a = this.input.length / this.d + 1 | 0,
+                b, e, f, g = this.input,
+                h = this.b;
+            c && ("number" === typeof c.o && (a = c.o), "number" === typeof c.q && (a += c.q));
+            2 > a ? (b = (g.length - this.d) / this.n[2], f = 258 * (b / 2) | 0, e = f < h.length ? h.length + f : h.length << 1) : e = h.length * a;
+            r ? (d = new Uint8Array(e), d.set(h)) : d = h;
+            return this.b = d
+        };
+        v.prototype.m = function() {
+            var c = 0,
+                d = this.b,
+                a = this.g,
+                b, e = new(r ? Uint8Array : Array)(this.k + (this.a - 32768)),
+                f, g, h, k;
+            if (0 === a.length) return r ? this.b.subarray(32768, this.a) : this.b.slice(32768, this.a);
+            f = 0;
+            for (g = a.length; f < g; ++f) {
+                b = a[f];
+                h = 0;
+                for (k = b.length; h < k; ++h) e[c++] = b[h]
+            }
+            f = 32768;
+            for (g = this.a; f < g; ++f) e[c++] = d[f];
+            this.g = [];
+            return this.buffer = e
+        };
+        v.prototype.r = function() {
+            var c, d = this.a;
+            r ? this.p ? (c = new Uint8Array(d), c.set(this.b.subarray(0, d))) : c = this.b.subarray(0, d) : (this.b.length > d && (this.b.length = d), c = this.b);
+            return this.buffer = c
+        };
+        q("Zlib.RawInflate", v);
+        q("Zlib.RawInflate.prototype.decompress", v.prototype.t);
+        var T = {
+            ADAPTIVE: w,
+            BLOCK: x
+        }, U, V, W, X;
+        if (Object.keys) U = Object.keys(T);
+        else for (V in U = [], W = 0, T) U[W++] = V;
+        W = 0;
+        for (X = U.length; W < X; ++W) V = U[W], q("Zlib.RawInflate.BufferType." + V, T[V]);
+    }).call(this);
+
+
+}).call(context);
+
+module.exports = function(input) {
+    var inflate = new context.Zlib.RawInflate(new Uint8Array(input));
+    return inflate.decompress();
+};
+
+},{}],15:[function(require,module,exports){
 /**
 
 JSZip - A Javascript class for generating and reading zip files
@@ -798,8 +4079,7 @@ JSZip.base64 = require('./base64');
 JSZip.compressions = require('./compressions');
 module.exports = JSZip;
 
-});
-require.register("calvinmetcalf-jszip/lib/load.js", function(exports, require, module){
+},{"./base64":7,"./compressions":9,"./load":16,"./object":18,"./support":21,"./utils":23}],16:[function(require,module,exports){
 var base64 = require('./base64');
 var ZipEntries = require('./zipEntries');
 module.exports = function(data, options) {
@@ -824,8 +4104,7 @@ module.exports = function(data, options) {
     return this;
 };
 
-});
-require.register("calvinmetcalf-jszip/lib/nodeBufferReader.js", function(exports, require, module){
+},{"./base64":7,"./zipEntries":24}],17:[function(require,module,exports){
 var Uint8ArrayReader = require('./uint8ArrayReader');
 
 function NodeBufferReader(data) {
@@ -846,9 +4125,8 @@ NodeBufferReader.prototype.readData = function(size) {
 };
 module.exports = NodeBufferReader;
 
-});
-require.register("calvinmetcalf-jszip/lib/object.js", function(exports, require, module){
-var support = require('./support');
+},{"./uint8ArrayReader":22}],18:[function(require,module,exports){
+var Buffer=require("__browserify_Buffer").Buffer;var support = require('./support');
 var utils = require('./utils');
 var signature = require('./signature');
 var defaults = require('./defaults');
@@ -1751,8 +5029,7 @@ var out = {
 };
 module.exports = out;
 
-});
-require.register("calvinmetcalf-jszip/lib/signature.js", function(exports, require, module){
+},{"./base64":7,"./compressedObject":8,"./compressions":9,"./defaults":11,"./signature":19,"./support":21,"./utils":23,"__browserify_Buffer":5}],19:[function(require,module,exports){
 exports.LOCAL_FILE_HEADER = "PK\x03\x04";
 exports.CENTRAL_FILE_HEADER = "PK\x01\x02";
 exports.CENTRAL_DIRECTORY_END = "PK\x05\x06";
@@ -1760,8 +5037,7 @@ exports.ZIP64_CENTRAL_DIRECTORY_LOCATOR = "PK\x06\x07";
 exports.ZIP64_CENTRAL_DIRECTORY_END = "PK\x06\x06";
 exports.DATA_DESCRIPTOR = "PK\x07\x08";
 
-});
-require.register("calvinmetcalf-jszip/lib/stringReader.js", function(exports, require, module){
+},{}],20:[function(require,module,exports){
 var DataReader = require('./dataReader');
 var utils = require('./utils');
 
@@ -1797,9 +5073,8 @@ StringReader.prototype.readData = function(size) {
     return result;
 };
 module.exports = StringReader;
-});
-require.register("calvinmetcalf-jszip/lib/support.js", function(exports, require, module){
-exports.base64 = true;
+},{"./dataReader":10,"./utils":23}],21:[function(require,module,exports){
+var Buffer=require("__browserify_Buffer").Buffer;exports.base64 = true;
 exports.array = true;
 exports.string = true;
 exports.arraybuffer = typeof ArrayBuffer !== "undefined" && typeof Uint8Array !== "undefined";
@@ -1831,8 +5106,7 @@ else {
     }
 }
 
-});
-require.register("calvinmetcalf-jszip/lib/uint8ArrayReader.js", function(exports, require, module){
+},{"__browserify_Buffer":5}],22:[function(require,module,exports){
 var DataReader = require('./dataReader');
 
 function Uint8ArrayReader(data) {
@@ -1875,9 +5149,8 @@ Uint8ArrayReader.prototype.readData = function(size) {
     return result;
 };
 module.exports = Uint8ArrayReader;
-});
-require.register("calvinmetcalf-jszip/lib/utils.js", function(exports, require, module){
-var support = require('./support');
+},{"./dataReader":10}],23:[function(require,module,exports){
+var Buffer=require("__browserify_Buffer").Buffer;var support = require('./support');
 var compressions = require('./compressions');
 /**
  * Convert a string to a "binary string" : a string containing only char codes between 0 and 255.
@@ -2194,8 +5467,7 @@ exports.findCompression = function(compressionMethod) {
     return null;
 };
 
-});
-require.register("calvinmetcalf-jszip/lib/zipEntries.js", function(exports, require, module){
+},{"./compressions":9,"./support":21,"__browserify_Buffer":5}],24:[function(require,module,exports){
 var StringReader = require('./stringReader');
 var NodeBufferReader = require('./nodeBufferReader');
 var Uint8ArrayReader = require('./uint8ArrayReader');
@@ -2391,8 +5663,7 @@ ZipEntries.prototype = {
 };
 // }}} end of ZipEntries
 module.exports = ZipEntries;
-});
-require.register("calvinmetcalf-jszip/lib/zipEntry.js", function(exports, require, module){
+},{"./nodeBufferReader":17,"./signature":19,"./stringReader":20,"./support":21,"./uint8ArrayReader":22,"./utils":23,"./zipEntry":25}],25:[function(require,module,exports){
 var StringReader = require('./stringReader');
 var utils = require('./utils');
 var CompressedObject = require('./compressedObject');
@@ -2615,975 +5886,833 @@ ZipEntry.prototype = {
 };
 module.exports = ZipEntry;
 
-});
-require.register("calvinmetcalf-jszip/lib/flate/index.js", function(exports, require, module){
-var USE_TYPEDARRAY = (typeof Uint8Array !== 'undefined') && (typeof Uint16Array !== 'undefined') && (typeof Uint32Array !== 'undefined');
-exports.magic = "\x08\x00";
-exports.uncompress = require('./inflate');
-exports.uncompressInputType = USE_TYPEDARRAY ? "uint8array" : "array";
-exports.compress = require('./deflate');
-exports.compressInputType = USE_TYPEDARRAY ? "uint8array" : "array";
-
-});
-require.register("calvinmetcalf-jszip/lib/flate/deflate.js", function(exports, require, module){
-var context = {};
-(function() {
-
-    // https://github.com/imaya/zlib.js
-    // tag 0.1.6
-    // file bin/deflate.min.js
-
-    /** @license zlib.js 2012 - imaya [ https://github.com/imaya/zlib.js ] The MIT License */
-    (function() {
-        'use strict';
-        var n = void 0,
-            u = !0,
-            aa = this;
-
-        function ba(e, d) {
-            var c = e.split("."),
-                f = aa;
-            !(c[0] in f) && f.execScript && f.execScript("var " + c[0]);
-            for (var a; c.length && (a = c.shift());)!c.length && d !== n ? f[a] = d : f = f[a] ? f[a] : f[a] = {}
-        };
-        var C = "undefined" !== typeof Uint8Array && "undefined" !== typeof Uint16Array && "undefined" !== typeof Uint32Array;
-
-        function K(e, d) {
-            this.index = "number" === typeof d ? d : 0;
-            this.d = 0;
-            this.buffer = e instanceof(C ? Uint8Array : Array) ? e : new(C ? Uint8Array : Array)(32768);
-            if (2 * this.buffer.length <= this.index) throw Error("invalid index");
-            this.buffer.length <= this.index && ca(this)
+},{"./compressedObject":8,"./object":18,"./stringReader":20,"./utils":23}],26:[function(require,module,exports){
+var promise = require('lie');
+var cast = require('lie-cast');
+var qMap = require('lie-quickmap');
+var each = require('lie-quickeach');
+var use = require('lie-use');
+function all(array) {
+    return promise(function(fulfill, reject) {
+        var len = array.length;
+        if(!len){
+            fulfill([]);
         }
-        function ca(e) {
-            var d = e.buffer,
-                c, f = d.length,
-                a = new(C ? Uint8Array : Array)(f << 1);
-            if (C) a.set(d);
-            else for (c = 0; c < f; ++c) a[c] = d[c];
-            return e.buffer = a
-        }
-        K.prototype.a = function(e, d, c) {
-            var f = this.buffer,
-                a = this.index,
-                b = this.d,
-                k = f[a],
-                m;
-            c && 1 < d && (e = 8 < d ? (L[e & 255] << 24 | L[e >>> 8 & 255] << 16 | L[e >>> 16 & 255] << 8 | L[e >>> 24 & 255]) >> 32 - d : L[e] >> 8 - d);
-            if (8 > d + b) k = k << d | e, b += d;
-            else for (m = 0; m < d; ++m) k = k << 1 | e >> d - m - 1 & 1, 8 === ++b && (b = 0, f[a++] = L[k], k = 0, a === f.length && (f = ca(this)));
-            f[a] = k;
-            this.buffer = f;
-            this.d = b;
-            this.index = a
-        };
-        K.prototype.finish = function() {
-            var e = this.buffer,
-                d = this.index,
-                c;
-            0 < this.d && (e[d] <<= 8 - this.d, e[d] = L[e[d]], d++);
-            C ? c = e.subarray(0, d) : (e.length = d, c = e);
-            return c
-        };
-        var ga = new(C ? Uint8Array : Array)(256),
-            M;
-        for (M = 0; 256 > M; ++M) {
-            for (var R = M, S = R, ha = 7, R = R >>> 1; R; R >>>= 1) S <<= 1, S |= R & 1, --ha;
-            ga[M] = (S << ha & 255) >>> 0
-        }
-        var L = ga;
-
-        function ja(e) {
-            this.buffer = new(C ? Uint16Array : Array)(2 * e);
-            this.length = 0
-        }
-        ja.prototype.getParent = function(e) {
-            return 2 * ((e - 2) / 4 | 0)
-        };
-        ja.prototype.push = function(e, d) {
-            var c, f, a = this.buffer,
-                b;
-            c = this.length;
-            a[this.length++] = d;
-            for (a[this.length++] = e; 0 < c;) if (f = this.getParent(c), a[c] > a[f]) b = a[c], a[c] = a[f], a[f] = b, b = a[c + 1], a[c + 1] = a[f + 1], a[f + 1] = b, c = f;
-            else break;
-            return this.length
-        };
-        ja.prototype.pop = function() {
-            var e, d, c = this.buffer,
-                f, a, b;
-            d = c[0];
-            e = c[1];
-            this.length -= 2;
-            c[0] = c[this.length];
-            c[1] = c[this.length + 1];
-            for (b = 0;;) {
-                a = 2 * b + 2;
-                if (a >= this.length) break;
-                a + 2 < this.length && c[a + 2] > c[a] && (a += 2);
-                if (c[a] > c[b]) f = c[b], c[b] = c[a], c[a] = f, f = c[b + 1], c[b + 1] = c[a + 1], c[a + 1] = f;
-                else break;
-                b = a
-            }
-            return {
-                index: e,
-                value: d,
-                length: this.length
-            }
-        };
-
-        function ka(e, d) {
-            this.e = ma;
-            this.f = 0;
-            this.input = C && e instanceof Array ? new Uint8Array(e) : e;
-            this.c = 0;
-            d && (d.lazy && (this.f = d.lazy), "number" === typeof d.compressionType && (this.e = d.compressionType), d.outputBuffer && (this.b = C && d.outputBuffer instanceof Array ? new Uint8Array(d.outputBuffer) : d.outputBuffer), "number" === typeof d.outputIndex && (this.c = d.outputIndex));
-            this.b || (this.b = new(C ? Uint8Array : Array)(32768))
-        }
-        var ma = 2,
-            T = [],
-            U;
-        for (U = 0; 288 > U; U++) switch (u) {
-        case 143 >= U:
-            T.push([U + 48, 8]);
-            break;
-        case 255 >= U:
-            T.push([U - 144 + 400, 9]);
-            break;
-        case 279 >= U:
-            T.push([U - 256 + 0, 7]);
-            break;
-        case 287 >= U:
-            T.push([U - 280 + 192, 8]);
-            break;
-        default:
-            throw "invalid literal: " + U;
-        }
-        ka.prototype.h = function() {
-            var e, d, c, f, a = this.input;
-            switch (this.e) {
-            case 0:
-                c = 0;
-                for (f = a.length; c < f;) {
-                    d = C ? a.subarray(c, c + 65535) : a.slice(c, c + 65535);
-                    c += d.length;
-                    var b = d,
-                        k = c === f,
-                        m = n,
-                        g = n,
-                        p = n,
-                        v = n,
-                        x = n,
-                        l = this.b,
-                        h = this.c;
-                    if (C) {
-                        for (l = new Uint8Array(this.b.buffer); l.length <= h + b.length + 5;) l = new Uint8Array(l.length << 1);
-                        l.set(this.b)
-                    }
-                    m = k ? 1 : 0;
-                    l[h++] = m | 0;
-                    g = b.length;
-                    p = ~g + 65536 & 65535;
-                    l[h++] = g & 255;
-                    l[h++] = g >>> 8 & 255;
-                    l[h++] = p & 255;
-                    l[h++] = p >>> 8 & 255;
-                    if (C) l.set(b, h), h += b.length, l = l.subarray(0, h);
-                    else {
-                        v = 0;
-                        for (x = b.length; v < x; ++v) l[h++] = b[v];
-                        l.length = h
-                    }
-                    this.c = h;
-                    this.b = l
+        var fulfilled = 0;
+        var out = [];
+        var onSuccess = function(n) {
+            return function(v) {
+                out[n] = v;
+                if (++fulfilled === len) {
+                    fulfill(out);
                 }
-                break;
-            case 1:
-                var q = new K(C ? new Uint8Array(this.b.buffer) : this.b, this.c);
-                q.a(1, 1, u);
-                q.a(1, 2, u);
-                var t = na(this, a),
-                    w, da, z;
-                w = 0;
-                for (da = t.length; w < da; w++) if (z = t[w], K.prototype.a.apply(q, T[z]), 256 < z) q.a(t[++w], t[++w], u), q.a(t[++w], 5), q.a(t[++w], t[++w], u);
-                else if (256 === z) break;
-                this.b = q.finish();
-                this.c = this.b.length;
-                break;
-            case ma:
-                var B = new K(C ? new Uint8Array(this.b.buffer) : this.b, this.c),
-                    ra, J, N, O, P, Ia = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15],
-                    W, sa, X, ta, ea, ia = Array(19),
-                    ua, Q, fa, y, va;
-                ra = ma;
-                B.a(1, 1, u);
-                B.a(ra, 2, u);
-                J = na(this, a);
-                W = oa(this.j, 15);
-                sa = pa(W);
-                X = oa(this.i, 7);
-                ta = pa(X);
-                for (N = 286; 257 < N && 0 === W[N - 1]; N--);
-                for (O = 30; 1 < O && 0 === X[O - 1]; O--);
-                var wa = N,
-                    xa = O,
-                    F = new(C ? Uint32Array : Array)(wa + xa),
-                    r, G, s, Y, E = new(C ? Uint32Array : Array)(316),
-                    D, A, H = new(C ? Uint8Array : Array)(19);
-                for (r = G = 0; r < wa; r++) F[G++] = W[r];
-                for (r = 0; r < xa; r++) F[G++] = X[r];
-                if (!C) {
-                    r = 0;
-                    for (Y = H.length; r < Y; ++r) H[r] = 0
-                }
-                r = D = 0;
-                for (Y = F.length; r < Y; r += G) {
-                    for (G = 1; r + G < Y && F[r + G] === F[r]; ++G);
-                    s = G;
-                    if (0 === F[r]) if (3 > s) for (; 0 < s--;) E[D++] = 0,
-                    H[0]++;
-                    else for (; 0 < s;) A = 138 > s ? s : 138, A > s - 3 && A < s && (A = s - 3), 10 >= A ? (E[D++] = 17, E[D++] = A - 3, H[17]++) : (E[D++] = 18, E[D++] = A - 11, H[18]++), s -= A;
-                    else if (E[D++] = F[r], H[F[r]]++, s--, 3 > s) for (; 0 < s--;) E[D++] = F[r], H[F[r]]++;
-                    else for (; 0 < s;) A = 6 > s ? s : 6, A > s - 3 && A < s && (A = s - 3), E[D++] = 16, E[D++] = A - 3, H[16]++, s -= A
-                }
-                e = C ? E.subarray(0, D) : E.slice(0, D);
-                ea = oa(H, 7);
-                for (y = 0; 19 > y; y++) ia[y] = ea[Ia[y]];
-                for (P = 19; 4 < P && 0 === ia[P - 1]; P--);
-                ua = pa(ea);
-                B.a(N - 257, 5, u);
-                B.a(O - 1, 5, u);
-                B.a(P - 4, 4, u);
-                for (y = 0; y < P; y++) B.a(ia[y], 3, u);
-                y = 0;
-                for (va = e.length; y < va; y++) if (Q = e[y], B.a(ua[Q], ea[Q], u), 16 <= Q) {
-                    y++;
-                    switch (Q) {
-                    case 16:
-                        fa = 2;
-                        break;
-                    case 17:
-                        fa = 3;
-                        break;
-                    case 18:
-                        fa = 7;
-                        break;
-                    default:
-                        throw "invalid code: " + Q;
-                    }
-                    B.a(e[y], fa, u)
-                }
-                var ya = [sa, W],
-                    za = [ta, X],
-                    I, Aa, Z, la, Ba, Ca, Da, Ea;
-                Ba = ya[0];
-                Ca = ya[1];
-                Da = za[0];
-                Ea = za[1];
-                I = 0;
-                for (Aa = J.length; I < Aa; ++I) if (Z = J[I], B.a(Ba[Z], Ca[Z], u), 256 < Z) B.a(J[++I], J[++I], u), la = J[++I], B.a(Da[la], Ea[la], u), B.a(J[++I], J[++I], u);
-                else if (256 === Z) break;
-                this.b = B.finish();
-                this.c = this.b.length;
-                break;
-            default:
-                throw "invalid compression type";
-            }
-            return this.b
+            };
         };
-
-        function qa(e, d) {
-            this.length = e;
-            this.g = d
-        }
-        var Fa = function() {
-            function e(a) {
-                switch (u) {
-                case 3 === a:
-                    return [257, a - 3, 0];
-                case 4 === a:
-                    return [258, a - 4, 0];
-                case 5 === a:
-                    return [259, a - 5, 0];
-                case 6 === a:
-                    return [260, a - 6, 0];
-                case 7 === a:
-                    return [261, a - 7, 0];
-                case 8 === a:
-                    return [262, a - 8, 0];
-                case 9 === a:
-                    return [263, a - 9, 0];
-                case 10 === a:
-                    return [264, a - 10, 0];
-                case 12 >= a:
-                    return [265, a - 11, 1];
-                case 14 >= a:
-                    return [266, a - 13, 1];
-                case 16 >= a:
-                    return [267, a - 15, 1];
-                case 18 >= a:
-                    return [268, a - 17, 1];
-                case 22 >= a:
-                    return [269, a - 19, 2];
-                case 26 >= a:
-                    return [270, a - 23, 2];
-                case 30 >= a:
-                    return [271, a - 27, 2];
-                case 34 >= a:
-                    return [272,
-                    a - 31, 2];
-                case 42 >= a:
-                    return [273, a - 35, 3];
-                case 50 >= a:
-                    return [274, a - 43, 3];
-                case 58 >= a:
-                    return [275, a - 51, 3];
-                case 66 >= a:
-                    return [276, a - 59, 3];
-                case 82 >= a:
-                    return [277, a - 67, 4];
-                case 98 >= a:
-                    return [278, a - 83, 4];
-                case 114 >= a:
-                    return [279, a - 99, 4];
-                case 130 >= a:
-                    return [280, a - 115, 4];
-                case 162 >= a:
-                    return [281, a - 131, 5];
-                case 194 >= a:
-                    return [282, a - 163, 5];
-                case 226 >= a:
-                    return [283, a - 195, 5];
-                case 257 >= a:
-                    return [284, a - 227, 5];
-                case 258 === a:
-                    return [285, a - 258, 0];
-                default:
-                    throw "invalid length: " + a;
-                }
-            }
-            var d = [],
-                c, f;
-            for (c = 3; 258 >= c; c++) f = e(c), d[c] = f[2] << 24 | f[1] << 16 | f[0];
-            return d
-        }(),
-            Ga = C ? new Uint32Array(Fa) : Fa;
-
-        function na(e, d) {
-            function c(a, c) {
-                var b = a.g,
-                    d = [],
-                    f = 0,
-                    e;
-                e = Ga[a.length];
-                d[f++] = e & 65535;
-                d[f++] = e >> 16 & 255;
-                d[f++] = e >> 24;
-                var g;
-                switch (u) {
-                case 1 === b:
-                    g = [0, b - 1, 0];
-                    break;
-                case 2 === b:
-                    g = [1, b - 2, 0];
-                    break;
-                case 3 === b:
-                    g = [2, b - 3, 0];
-                    break;
-                case 4 === b:
-                    g = [3, b - 4, 0];
-                    break;
-                case 6 >= b:
-                    g = [4, b - 5, 1];
-                    break;
-                case 8 >= b:
-                    g = [5, b - 7, 1];
-                    break;
-                case 12 >= b:
-                    g = [6, b - 9, 2];
-                    break;
-                case 16 >= b:
-                    g = [7, b - 13, 2];
-                    break;
-                case 24 >= b:
-                    g = [8, b - 17, 3];
-                    break;
-                case 32 >= b:
-                    g = [9, b - 25, 3];
-                    break;
-                case 48 >= b:
-                    g = [10, b - 33, 4];
-                    break;
-                case 64 >= b:
-                    g = [11, b - 49, 4];
-                    break;
-                case 96 >= b:
-                    g = [12, b - 65, 5];
-                    break;
-                case 128 >= b:
-                    g = [13, b - 97, 5];
-                    break;
-                case 192 >= b:
-                    g = [14, b - 129, 6];
-                    break;
-                case 256 >= b:
-                    g = [15, b - 193, 6];
-                    break;
-                case 384 >= b:
-                    g = [16, b - 257, 7];
-                    break;
-                case 512 >= b:
-                    g = [17, b - 385, 7];
-                    break;
-                case 768 >= b:
-                    g = [18, b - 513, 8];
-                    break;
-                case 1024 >= b:
-                    g = [19, b - 769, 8];
-                    break;
-                case 1536 >= b:
-                    g = [20, b - 1025, 9];
-                    break;
-                case 2048 >= b:
-                    g = [21, b - 1537, 9];
-                    break;
-                case 3072 >= b:
-                    g = [22, b - 2049, 10];
-                    break;
-                case 4096 >= b:
-                    g = [23, b - 3073, 10];
-                    break;
-                case 6144 >= b:
-                    g = [24, b - 4097, 11];
-                    break;
-                case 8192 >= b:
-                    g = [25, b - 6145, 11];
-                    break;
-                case 12288 >= b:
-                    g = [26, b - 8193, 12];
-                    break;
-                case 16384 >= b:
-                    g = [27, b - 12289, 12];
-                    break;
-                case 24576 >= b:
-                    g = [28, b - 16385, 13];
-                    break;
-                case 32768 >= b:
-                    g = [29, b - 24577, 13];
-                    break;
-                default:
-                    throw "invalid distance";
-                }
-                e = g;
-                d[f++] = e[0];
-                d[f++] = e[1];
-                d[f++] = e[2];
-                var k, m;
-                k = 0;
-                for (m = d.length; k < m; ++k) l[h++] = d[k];
-                t[d[0]]++;
-                w[d[3]]++;
-                q = a.length + c - 1;
-                x = null
-            }
-            var f, a, b, k, m, g = {}, p, v, x, l = C ? new Uint16Array(2 * d.length) : [],
-                h = 0,
-                q = 0,
-                t = new(C ? Uint32Array : Array)(286),
-                w = new(C ? Uint32Array : Array)(30),
-                da = e.f,
-                z;
-            if (!C) {
-                for (b = 0; 285 >= b;) t[b++] = 0;
-                for (b = 0; 29 >= b;) w[b++] = 0
-            }
-            t[256] = 1;
-            f = 0;
-            for (a = d.length; f < a; ++f) {
-                b = m = 0;
-                for (k = 3; b < k && f + b !== a; ++b) m = m << 8 | d[f + b];
-                g[m] === n && (g[m] = []);
-                p = g[m];
-                if (!(0 < q--)) {
-                    for (; 0 < p.length && 32768 < f - p[0];) p.shift();
-                    if (f + 3 >= a) {
-                        x && c(x, - 1);
-                        b = 0;
-                        for (k = a - f; b < k; ++b) z = d[f + b], l[h++] = z, ++t[z];
-                        break
-                    }
-                    0 < p.length ? (v = Ha(d, f, p), x ? x.length < v.length ? (z = d[f - 1], l[h++] = z, ++t[z], c(v, 0)) : c(x, - 1) : v.length < da ? x = v : c(v, 0)) : x ? c(x, - 1) : (z = d[f], l[h++] = z, ++t[z])
-                }
-                p.push(f)
-            }
-            l[h++] = 256;
-            t[256]++;
-            e.j = t;
-            e.i = w;
-            return C ? l.subarray(0, h) : l
-        }
-
-        function Ha(e, d, c) {
-            var f, a, b = 0,
-                k, m, g, p, v = e.length;
-            m = 0;
-            p = c.length;
-            a: for (; m < p; m++) {
-                f = c[p - m - 1];
-                k = 3;
-                if (3 < b) {
-                    for (g = b; 3 < g; g--) if (e[f + g - 1] !== e[d + g - 1]) continue a;
-                    k = b
-                }
-                for (; 258 > k && d + k < v && e[f + k] === e[d + k];)++k;
-                k > b && (a = f, b = k);
-                if (258 === k) break
-            }
-            return new qa(b, d - a)
-        }
-
-        function oa(e, d) {
-            var c = e.length,
-                f = new ja(572),
-                a = new(C ? Uint8Array : Array)(c),
-                b, k, m, g, p;
-            if (!C) for (g = 0; g < c; g++) a[g] = 0;
-            for (g = 0; g < c; ++g) 0 < e[g] && f.push(g, e[g]);
-            b = Array(f.length / 2);
-            k = new(C ? Uint32Array : Array)(f.length / 2);
-            if (1 === b.length) return a[f.pop().index] = 1, a;
-            g = 0;
-            for (p = f.length / 2; g < p; ++g) b[g] = f.pop(), k[g] = b[g].value;
-            m = Ja(k, k.length, d);
-            g = 0;
-            for (p = b.length; g < p; ++g) a[b[g].index] = m[g];
-            return a
-        }
-
-        function Ja(e, d, c) {
-            function f(a) {
-                var b = g[a][p[a]];
-                b === d ? (f(a + 1), f(a + 1)) : --k[b];
-                ++p[a]
-            }
-            var a = new(C ? Uint16Array : Array)(c),
-                b = new(C ? Uint8Array : Array)(c),
-                k = new(C ? Uint8Array : Array)(d),
-                m = Array(c),
-                g = Array(c),
-                p = Array(c),
-                v = (1 << c) - d,
-                x = 1 << c - 1,
-                l, h, q, t, w;
-            a[c - 1] = d;
-            for (h = 0; h < c; ++h) v < x ? b[h] = 0 : (b[h] = 1, v -= x), v <<= 1, a[c - 2 - h] = (a[c - 1 - h] / 2 | 0) + d;
-            a[0] = b[0];
-            m[0] = Array(a[0]);
-            g[0] = Array(a[0]);
-            for (h = 1; h < c; ++h) a[h] > 2 * a[h - 1] + b[h] && (a[h] = 2 * a[h - 1] + b[h]), m[h] = Array(a[h]), g[h] = Array(a[h]);
-            for (l = 0; l < d; ++l) k[l] = c;
-            for (q = 0; q < a[c - 1]; ++q) m[c - 1][q] = e[q], g[c - 1][q] = q;
-            for (l = 0; l < c; ++l) p[l] = 0;
-            1 === b[c - 1] && (--k[0], ++p[c - 1]);
-            for (h = c - 2; 0 <= h; --h) {
-                t = l = 0;
-                w = p[h + 1];
-                for (q = 0; q < a[h]; q++) t = m[h + 1][w] + m[h + 1][w + 1], t > e[l] ? (m[h][q] = t, g[h][q] = d, w += 2) : (m[h][q] = e[l], g[h][q] = l, ++l);
-                p[h] = 0;
-                1 === b[h] && f(h)
-            }
-            return k
-        }
-
-        function pa(e) {
-            var d = new(C ? Uint16Array : Array)(e.length),
-                c = [],
-                f = [],
-                a = 0,
-                b, k, m, g;
-            b = 0;
-            for (k = e.length; b < k; b++) c[e[b]] = (c[e[b]] | 0) + 1;
-            b = 1;
-            for (k = 16; b <= k; b++) f[b] = a, a += c[b] | 0, a <<= 1;
-            b = 0;
-            for (k = e.length; b < k; b++) {
-                a = f[e[b]];
-                f[e[b]] += 1;
-                m = d[b] = 0;
-                for (g = e[b]; m < g; m++) d[b] = d[b] << 1 | a & 1, a >>>= 1
-            }
-            return d
-        };
-        ba("Zlib.RawDeflate", ka);
-        ba("Zlib.RawDeflate.prototype.compress", ka.prototype.h);
-        var Ka = {
-            NONE: 0,
-            FIXED: 1,
-            DYNAMIC: ma
-        }, V, La, $, Ma;
-        if (Object.keys) V = Object.keys(Ka);
-        else for (La in V = [], $ = 0, Ka) V[$++] = La;
-        $ = 0;
-        for (Ma = V.length; $ < Ma; ++$) La = V[$], ba("Zlib.RawDeflate.CompressionType." + La, Ka[La]);
-    }).call(this);
-
-
-}).call(context);
-
-module.exports = function(input) {
-    var deflate = new context.Zlib.RawDeflate(input);
-    return deflate.compress();
+        each(qMap(array,cast),function(v, i) {
+            v.then(onSuccess(i), function(a) {
+                reject(a);
+            });
+        });
+    });
+}
+module.exports = function(array){
+    return use(array,all);
 };
 
+},{"lie":32,"lie-cast":27,"lie-quickeach":29,"lie-quickmap":30,"lie-use":31}],27:[function(require,module,exports){
+var resolve = require('lie-resolve');
+function cast(thing){
+    if(thing && typeof thing.then === 'function'){
+        return thing;
+    }else{
+        return resolve(thing);
+    }
+}
+module.exports = cast;
+},{"lie-resolve":28}],28:[function(require,module,exports){
+var promise = require('lie');
+function resolve(value){
+    return promise(function(yes){
+        yes(value);
+    });
+}
+module.exports = resolve;
+},{"lie":32}],29:[function(require,module,exports){
+function quickEach(arr,func){
+    var len = arr.length;
+    if(!len){
+        return;
+    }
+ var i = -1;
+ while(++i<len){
+     func(arr[i],i);
+ }
+}
+module.exports = quickEach;
+
+},{}],30:[function(require,module,exports){
+function quickMap(arr,func){
+    var len = arr.length;
+    if(!len){
+        return [];
+    }
+ var i = -1;
+ var out = new Array(len);
+ if(typeof func === 'function'){
+     while(++i<len){
+         out[i]=func(arr[i],i);
+     }
+ }else{
+    while(++i<len){
+        out[i]=arr[i];
+    }
+ }
+ return out;
+}
+module.exports = quickMap;
+
+},{}],31:[function(require,module,exports){
+function use(thing,func){
+    if(typeof thing.then === 'function'){
+        return thing.then(func);
+    }else{
+        return func(thing);
+    }
+}
+module.exports = use;
+},{}],32:[function(require,module,exports){
+var immediate = require('immediate');
+// Creates a deferred: an object with a promise and corresponding resolve/reject methods
+function Promise(resolver) {
+     if (!(this instanceof Promise)) {
+        return new Promise(resolver);
+    }
+    var sucessQueue = [];
+    var failureQueue = [];
+    var resolved = false;
+    // The `handler` variable points to the function that will
+    // 1) handle a .then(onFulfilled, onRejected) call
+    // 2) handle a .resolve or .reject call (if not fulfilled)
+    // Before 2), `handler` holds a queue of callbacks.
+    // After 2), `handler` is a simple .then handler.
+    // We use only one function to save memory and complexity.
+     // Case 1) handle a .then(onFulfilled, onRejected) call
+    function pending(onFulfilled, onRejected){
+        return Promise(function(success,failure){
+            if(typeof onFulfilled === 'function'){
+                sucessQueue.push({
+                    resolve: success,
+                    reject: failure,
+                    callback:onFulfilled
+                });
+            }else{
+                sucessQueue.push({
+                    next: success,
+                    callback:false
+                });
+            }
+            if(typeof onRejected === 'function'){
+                failureQueue.push({
+                    resolve: success,
+                    reject: failure,
+                    callback:onRejected
+                });
+            }else{
+                failureQueue.push({
+                    next: failure,
+                    callback:false
+                });
+            }
+        });
+    }
+    this.then = function(onFulfilled, onRejected) {
+        return resolved?resolved(onFulfilled, onRejected):pending(onFulfilled, onRejected);
+    };
+    // Case 2) handle a .resolve or .reject call
+        // (`onFulfilled` acts as a sentinel)
+        // The actual function signature is
+        // .re[ject|solve](sentinel, success, value)
+    function resolve(success, value){
+        if(resolved){
+            return;
+        }
+        resolved = createHandler(this, value, success?0:1);
+        var queue = success ? sucessQueue : failureQueue;
+        var len = queue.length;
+        var i = -1;
+        while(++i < len) {
+            if (queue[i].callback) {
+                immediate(execute,queue[i].callback, value, queue[i].resolve, queue[i].reject);
+            }else if(queue[i].next){
+                queue[i].next(value);
+            }
+        }
+        // Replace this handler with a simple resolved or rejected handler
+    }
+    var fulfill = resolve.bind(this,true);
+    var reject = resolve.bind(this,false);
+    try{
+        resolver(function(a){
+            if(a && typeof a.then==='function'){
+                a.then(fulfill,reject);
+            }else{
+                fulfill(a);
+            }
+        },reject);
+    }catch(e){
+        reject(e);
+    }
+}
+
+// Creates a fulfilled or rejected .then function
+function createHandler(scope, value, success) {
+    return function() {
+        var callback = arguments[success];
+        if (typeof callback !== 'function') {
+            return scope;
+        }
+        return Promise(function(resolve,reject){
+            immediate(execute,callback,value,resolve,reject);
+       });
+    };
+}
+
+// Executes the callback with the specified value,
+// resolving or rejecting the deferred
+function execute(callback, value, resolve, reject) {
+        try {
+            var result = callback(value);
+            if (result && typeof result.then === 'function') {
+                result.then(resolve, reject);
+            }
+            else {
+                resolve(result);
+            }
+        }
+        catch (error) {
+            reject(error);
+        }
+}
+module.exports = Promise;
+
+},{"immediate":34}],33:[function(require,module,exports){
+var global=typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {};module.exports = typeof global === "object" && global ? global : this;
+},{}],34:[function(require,module,exports){
+"use strict";
+var types = [
+    require("./nextTick"),
+    require("./mutation"),
+    require("./realSetImmediate"),
+    require("./postMessage"),
+    require("./messageChannel"),
+    require("./stateChange"),
+    require("./timeout")
+];
+var handlerQueue = [];
+
+function drainQueue() {
+    var i = 0,
+        task,
+        innerQueue = handlerQueue;
+	handlerQueue = [];
+	/*jslint boss: true */
+	while (task = innerQueue[i++]) {
+		task();
+	}
+}
+var nextTick;
+types.some(function (obj) {
+    var t = obj.test();
+    if (t) {
+        nextTick = obj.install(drainQueue);
+    }
+    return t;
 });
-require.register("calvinmetcalf-jszip/lib/flate/inflate.js", function(exports, require, module){
-var context = {};
-(function() {
+var retFunc = function (task) {
+    var len, args;
+    if (arguments.length > 1 && typeof task === "function") {
+        args = Array.prototype.slice.call(arguments, 1);
+        args.unshift(undefined);
+        task = task.bind.apply(task, args);
+    }
+    if ((len = handlerQueue.push(task)) === 1) {
+        nextTick(drainQueue);
+    }
+    return len;
+};
+retFunc.clear = function (n) {
+    if (n <= handlerQueue.length) {
+        handlerQueue[n - 1] = function () {};
+    }
+    return this;
+};
+module.exports = retFunc;
 
-    // https://github.com/imaya/zlib.js
-    // tag 0.1.6
-    // file bin/deflate.min.js
-
-    /** @license zlib.js 2012 - imaya [ https://github.com/imaya/zlib.js ] The MIT License */ (function() {
-        'use strict';
-        var l = void 0,
-            p = this;
-
-        function q(c, d) {
-            var a = c.split("."),
-                b = p;
-            !(a[0] in b) && b.execScript && b.execScript("var " + a[0]);
-            for (var e; a.length && (e = a.shift());)!a.length && d !== l ? b[e] = d : b = b[e] ? b[e] : b[e] = {}
-        };
-        var r = "undefined" !== typeof Uint8Array && "undefined" !== typeof Uint16Array && "undefined" !== typeof Uint32Array;
-
-        function u(c) {
-            var d = c.length,
-                a = 0,
-                b = Number.POSITIVE_INFINITY,
-                e, f, g, h, k, m, s, n, t;
-            for (n = 0; n < d; ++n) c[n] > a && (a = c[n]), c[n] < b && (b = c[n]);
-            e = 1 << a;
-            f = new(r ? Uint32Array : Array)(e);
-            g = 1;
-            h = 0;
-            for (k = 2; g <= a;) {
-                for (n = 0; n < d; ++n) if (c[n] === g) {
-                    m = 0;
-                    s = h;
-                    for (t = 0; t < g; ++t) m = m << 1 | s & 1, s >>= 1;
-                    for (t = m; t < e; t += k) f[t] = g << 16 | n;
-                    ++h
-                }++g;
-                h <<= 1;
-                k <<= 1
-            }
-            return [f, a, b]
-        };
-
-        function v(c, d) {
-            this.g = [];
-            this.h = 32768;
-            this.c = this.f = this.d = this.k = 0;
-            this.input = r ? new Uint8Array(c) : c;
-            this.l = !1;
-            this.i = w;
-            this.p = !1;
-            if (d || !(d = {})) d.index && (this.d = d.index), d.bufferSize && (this.h = d.bufferSize), d.bufferType && (this.i = d.bufferType), d.resize && (this.p = d.resize);
-            switch (this.i) {
-            case x:
-                this.a = 32768;
-                this.b = new(r ? Uint8Array : Array)(32768 + this.h + 258);
-                break;
-            case w:
-                this.a = 0;
-                this.b = new(r ? Uint8Array : Array)(this.h);
-                this.e = this.u;
-                this.m = this.r;
-                this.j = this.s;
-                break;
-            default:
-                throw Error("invalid inflate mode");
-            }
-        }
-        var x = 0,
-            w = 1;
-        v.prototype.t = function() {
-            for (; !this.l;) {
-                var c = y(this, 3);
-                c & 1 && (this.l = !0);
-                c >>>= 1;
-                switch (c) {
-                case 0:
-                    var d = this.input,
-                        a = this.d,
-                        b = this.b,
-                        e = this.a,
-                        f = l,
-                        g = l,
-                        h = l,
-                        k = b.length,
-                        m = l;
-                    this.c = this.f = 0;
-                    f = d[a++];
-                    if (f === l) throw Error("invalid uncompressed block header: LEN (first byte)");
-                    g = f;
-                    f = d[a++];
-                    if (f === l) throw Error("invalid uncompressed block header: LEN (second byte)");
-                    g |= f << 8;
-                    f = d[a++];
-                    if (f === l) throw Error("invalid uncompressed block header: NLEN (first byte)");
-                    h = f;
-                    f = d[a++];
-                    if (f === l) throw Error("invalid uncompressed block header: NLEN (second byte)");
-                    h |= f << 8;
-                    if (g === ~h) throw Error("invalid uncompressed block header: length verify");
-                    if (a + g > d.length) throw Error("input buffer is broken");
-                    switch (this.i) {
-                    case x:
-                        for (; e + g > b.length;) {
-                            m = k - e;
-                            g -= m;
-                            if (r) b.set(d.subarray(a, a + m), e), e += m, a += m;
-                            else for (; m--;) b[e++] = d[a++];
-                            this.a = e;
-                            b = this.e();
-                            e = this.a
-                        }
-                        break;
-                    case w:
-                        for (; e + g > b.length;) b = this.e({
-                            o: 2
-                        });
-                        break;
-                    default:
-                        throw Error("invalid inflate mode");
-                    }
-                    if (r) b.set(d.subarray(a, a + g), e), e += g, a += g;
-                    else for (; g--;) b[e++] = d[a++];
-                    this.d = a;
-                    this.a = e;
-                    this.b = b;
-                    break;
-                case 1:
-                    this.j(z,
-                    A);
-                    break;
-                case 2:
-                    B(this);
-                    break;
-                default:
-                    throw Error("unknown BTYPE: " + c);
-                }
-            }
-            return this.m()
-        };
-        var C = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15],
-            D = r ? new Uint16Array(C) : C,
-            E = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258, 258, 258],
-            F = r ? new Uint16Array(E) : E,
-            G = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, 0, 0],
-            H = r ? new Uint8Array(G) : G,
-            I = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577],
-            J = r ? new Uint16Array(I) : I,
-            K = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13,
-            13],
-            L = r ? new Uint8Array(K) : K,
-            M = new(r ? Uint8Array : Array)(288),
-            N, O;
-        N = 0;
-        for (O = M.length; N < O; ++N) M[N] = 143 >= N ? 8 : 255 >= N ? 9 : 279 >= N ? 7 : 8;
-        var z = u(M),
-            P = new(r ? Uint8Array : Array)(30),
-            Q, R;
-        Q = 0;
-        for (R = P.length; Q < R; ++Q) P[Q] = 5;
-        var A = u(P);
-
-        function y(c, d) {
-            for (var a = c.f, b = c.c, e = c.input, f = c.d, g; b < d;) {
-                g = e[f++];
-                if (g === l) throw Error("input buffer is broken");
-                a |= g << b;
-                b += 8
-            }
-            g = a & (1 << d) - 1;
-            c.f = a >>> d;
-            c.c = b - d;
-            c.d = f;
-            return g
-        }
-
-        function S(c, d) {
-            for (var a = c.f, b = c.c, e = c.input, f = c.d, g = d[0], h = d[1], k, m, s; b < h;) {
-                k = e[f++];
-                if (k === l) break;
-                a |= k << b;
-                b += 8
-            }
-            m = g[a & (1 << h) - 1];
-            s = m >>> 16;
-            c.f = a >> s;
-            c.c = b - s;
-            c.d = f;
-            return m & 65535
-        }
-
-        function B(c) {
-            function d(a, c, b) {
-                var d, f, e, g;
-                for (g = 0; g < a;) switch (d = S(this, c), d) {
-                case 16:
-                    for (e = 3 + y(this, 2); e--;) b[g++] = f;
-                    break;
-                case 17:
-                    for (e = 3 + y(this, 3); e--;) b[g++] = 0;
-                    f = 0;
-                    break;
-                case 18:
-                    for (e = 11 + y(this, 7); e--;) b[g++] = 0;
-                    f = 0;
-                    break;
-                default:
-                    f = b[g++] = d
-                }
-                return b
-            }
-            var a = y(c, 5) + 257,
-                b = y(c, 5) + 1,
-                e = y(c, 4) + 4,
-                f = new(r ? Uint8Array : Array)(D.length),
-                g, h, k, m;
-            for (m = 0; m < e; ++m) f[D[m]] = y(c, 3);
-            g = u(f);
-            h = new(r ? Uint8Array : Array)(a);
-            k = new(r ? Uint8Array : Array)(b);
-            c.j(u(d.call(c, a, g, h)), u(d.call(c, b, g, k)))
-        }
-        v.prototype.j = function(c, d) {
-            var a = this.b,
-                b = this.a;
-            this.n = c;
-            for (var e = a.length - 258, f, g, h, k; 256 !== (f = S(this, c));) if (256 > f) b >= e && (this.a = b, a = this.e(), b = this.a), a[b++] = f;
-            else {
-                g = f - 257;
-                k = F[g];
-                0 < H[g] && (k += y(this, H[g]));
-                f = S(this, d);
-                h = J[f];
-                0 < L[f] && (h += y(this, L[f]));
-                b >= e && (this.a = b, a = this.e(), b = this.a);
-                for (; k--;) a[b] = a[b++-h]
-            }
-            for (; 8 <= this.c;) this.c -= 8, this.d--;
-            this.a = b
-        };
-        v.prototype.s = function(c, d) {
-            var a = this.b,
-                b = this.a;
-            this.n = c;
-            for (var e = a.length, f, g, h, k; 256 !== (f = S(this, c));) if (256 > f) b >= e && (a = this.e(), e = a.length), a[b++] = f;
-            else {
-                g = f - 257;
-                k = F[g];
-                0 < H[g] && (k += y(this, H[g]));
-                f = S(this, d);
-                h = J[f];
-                0 < L[f] && (h += y(this, L[f]));
-                b + k > e && (a = this.e(), e = a.length);
-                for (; k--;) a[b] = a[b++-h]
-            }
-            for (; 8 <= this.c;) this.c -= 8, this.d--;
-            this.a = b
-        };
-        v.prototype.e = function() {
-            var c = new(r ? Uint8Array : Array)(this.a - 32768),
-                d = this.a - 32768,
-                a, b, e = this.b;
-            if (r) c.set(e.subarray(32768, c.length));
-            else {
-                a = 0;
-                for (b = c.length; a < b; ++a) c[a] = e[a + 32768]
-            }
-            this.g.push(c);
-            this.k += c.length;
-            if (r) e.set(e.subarray(d, d + 32768));
-            else for (a = 0; 32768 > a; ++a) e[a] = e[d + a];
-            this.a = 32768;
-            return e
-        };
-        v.prototype.u = function(c) {
-            var d, a = this.input.length / this.d + 1 | 0,
-                b, e, f, g = this.input,
-                h = this.b;
-            c && ("number" === typeof c.o && (a = c.o), "number" === typeof c.q && (a += c.q));
-            2 > a ? (b = (g.length - this.d) / this.n[2], f = 258 * (b / 2) | 0, e = f < h.length ? h.length + f : h.length << 1) : e = h.length * a;
-            r ? (d = new Uint8Array(e), d.set(h)) : d = h;
-            return this.b = d
-        };
-        v.prototype.m = function() {
-            var c = 0,
-                d = this.b,
-                a = this.g,
-                b, e = new(r ? Uint8Array : Array)(this.k + (this.a - 32768)),
-                f, g, h, k;
-            if (0 === a.length) return r ? this.b.subarray(32768, this.a) : this.b.slice(32768, this.a);
-            f = 0;
-            for (g = a.length; f < g; ++f) {
-                b = a[f];
-                h = 0;
-                for (k = b.length; h < k; ++h) e[c++] = b[h]
-            }
-            f = 32768;
-            for (g = this.a; f < g; ++f) e[c++] = d[f];
-            this.g = [];
-            return this.buffer = e
-        };
-        v.prototype.r = function() {
-            var c, d = this.a;
-            r ? this.p ? (c = new Uint8Array(d), c.set(this.b.subarray(0, d))) : c = this.b.subarray(0, d) : (this.b.length > d && (this.b.length = d), c = this.b);
-            return this.buffer = c
-        };
-        q("Zlib.RawInflate", v);
-        q("Zlib.RawInflate.prototype.decompress", v.prototype.t);
-        var T = {
-            ADAPTIVE: w,
-            BLOCK: x
-        }, U, V, W, X;
-        if (Object.keys) U = Object.keys(T);
-        else for (V in U = [], W = 0, T) U[W++] = V;
-        W = 0;
-        for (X = U.length; W < X; ++W) V = U[W], q("Zlib.RawInflate.BufferType." + V, T[V]);
-    }).call(this);
-
-
-}).call(context);
-
-module.exports = function(input) {
-    var inflate = new context.Zlib.RawInflate(new Uint8Array(input));
-    return inflate.decompress();
+},{"./messageChannel":35,"./mutation":36,"./nextTick":37,"./postMessage":38,"./realSetImmediate":39,"./stateChange":40,"./timeout":41}],35:[function(require,module,exports){
+"use strict";
+var globe = require("./global");
+exports.test = function () {
+    return !!globe.MessageChannel;
 };
 
-});
-require.register("proj4js-proj4js/dist/proj4.js", function(exports, require, module){
-(function(e){if("function"==typeof bootstrap)bootstrap("proj4",e);else if("object"==typeof exports)module.exports=e();else if("function"==typeof define&&define.amd)define(e);else if("undefined"!=typeof ses){if(!ses.ok())return;ses.makeProj4=e}else"undefined"!=typeof window?window.proj4=e():global.proj4=e()})(function(){var define,ses,bootstrap,module,exports;
-return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+exports.install = function (func) {
+    var channel = new globe.MessageChannel();
+    channel.port1.onmessage = func;
+    return function () {
+        channel.port2.postMessage(0);
+    };
+};
+},{"./global":33}],36:[function(require,module,exports){
+"use strict";
+//based off rsvp
+//https://github.com/tildeio/rsvp.js/blob/master/lib/rsvp/async.js
+var globe = require("./global");
+
+var MutationObserver = globe.MutationObserver || globe.WebKitMutationObserver;
+
+exports.test = function () {
+    return MutationObserver;
+};
+
+exports.install = function (handle) {
+    var observer = new MutationObserver(handle);
+    var element = globe.document.createElement("div");
+    observer.observe(element, { attributes: true });
+
+    // Chrome Memory Leak: https://bugs.webkit.org/show_bug.cgi?id=93661
+    globe.addEventListener("unload", function () {
+        observer.disconnect();
+        observer = null;
+    }, false);
+    return function () {
+        element.setAttribute("drainQueue", "drainQueue");
+    };
+};
+},{"./global":33}],37:[function(require,module,exports){
+var process=require("__browserify_process");"use strict";
+exports.test = function () {
+    // Don't get fooled by e.g. browserify environments.
+    return typeof process === "object" && Object.prototype.toString.call(process) === "[object process]";
+};
+
+exports.install = function () {
+    return process.nextTick;
+};
+},{"__browserify_process":6}],38:[function(require,module,exports){
+"use strict";
+var globe = require("./global");
+exports.test = function () {
+    // The test against `importScripts` prevents this implementation from being installed inside a web worker,
+    // where `global.postMessage` means something completely different and can"t be used for this purpose.
+
+    if (!globe.postMessage || globe.importScripts) {
+        return false;
+    }
+
+    var postMessageIsAsynchronous = true;
+    var oldOnMessage = globe.onmessage;
+    globe.onmessage = function () {
+        postMessageIsAsynchronous = false;
+    };
+    globe.postMessage("", "*");
+    globe.onmessage = oldOnMessage;
+
+    return postMessageIsAsynchronous;
+};
+
+exports.install = function (func) {
+    var codeWord = "com.calvinmetcalf.setImmediate" + Math.random();
+    function globalMessage(event) {
+        if (event.source === globe && event.data === codeWord) {
+            func();
+        }
+    }
+    if (globe.addEventListener) {
+        globe.addEventListener("message", globalMessage, false);
+    } else {
+        globe.attachEvent("onmessage", globalMessage);
+    }
+    return function () {
+        globe.postMessage(codeWord, "*");
+    };
+};
+},{"./global":33}],39:[function(require,module,exports){
+"use strict";
+var globe = require("./global");
+exports.test = function () {
+    return  globe.setImmediate;
+};
+
+exports.install = function (handle) {
+    //return globe.setImmediate.bind(globe, handle);
+    return globe.setTimeout.bind(globe,handle,0);
+};
+
+},{"./global":33}],40:[function(require,module,exports){
+"use strict";
+var globe = require("./global");
+exports.test = function () {
+    return "document" in globe && "onreadystatechange" in globe.document.createElement("script");
+};
+
+exports.install = function (handle) {
+    return function () {
+
+        // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
+        // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
+        var scriptEl = globe.document.createElement("script");
+        scriptEl.onreadystatechange = function () {
+            handle();
+
+            scriptEl.onreadystatechange = null;
+            scriptEl.parentNode.removeChild(scriptEl);
+            scriptEl = null;
+        };
+        globe.document.documentElement.appendChild(scriptEl);
+
+        return handle;
+    };
+};
+},{"./global":33}],41:[function(require,module,exports){
+"use strict";
+exports.test = function () {
+    return true;
+};
+
+exports.install = function (t) {
+    return function () {
+        setTimeout(t, 0);
+    };
+};
+},{}],42:[function(require,module,exports){
+
+//#Promises
+
+//This file is both legal JavaScript and markdown, so if there are a few quirks like that open comment up there, that is why.
+
+//This code is from a [promise library called 'lie'](https://github.com/calvinmetcalf/lie). You can install it from npm with `npm install lie`.
+
+//The intent of this code is to implement promises in a straightforward way that is as close to the spec as possible while also being readable and performance. The version of promises that ended up being settled on is (as of 10/27/13) a simple constructor which takes as its sole argument a function with 2 arguments, 'fulfill' and 'reject'. Gone are the earlier notions of promises and deferred objects (which is good a I kept trying to spell deferred with 2 Fs and 1 R).
+
+//In case you don't know how a promise works a quick review, if you need more Domenic Denicola did a [good post](http://domenic.me/2012/10/14/youre-missing-the-point-of-promises/) on promises.
+
+//- a *promise* is a placeholder for a value that you don't have yet but you plan to have latter, it is equivalent to the 'maybe monads' in other languages.
+//- a promise starts off as pending but then *resolves* into a value or an error.
+//- you access the value or error with the promises sole method which is `.then`. It takes two arguments, a function called with the value if it succeeds and a function called with an error, for this reason promise and promise like things are sometimes called *thenable* objects.
+//- the then method is also a promise, they are promises for the value that they success or failure handlers return, if the promise failed but the failure handler returns a value then the promises is turned into a successful one, if the promise fulfills but there is an error thrown in the success handler it turns into a failed promise.
+//- you don't have to call with both arguments you can omit either one (i.e. call with one function and omit the failure one, or call with false/null/undefined/etc and the failure one). In this case the promise returned by the call to then will pass the value to the omitted function through.
+//- one a promise is resolved it is resolved, it can only happen once.
+//- if the success handler or the promise return a promise as a value, then instead of resolving as that promise it resolves to the value that promise resolves to. (aka `Promise(function(resolve){return promise2;});` is the same this as just returning promise2).
+
+//Anyway onward to the code.
+
+/* lie.js By Calvin Metcalf*/
+
+//First off we want our code to be strict, this might look like it's enabling global strict mode (bad). But in node it doesn't work that way, and our build system will wrap this in a closure for the browser.
+
+
+'use strict';
+
+
+//An efficient promise implementation needs a way to resolve a function asynchronously, and you want to do it as fast as possible, I've covered how to do efficient low latency async resolving in a few [other] (http://calvinmetcalf.com/post/61672207151/setimmediate-etc) [posts](http://calvinmetcalf.com/post/61761231881/javascript-schedulers).
+
+
+var immediate = require('immediate');
+
+
+//Now for the actual constructor
+
+
+function Promise(resolver) {
+
+
+//Right remember when I said I wanted to get it as close as possible to the spec, this is the one place I didn't this trick allows me to call the constructor from code without using 'new'. I do this because you can't chain a function called with the new operator very easily. You can't do `new promise(func).then(other stuff)` you have to do `(new promise(func)).then(other stuff)` so when the spec comes out I'll probably be having a little script that says `function promise(f){return new Promise(f);}` on most of my pages.
+
+     if (!(this instanceof Promise)) {
+        return new Promise(resolver);
+    }
+
+//We start by creating two queues, one for functions to call if our promise resolves successfully and the other for functions we need to call if it isn't successful, we have have a 'resolved' variable so we cn tell if we are pending or not.
+
+
+    var successQueue = [];
+    var failureQueue = [];
+    var resolved = false;
+
+
+//Our one and only method then is defined, and it checks if the aforementioned resolved variable is falsy, and if it is we return the pending function with the two arguments and if it is truthy we return it as a function.
+
+//Later on we will see that we redefine this variable to be a function.  In my head it is clearer to only use one variable for both the state and the function that is used when the state changes, others might not.
+
+
+    this.then = function(onFulfilled, onRejected) {
+        if(resolved){
+            return resolved(onFulfilled, onRejected);
+        } else {
+            return pending(onFulfilled, onRejected);
+        }
+    };
+
+
+//The pending function actually returns a new promise and you can see the syntax of how it's called with the nested function inside function.
+
+    function pending(onFulfilled, onRejected){
+        return new Promise(function(success,failure){
+
+// We more or less do the same thing twice in this function,ones for each argument.
+
+// First if the `onFulfilled` function is given (i.e. called as `.then(func)` or as `.then(func,func)`). we put into the successQueue and object with
+
+// - a callback: a function to call the value on.
+// - a resolve handler, a function to call with the value if things go well
+// - a reject handler, a function to call with any errors that happen.
+
+//if it is not called with an `onFulfilled` function the callback is set to false and it is has `next` which is just how to resolve this promise.
+
+            if(typeof onFulfilled === 'function'){
+                successQueue.push({
+                    resolve: success,
+                    reject: failure,
+                    callback:onFulfilled
+                });
+            }else{
+                successQueue.push({
+                    next: success,
+                    callback:false
+                });
+            }
+
+
+//Then we do the same thing for the `onRejected` handler.
+
+            if(typeof onRejected === 'function'){
+                failureQueue.push({
+                    resolve: success,
+                    reject: failure,
+                    callback:onRejected
+                });
+            }else{
+                failureQueue.push({
+                    next: failure,
+                    callback:false
+                });
+            }
+        });
+    }
+
+//We save the current `this` value as a variable called `scope` this will come in handy in a bit if we need to give somebody this same promise we are building now.
+
+//This could be avoided by using 'function.prototype.bind', but it is unavailable in older version of Internet Explorer.
+
+
+    var scope = this;
+
+//This is the function we call when we want to transition the function from pending to resolved, it is called with two arguments, `success` which is true if the promise is being resolved successfully and false if it is being rejected, the second argument is the value it is being resolved with, or the reason it's being rejected.
+
+
+    function resolve(success, value){
+
+
+//If you remember from earlier we can only resolve it once, so if this is being called a seccond time then we need to nip that in the bud.
+
+
+        if(resolved){
+            return;
+        }
+
+
+//Here is where we redefine the variable resolved into a truthy value, it will be a function which handles calls to `then` from now on, it's called with the scope (remember thats the current promise we're creating), the value, and then we give it the number 0 if we succeeded and one if we failed, you'll see why we want it to have those values when we look at the createResolved function later.
+
+//In case you are don't know it's important to remember that in a function in JavaScript counts as `true` when it comes to conditionals.
+
+
+
+        resolved = createResolved(scope, value, success?0:1);
+
+
+//Now we define the variable queue to be either successQueue or failureQueue depending on what happened and we set up the loop through it.
+
+
+        var queue = success ? successQueue : failureQueue;
+        var len = queue.length;
+        var i = -1;
+        while(++i < len) {
+
+//so if this item in the queue has a callback we do something complicated which I'll get to in a minute, and if it doesn't but does have a next value we just call next with that value.  e.g if you go `var promise2 = promise(blah).then(null,func)` and it successfully resolves, then `next` is the function which resolves promise2.
+
+//back to what immediate does, what it does is call it's first argument with the rest of its arguments, in other words `immediate(a,b,c)` is the same as calling `immediate(function(){a(b,c);})`. In other words `execute` is being called with the callback, the value, the success function, and the reject function, you'll see what execute does in a bit.
+
+
+            if (queue[i].callback) {
+                immediate(execute,queue[i].callback, value, queue[i].resolve, queue[i].reject);
+            }else {
+                queue[i].next(value);
+            }
+        }
+    }
+
+
+//We now set up two functions which are just short hands for calling resolve with true or false value, these two functions where originally written as `var reject = resolve.bind(this,false);` and `var fulfill = resolve.bind(this,true);` but I had to change it as bind isn't available in older versions of IE.
+
+//In that state of affairs the resolve function didn't need to use the `scope` variable but could just pass `this`. Sometimes we have elegant code and Microsoft just shits all over it.
+
+
+    function reject(reason){
+        resolve(false,reason);
+    }
+    function fulfill(value){
+        resolve(true,value);
+    }
+
+//Remember when I said we had to make sure if a a promise resolved with a promise, it was the value the promise resolved and not the promise which was given to the next thing? unwrap is the function which does that for us.
+
+//Back in my nice pre Microsoft version of the code fulfill was really `var fulfill = unwrap.bind(null,resolve.bind(this,true),reject);`
+
+
+    function fulfillUnwrap(value){
+        unwrap(fulfill, reject, value);
+    }
+
+//Now we actually call that resolver from way up in the arguments to this function.  We call it inside a try clause and if it fails we call the rejection handler.
+
+    try{
+        resolver(fulfillUnwrap,reject);
+    }catch(e){
+        reject(e);
+    }
+}
+
+
+//That is the end of the Promise constructor, I now have a couple utility methods that didn’t depend on the closure. First being `unwrap` which takes a value, and if it's a promise calls the promise with the fulfill and reject functions it's given.  Otherwise we just call fulfill with it. 
+
+function unwrap(fulfill, reject, value){
+    if(value && typeof value.then==='function'){
+        value.then(fulfill,reject);
+    }else{
+        fulfill(value);
+    }
+}
+
+//This is the function which creates the function which handles calls to `.then` after it is resolved. What it does is it first figures out which of it's arguments corresponds to the state the promise is in (e.g. if it's successful grabs the first one, rejected grabs the second). 
+
+//If that argument isn't a function then we just return the original promise. This covers when `promise1` resolves into an error. `promise1.then(func);` doesn't do anything. if we were to call it as `promise1.then(null,func)` we would then triger the other clause which asynchronously executes the callback just like we did for the things in the queue in the 'resolve' function.
+
+//Instead of straight up returning an anonymous function we define it with a name and then return it, this can help in debugging. 
+
+function createResolved(scope, value, whichArg) {
+    function resolved() {
+        var callback = arguments[whichArg];
+        if (typeof callback !== 'function') {
+            return scope;
+        }else{
+            return new Promise(function(resolve,reject){
+                immediate(execute,callback,value,resolve,reject);
+            });
+        }
+    }
+    return resolved;
+}
+
+
+//Lastly we have the execute function which is pretty similar to what we did with the resolver function of calling it inside a try clause.
+
+function execute(callback, value, resolve, reject) {
+    try {
+        unwrap(resolve,reject,callback(value));
+    } catch (error) {
+        reject(error);
+    }
+}
+
+
+//this is [commonjs](http://wiki.commonjs.org/wiki/CommonJS) so we export stuff, I'm using [browerify](https://github.com/substack/node-browserify) to make the browser version.
+
+
+
+module.exports = Promise;
+
+// fin
+
+// -Calvin W. Metcalf
+},{"immediate":45}],43:[function(require,module,exports){
+"use strict";
+exports.test = function () {
+    return false;
+};
+},{}],44:[function(require,module,exports){
+module.exports=require(33)
+},{}],45:[function(require,module,exports){
+"use strict";
+var types = [
+    require("./nextTick"),
+    require("./mutation"),
+    require("./realSetImmediate"),
+    require("./postMessage"),
+    require("./messageChannel"),
+    require("./stateChange"),
+    require("./timeout")
+];
+var handlerQueue = [];
+function drainQueue() {
+    var i = 0,
+        task,
+        innerQueue = handlerQueue;
+	handlerQueue = [];
+	/*jslint boss: true */
+	while (task = innerQueue[i++]) {
+		task();
+	}
+}
+var nextTick;
+var i = -1;
+var len = types.length;
+while(++i<len){
+    if(types[i].test()){
+        nextTick = types[i].install(drainQueue);
+        break;
+    }
+}
+var retFunc = function (task) {
+    var len, args;
+    var nTask = task;
+    if (arguments.length > 1 && typeof task === "function") {
+        args = Array.prototype.slice.call(arguments, 1);
+        nTask = function(){
+            task.apply(undefined,args);
+        }
+    }
+    if ((len = handlerQueue.push(nTask)) === 1) {
+        nextTick(drainQueue);
+    }
+    return len;
+};
+retFunc.clear = function (n) {
+    if (n <= handlerQueue.length) {
+        handlerQueue[n - 1] = function () {};
+    }
+    return this;
+};
+module.exports = retFunc;
+
+},{"./messageChannel":46,"./mutation":47,"./nextTick":43,"./postMessage":48,"./realSetImmediate":49,"./stateChange":50,"./timeout":51}],46:[function(require,module,exports){
+module.exports=require(35)
+},{"./global":44}],47:[function(require,module,exports){
+module.exports=require(36)
+},{"./global":44}],48:[function(require,module,exports){
+module.exports=require(38)
+},{"./global":44}],49:[function(require,module,exports){
+"use strict";
+var globe = require("./global");
+exports.test = function () {
+    return  globe.setImmediate;
+};
+
+exports.install = function (handle) {
+    return globe.setTimeout.bind(globe, handle, 0);
+};
+
+},{"./global":44}],50:[function(require,module,exports){
+module.exports=require(40)
+},{"./global":44}],51:[function(require,module,exports){
+module.exports=require(41)
+},{}],52:[function(require,module,exports){
+function dbfHeader(buffer){
+	var data = new DataView(buffer);
+	var out = {};
+	out.lastUpdated = new Date(data.getUint8(1,true)+1900,data.getUint8(2,true),data.getUint8(3,true));
+	out.records = data.getUint32(4,true);
+	out.headerLen = data.getUint16(8,true);
+	out.recLen = data.getUint16(10,true);
+	return out;
+}
+
+function dbfRowHeader(buffer){
+	var data = new DataView(buffer);
+	var out = [];
+	var offset = 32;
+	while(true){
+		out.push({
+			name : String.fromCharCode.apply(this,(new Uint8Array(buffer,offset,10))).replace(/\0|\s+$/g,''),
+			dataType : String.fromCharCode(data.getUint8(offset+11)),
+			len : data.getUint8(offset+16),
+			decimal : data.getUint8(offset+17)
+		});
+		if(data.getUint8(offset+32)===13){
+			break;
+		}else{
+			offset+=32;
+		}
+	}
+	return out;
+}
+function rowFuncs(buffer,offset,len,type){
+	var data = (new Uint8Array(buffer,offset,len));
+	var textData = String.fromCharCode.apply(this,data).replace(/\0|\s+$/g,'');
+	switch(type){
+		case 'N':
+		case 'F':
+		case 'O':
+			return parseFloat(textData,10);
+		case 'D':
+			return new Date(textData.slice(0,4), parseInt(textData.slice(4,6),10)-1, textData.slice(6,8));
+		case 'L':
+			return textData.toLowerCase() === 'y' || textData.toLowerCase() === 't';
+		default:
+			return textData;
+	}
+}
+function parseRow(buffer,offset,rowHeaders){
+	var out={};
+	var i = 0;
+	var len = rowHeaders.length;
+	var field;
+	var header;
+	while(i<len){
+		header = rowHeaders[i];
+		field = rowFuncs(buffer,offset,header.len,header.dataType);
+		offset += header.len;
+		if(typeof field !== 'undefined'){
+			out[header.name]=field;
+		}
+		i++;
+	}
+	return out;
+}
+module.exports = function(buffer){
+	var rowHeaders = dbfRowHeader(buffer);
+	var header = dbfHeader(buffer);
+	var offset = ((rowHeaders.length+1)<<5)+2;
+	var recLen = header.recLen;
+	var records = header.records;
+	var out = [];
+	while(records){
+		out.push(parseRow(buffer,offset,rowHeaders));
+		offset += recLen;
+		records--;
+	}
+	return out;
+};
+
+},{}],53:[function(require,module,exports){
 var mgrs = require('./mgrs');
 
 function Point(x, y, z) {
   if (!(this instanceof Point)) {
     return new Point(x, y, z);
   }
-  if (typeof x === 'object') {
+  if (Array.isArray(x)) {
     this.x = x[0];
     this.y = x[1];
     this.z = x[2] || 0.0;
-  }
-  else if (typeof x === 'string' && typeof y === 'undefined') {
+  }else if(typeof x === 'object'){
+    this.x = x.x;
+    this.y = x.y;
+    this.z = x.z || 0.0;
+  } else if (typeof x === 'string' && typeof y === 'undefined') {
     var coords = x.split(',');
-    this.x = parseFloat(coords[0]);
-    this.y = parseFloat(coords[1]);
-    this.z = parseFloat(coords[2]) || 0.0;
+    this.x = parseFloat(coords[0], 10);
+    this.y = parseFloat(coords[1], 10);
+    this.z = parseFloat(coords[2], 10) || 0.0;
   }
   else {
     this.x = x;
@@ -3593,19 +6722,26 @@ function Point(x, y, z) {
   this.clone = function() {
     return new Point(this.x, this.y, this.z);
   };
-  this.toString = function() {
-    return ("x=" + this.x + ",y=" + this.y);
+  this.toArray = function(){
+    if(this.z){
+      return [this.x,this.y, this.z];
+    }else{
+      return [this.x,this.y];
+    }
   };
-  /** 
-   * APIMethod: toShortString
-   * Return a short string version of the point.
-   *
-   * Return:
-   * {String} Shortened String representation of ..Point object. 
-   *         (ex. <i>"5, 42"</i>)
-   */
+  this.toString = function() {
+    if(this.z){
+      return "x=" + this.x + ",y=" + this.y + ",z="+this.z;
+    }else{
+      return "x=" + this.x + ",y=" + this.y;
+    }
+  };
   this.toShortString = function() {
-    return (this.x + ", " + this.y);
+    if(this.z){
+      return this.x + "," + this.y+ "," + this.z;
+    }else{
+      return this.x + "," + this.y;
+    }
   };
 }
 
@@ -3620,19 +6756,19 @@ Point.prototype.toMGRS = function(accuracy) {
   }, accuracy);
 };
 module.exports = Point;
-},{"./mgrs":17}],2:[function(require,module,exports){
+},{"./mgrs":69}],54:[function(require,module,exports){
 var extend = require('./extend');
 var common = require('./common');
 var defs = require('./defs');
-var constants = require('./constants');
+var constants = require('./constants/index');
 var datum = require('./datum');
-var projections = require('./projections');
+var projections = require('./projections/index');
 var wkt = require('./wkt');
 var projStr = require('./projString');
 
-function proj(srsCode) {
-  if (!(this instanceof proj)) {
-    return new proj(srsCode);
+function Projection(srsCode) {
+  if (!(this instanceof Projection)) {
+    return new Projection(srsCode);
   }
   this.srsCodeInput = srsCode;
   this.x0 = 0;
@@ -3663,16 +6799,16 @@ function proj(srsCode) {
 
   this.initTransforms(this.projName);
 }
-proj.projections = projections;
-proj.projections.start();
-proj.prototype = {
+Projection.projections = projections;
+Projection.projections.start();
+Projection.prototype = {
   /**
    * Function: initTransforms
    *    Finalize the initialization of the Proj object
    *
    */
   initTransforms: function(projName) {
-    var ourProj = proj.projections.get(projName);
+    var ourProj = Projection.projections.get(projName);
     if (ourProj) {
       extend(this, ourProj);
       this.init();
@@ -3753,9 +6889,9 @@ proj.prototype = {
     self.datum = datum(self);
   }
 };
-module.exports = proj;
+module.exports = Projection;
 
-},{"./common":4,"./constants":9,"./datum":11,"./defs":13,"./extend":14,"./projString":18,"./projections":27,"./wkt":47}],3:[function(require,module,exports){
+},{"./common":56,"./constants/index":61,"./datum":63,"./defs":65,"./extend":66,"./projString":70,"./projections/index":79,"./wkt":99}],55:[function(require,module,exports){
 module.exports = function(crs, denorm, point) {
   var xin = point.x,
     yin = point.y,
@@ -3808,7 +6944,7 @@ module.exports = function(crs, denorm, point) {
   return point;
 };
 
-},{}],4:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 exports.PI = 3.141592653589793238; //Math.PI;
 exports.HALF_PI = 1.570796326794896619; //Math.PI*0.5;
 exports.TWO_PI = 6.283185307179586477; //Math.PI*2;
@@ -4111,7 +7247,32 @@ exports.pj_inv_mlfn = function(arg, es, en) {
   //..reportError("cass:pj_inv_mlfn: Convergence error");
   return phi;
 };
-
+exports.nadInterBreakout = function(indx, frct, letter, number, ct) {
+  var inx;
+  if (indx[letter] < 0) {
+    if (!(indx[letter] === -1 && frct[letter] > 0.99999999999)) {
+      return false;
+    }
+    indx[letter]++;
+    frct[letter] = 0;
+  }
+  else {
+    inx = indx[letter] + 1;
+    if (inx >= ct.lim[number]) {
+      if (!(inx === ct.lim[number] && frct[letter] < 1e-11)) {
+        return false;
+      }
+      if (letter === 'x') {
+        indx[letter]--;
+      }
+      else {
+        indx[letter]++;
+      }
+      frct[letter] = 1;
+    }
+  }
+  return [indx, frct];
+};
 /**
  * Determine correction values
  * source: nad_intr.c (DGR: 2012-07-29)
@@ -4135,42 +7296,25 @@ exports.nad_intr = function(pin, ct) {
     x: Number.NaN,
     y: Number.NaN
   };
-  var inx;
-  if (indx.x < 0) {
-    if (!(indx.x === -1 && frct.x > 0.99999999999)) {
-      return val;
-    }
-    indx.x++;
-    frct.x = 0;
+
+
+  var temp = exports.nadInterBreakout(indx, frct, 'x', 0, ct);
+  if (temp) {
+    indx = temp[0];
+    frct = temp[1];
   }
   else {
-    inx = indx.x + 1;
-    if (inx >= ct.lim[0]) {
-      if (!(inx === ct.lim[0] && frct.x < 1e-11)) {
-        return val;
-      }
-      indx.x--;
-      frct.x = 1;
-    }
+    return val;
   }
-  if (indx.y < 0) {
-    if (!(indx.y === -1 && frct.y > 0.99999999999)) {
-      return val;
-    }
-    indx.y++;
-    frct.y = 0;
+  temp = exports.nadInterBreakout(indx, frct, 'y', 1, ct);
+  if (temp) {
+    indx = temp[0];
+    frct = temp[1];
   }
   else {
-    inx = indx.y + 1;
-    if (inx >= ct.lim[1]) {
-      if (!(inx === ct.lim[1] && frct.y < 1e-11)) {
-        return val;
-      }
-      indx.y++;
-      frct.y = 1;
-    }
+    return val;
   }
-  inx = (indx.y * ct.lim[0]) + indx.x;
+  var inx = (indx.y * ct.lim[0]) + indx.x;
   var f00 = {
     x: ct.cvs[inx][0],
     y: ct.cvs[inx][1]
@@ -4203,6 +7347,36 @@ exports.nad_intr = function(pin, ct) {
  * Correct value
  * source: nad_cvt.c (DGR: 2012-07-29)
  */
+exports.inverseNadCvt = function(t, val, tb, ct) {
+  if (isNaN(t.x)) {
+    return val;
+  }
+  t.x = tb.x + t.x;
+  t.y = tb.y - t.y;
+  var i = 9,
+    tol = 1e-12;
+  var dif, del;
+  do {
+    del = exports.nad_intr(t, ct);
+    if (isNaN(del.x)) {
+      this.reportError("Inverse grid shift iteration failed, presumably at grid edge.  Using first approximation.");
+      break;
+    }
+    dif = {
+      "x": t.x - del.x - tb.x,
+      "y": t.y + del.y - tb.y
+    };
+    t.x -= dif.x;
+    t.y -= dif.y;
+  } while (i-- && Math.abs(dif.x) > tol && Math.abs(dif.y) > tol);
+  if (i < 0) {
+    this.reportError("Inverse grid shift iterator failed to converge.");
+    return val;
+  }
+  val.x = exports.adjust_lon(t.x + ct.ll[0]);
+  val.y = t.y + ct.ll[1];
+  return val;
+};
 exports.nad_cvt = function(pin, inverse, ct) {
   var val = {
     "x": Number.NaN,
@@ -4220,33 +7394,7 @@ exports.nad_cvt = function(pin, inverse, ct) {
   tb.x = exports.adjust_lon(tb.x - exports.PI) + exports.PI;
   var t = exports.nad_intr(tb, ct);
   if (inverse) {
-    if (isNaN(t.x)) {
-      return val;
-    }
-    t.x = tb.x + t.x;
-    t.y = tb.y - t.y;
-    var i = 9,
-      tol = 1e-12;
-    var dif, del;
-    do {
-      del = exports.nad_intr(t, ct);
-      if (isNaN(del.x)) {
-        this.reportError("Inverse grid shift iteration failed, presumably at grid edge.  Using first approximation.");
-        break;
-      }
-      dif = {
-        "x": t.x - del.x - tb.x,
-        "y": t.y + del.y - tb.y
-      };
-      t.x -= dif.x;
-      t.y -= dif.y;
-    } while (i-- && Math.abs(dif.x) > tol && Math.abs(dif.y) > tol);
-    if (i < 0) {
-      this.reportError("Inverse grid shift iterator failed to converge.");
-      return val;
-    }
-    val.x = exports.adjust_lon(t.x + ct.ll[0]);
-    val.y = t.y + ct.ll[1];
+    return exports.inverseNadCvt(t, val, tb, ct);
   }
   else {
     if (!isNaN(t.x)) {
@@ -4275,7 +7423,7 @@ exports.C66 = 0.36458333333333333333;
 exports.C68 = 0.00569661458333333333;
 exports.C88 = 0.3076171875;
 
-},{}],5:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 exports.wgs84 = {
   towgs84: "0,0,0",
   ellipse: "WGS84",
@@ -4351,7 +7499,7 @@ exports.gunung_segara = {
   ellipse: 'bessel',
   datumName: 'Gunung Segara Jakarta'
 };
-},{}],6:[function(require,module,exports){
+},{}],58:[function(require,module,exports){
 exports.MERIT = {
   a: 6378137.0,
   rf: 298.257,
@@ -4567,7 +7715,7 @@ exports.sphere = {
   b: 6370997.0,
   ellipseName: "Normal Sphere (r=6370997)"
 };
-},{}],7:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
 exports.greenwich = 0.0; //"0dE",
 exports.lisbon = -9.131906111111; //"9d07'54.862\"W",
 exports.paris = 2.337229166667; //"2d20'14.025\"E",
@@ -4581,7 +7729,7 @@ exports.brussels = 4.367975; //"4d22'4.71\"E",
 exports.stockholm = 18.058277777778; //"18d3'29.8\"E",
 exports.athens = 23.7163375; //"23d42'58.815\"E",
 exports.oslo = 10.722916666667; //"10d43'22.5\"E"
-},{}],8:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 // Based on . CTABLE  structure :
   // FIXME: better to have array instead of object holding longitudes, latitudes members
   //        In the former case, one has to document index 0 is longitude and
@@ -4605,7 +7753,7 @@ exports.null = { // name of grid's file
     [0.0, 0.0] // }
   ]
 };
-},{}],9:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 exports.PrimeMeridian = require('./PrimeMeridian');
 
 exports.Ellipsoid = require('./Ellipsoid');
@@ -4617,7 +7765,7 @@ exports.Datum.OSB36 = exports.Datum.OSGB36; //as returned from spatialreference.
 
 exports.grids = require('./grids');
 
-},{"./Datum":5,"./Ellipsoid":6,"./PrimeMeridian":7,"./grids":8}],10:[function(require,module,exports){
+},{"./Datum":57,"./Ellipsoid":58,"./PrimeMeridian":59,"./grids":60}],62:[function(require,module,exports){
 var point = require('./Point');
 var proj = require('./Proj');
 var transform = require('./transform');
@@ -4648,7 +7796,7 @@ function checkProj(item) {
   }
   return proj(item);
 }
-module.exports = function(fromProj, toProj, coord) {
+function proj4(fromProj, toProj, coord) {
   fromProj = checkProj(fromProj);
   var single = false;
   var obj;
@@ -4681,8 +7829,9 @@ module.exports = function(fromProj, toProj, coord) {
     }
     return obj;
   }
-};
-},{"./Point":1,"./Proj":2,"./transform":45}],11:[function(require,module,exports){
+}
+module.exports = proj4;
+},{"./Point":53,"./Proj":54,"./transform":97}],63:[function(require,module,exports){
 var common = require('./common');
 var datum = function(proj) {
   if (!(this instanceof datum)) {
@@ -5080,7 +8229,7 @@ datum.prototype = {
 */
 module.exports = datum;
 
-},{"./common":4}],12:[function(require,module,exports){
+},{"./common":56}],64:[function(require,module,exports){
 var common = require('./common');
 module.exports = function(source, dest, point) {
   var wp, i, l;
@@ -5176,7 +8325,7 @@ module.exports = function(source, dest, point) {
 };
 
 
-},{"./common":4}],13:[function(require,module,exports){
+},{"./common":56}],65:[function(require,module,exports){
 var globals = require('./global');
 var parseProj = require('./projString');
 var wkt = require('./wkt');
@@ -5226,7 +8375,7 @@ function defs(name) {
 globals(defs);
 module.exports = defs;
 
-},{"./global":15,"./projString":18,"./wkt":47}],14:[function(require,module,exports){
+},{"./global":67,"./projString":70,"./wkt":99}],66:[function(require,module,exports){
 module.exports = function(destination, source) {
   destination = destination || {};
   var value, property;
@@ -5242,7 +8391,7 @@ module.exports = function(destination, source) {
   return destination;
 };
 
-},{}],15:[function(require,module,exports){
+},{}],67:[function(require,module,exports){
 module.exports = function(defs) {
   defs('WGS84', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
   defs('EPSG:4326', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
@@ -5255,7 +8404,7 @@ module.exports = function(defs) {
   defs['EPSG:102113'] = defs['EPSG:3857'];
 };
 
-},{}],16:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 var proj4 = require('./core');
 proj4.defaultDatum = 'WGS84'; //default datum
 proj4.Proj = require('./Proj');
@@ -5266,7 +8415,7 @@ proj4.transform = require('./transform');
 proj4.mgrs = require('./mgrs');
 proj4.version = require('./version');
 module.exports = proj4;
-},{"./Point":1,"./Proj":2,"./core":10,"./defs":13,"./mgrs":17,"./transform":45,"./version":46}],17:[function(require,module,exports){
+},{"./Point":53,"./Proj":54,"./core":62,"./defs":65,"./mgrs":69,"./transform":97,"./version":98}],69:[function(require,module,exports){
 /*
 Portions of this software are based on a port of components from the OpenMap
 com.bbn.openmap.proj.coords Java package. An initial port was initially created
@@ -5425,18 +8574,6 @@ United States complies, relating to the export or re-export of
 any commodities, software, or technical data.
 */
 
-
-
-/**
- * Converts between lat/lon and MGRS coordinates. Note that this static class
- * is restricted to the WGS84 ellipsoid and does not support MGRS notations
- * for polar regions (i.e. above 84° North and below 80° South).
- *
- * If . is loaded, this will be referenced as util.MGRS. If used
- * standalone, it will be referenced as window.MGRS.
- *
- * @static
- */
 
 
 /**
@@ -6168,9 +9305,9 @@ function getMinNorthing(zoneLetter) {
 
 }
 
-},{}],18:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 var common = require('./common');
-var constants = require('./constants');
+var constants = require('./constants/index');
 module.exports = function(defData) {
   var self = {};
 
@@ -6285,12 +9422,12 @@ module.exports = function(defData) {
   }
   return self;
 };
-},{"./common":4,"./constants":9}],19:[function(require,module,exports){
+
+},{"./common":56,"./constants/index":61}],71:[function(require,module,exports){
 var common = require('../common');
 exports.init = function() {
 
   if (Math.abs(this.lat1 + this.lat2) < common.EPSLN) {
-    //...reportError("aeaInitEqualLatitudes");
     return;
   }
   this.temp = this.b / this.a;
@@ -6401,12 +9538,11 @@ exports.phi1z = function(eccent, qs) {
       return phi;
     }
   }
-  //...reportError("aea:phi1z:Convergence error");
   return null;
 };
 exports.names = ["Albers_Conic_Equal_Area", "Albers", "aea"];
 
-},{"../common":4}],20:[function(require,module,exports){
+},{"../common":56}],72:[function(require,module,exports){
 var common = require('../common');
 exports.init = function() {
   this.sin_p12 = Math.sin(this.lat0);
@@ -6505,7 +9641,6 @@ exports.inverse = function(p) {
   if (this.sphere) {
     rh = Math.sqrt(p.x * p.x + p.y * p.y);
     if (rh > (2 * common.HALF_PI * this.a)) {
-      //...reportError("aeqdInvDataError");
       return;
     }
     z = rh / this.a;
@@ -6596,7 +9731,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Azimuthal_Equidistant", "aeqd"];
 
-},{"../common":4}],21:[function(require,module,exports){
+},{"../common":56}],73:[function(require,module,exports){
 var common = require('../common');
 exports.init = function() {
   if (!this.sphere) {
@@ -6690,7 +9825,7 @@ exports.inverse = function(p) {
 
 };
 exports.names = ["Cassini", "Cassini_Soldner", "cass"];
-},{"../common":4}],22:[function(require,module,exports){
+},{"../common":56}],74:[function(require,module,exports){
 var common = require('../common');
 /*
   reference:  
@@ -6752,7 +9887,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["cea"];
 
-},{"../common":4}],23:[function(require,module,exports){
+},{"../common":56}],75:[function(require,module,exports){
 var common = require('../common');
 exports.init = function() {
 
@@ -6794,7 +9929,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Equirectangular", "Equidistant_Cylindrical", "eqc"];
 
-},{"../common":4}],24:[function(require,module,exports){
+},{"../common":56}],76:[function(require,module,exports){
 var common = require('../common');
 exports.init = function() {
 
@@ -6822,7 +9957,6 @@ exports.init = function() {
 
   if (Math.abs(this.lat1 - this.lat2) < common.EPSLN) {
     this.ns = this.sinphi;
-    //...reportError("eqdc:Init:EqualLatitudes");
   }
   else {
     this.sinphi = Math.sin(this.lat2);
@@ -6899,7 +10033,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Equidistant_Conic", "eqdc"];
 
-},{"../common":4}],25:[function(require,module,exports){
+},{"../common":56}],77:[function(require,module,exports){
 var common = require('../common');
 exports.init = function() {
   var sphi = Math.sin(this.lat0);
@@ -6935,7 +10069,6 @@ exports.inverse = function(p) {
   }
   /* convergence failed */
   if (!i) {
-    //...reportError("gauss:inverse:convergence failed");
     return null;
   }
   p.x = lon;
@@ -6943,7 +10076,8 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["gauss"];
-},{"../common":4}],26:[function(require,module,exports){
+
+},{"../common":56}],78:[function(require,module,exports){
 var common = require('../common');
 /*
   reference:
@@ -6989,7 +10123,6 @@ exports.forward = function(p) {
     y = this.y0 + this.a * ksp * (this.cos_p14 * sinphi - this.sin_p14 * cosphi * coslon) / g;
   }
   else {
-    //...reportError("orthoFwdPointError");
 
     // Point is in the opposing hemisphere and is unprojectable
     // We still need to return a reasonable point, so we project 
@@ -7042,7 +10175,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["gnom"];
 
-},{"../common":4}],27:[function(require,module,exports){
+},{"../common":56}],79:[function(require,module,exports){
 var projs = [
   require('./tmerc'),
   require('./utm'),
@@ -7100,14 +10233,12 @@ exports.start = function() {
   projs.forEach(add);
 };
 
-},{"./aea":19,"./aeqd":20,"./cass":21,"./cea":22,"./eqc":23,"./eqdc":24,"./gnom":26,"./krovak":28,"./laea":29,"./lcc":30,"./longlat":31,"./merc":32,"./mill":33,"./moll":34,"./nzmg":35,"./omerc":36,"./poly":37,"./sinu":38,"./somerc":39,"./stere":40,"./sterea":41,"./tmerc":42,"./utm":43,"./vandg":44}],28:[function(require,module,exports){
+},{"./aea":71,"./aeqd":72,"./cass":73,"./cea":74,"./eqc":75,"./eqdc":76,"./gnom":78,"./krovak":80,"./laea":81,"./lcc":82,"./longlat":83,"./merc":84,"./mill":85,"./moll":86,"./nzmg":87,"./omerc":88,"./poly":89,"./sinu":90,"./somerc":91,"./stere":92,"./sterea":93,"./tmerc":94,"./utm":95,"./vandg":96}],80:[function(require,module,exports){
 var common = require('../common');
 exports.init = function() {
-  /* we want Bessel as fixed ellipsoid */
   this.a = 6377397.155;
   this.es = 0.006674372230614;
   this.e = Math.sqrt(this.es);
-  /* if latitude of projection center is not set, use 49d30'N */
   if (!this.lat0) {
     this.lat0 = 0.863937979737193;
   }
@@ -7120,20 +10251,17 @@ exports.init = function() {
   }
   this.s45 = 0.785398163397448; /* 45 */
   this.s90 = 2 * this.s45;
-  this.fi0 = this.lat0; /* Latitude of projection centre 49  30' */
-  /*  Ellipsoid Bessel 1841 a = 6377397.155m 1/f = 299.1528128,
-                 e2=0.006674372230614;
-     */
-  this.e2 = this.es; /* 0.006674372230614; */
+  this.fi0 = this.lat0;
+  this.e2 = this.es;
   this.e = Math.sqrt(this.e2);
   this.alfa = Math.sqrt(1 + (this.e2 * Math.pow(Math.cos(this.fi0), 4)) / (1 - this.e2));
-  this.uq = 1.04216856380474; /* DU(2, 59, 42, 42.69689) */
+  this.uq = 1.04216856380474;
   this.u0 = Math.asin(Math.sin(this.fi0) / this.alfa);
   this.g = Math.pow((1 + this.e * Math.sin(this.fi0)) / (1 - this.e * Math.sin(this.fi0)), this.alfa * this.e / 2);
   this.k = Math.tan(this.u0 / 2 + this.s45) / Math.pow(Math.tan(this.fi0 / 2 + this.s45), this.alfa) * this.g;
   this.k1 = this.k0;
   this.n0 = this.a * Math.sqrt(1 - this.e2) / (1 - this.e2 * Math.pow(Math.sin(this.fi0), 2));
-  this.s0 = 1.37008346281555; /* Latitude of pseudo standard parallel 78 30'00" N */
+  this.s0 = 1.37008346281555;
   this.n = Math.sin(this.s0);
   this.ro0 = this.k1 * this.n0 / Math.tan(this.s0);
   this.ad = this.s90 - this.uq;
@@ -7146,7 +10274,7 @@ exports.forward = function(p) {
   var gfi, u, deltav, s, d, eps, ro;
   var lon = p.x;
   var lat = p.y;
-  var delta_lon = common.adjust_lon(lon - this.long0); // Delta longitude
+  var delta_lon = common.adjust_lon(lon - this.long0);
   /* Transformation */
   gfi = Math.pow(((1 + this.e * Math.sin(lat)) / (1 - this.e * Math.sin(lat))), (this.alfa * this.e / 2));
   u = 2 * (Math.atan(this.k * Math.pow(Math.tan(lat / 2 + this.s45), this.alfa) / gfi) - this.s45);
@@ -7155,9 +10283,6 @@ exports.forward = function(p) {
   d = Math.asin(Math.cos(u) * Math.sin(deltav) / Math.cos(s));
   eps = this.n * d;
   ro = this.ro0 * Math.pow(Math.tan(this.s0 / 2 + this.s45), this.n) / Math.pow(Math.tan(s / 2 + this.s45), this.n);
-  /* x and y are reverted! */
-  //p.y = ro * Math.cos(eps) / a;
-  //p.x = ro * Math.sin(eps) / a;
   p.y = ro * Math.cos(eps) / 1;
   p.x = ro * Math.sin(eps) / 1;
 
@@ -7170,7 +10295,6 @@ exports.forward = function(p) {
 
 /* calculate lat/lon from xy */
 exports.inverse = function(p) {
-  /* Constants, identisch wie in der Umkehrfunktion */
   var u, deltav, s, d, eps, ro, fi1;
   var ok;
 
@@ -7190,7 +10314,6 @@ exports.inverse = function(p) {
   u = Math.asin(Math.cos(this.ad) * Math.sin(s) - Math.sin(this.ad) * Math.cos(s) * Math.cos(d));
   deltav = Math.asin(Math.cos(s) * Math.sin(d) / Math.cos(u));
   p.x = this.long0 - deltav / this.alfa;
-  /* ITERATION FOR lat */
   fi1 = u;
   ok = 0;
   var iter = 0;
@@ -7203,15 +10326,14 @@ exports.inverse = function(p) {
     iter += 1;
   } while (ok === 0 && iter < 15);
   if (iter >= 15) {
-    //...reportError("PHI3Z-CONV:Latitude failed to converge after 15 iterations");
-    //console.log('iter:', iter);
     return null;
   }
 
   return (p);
 };
 exports.names = ["Krovak", "krovak"];
-},{"../common":4}],29:[function(require,module,exports){
+
+},{"../common":56}],81:[function(require,module,exports){
 var common = require('../common');
 /*
   reference
@@ -7295,7 +10417,6 @@ exports.forward = function(p) {
     if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
       y = (this.mode === this.EQUIT) ? 1 + cosphi * coslam : 1 + this.sinph0 * sinphi + this.cosph0 * cosphi * coslam;
       if (y <= common.EPSLN) {
-        //...reportError("laea:fwd:y less than eps");
         return null;
       }
       y = Math.sqrt(2 / y);
@@ -7307,7 +10428,6 @@ exports.forward = function(p) {
         coslam = -coslam;
       }
       if (Math.abs(phi + this.phi0) < common.EPSLN) {
-        //...reportError("laea:fwd:phi < eps");
         return null;
       }
       y = common.FORTPI - phi * 0.5;
@@ -7345,7 +10465,6 @@ exports.forward = function(p) {
       break;
     }
     if (Math.abs(b) < common.EPSLN) {
-      //...reportError("laea:fwd:b < eps");
       return null;
     }
     switch (this.mode) {
@@ -7373,23 +10492,6 @@ exports.forward = function(p) {
     }
   }
 
-  //v 1
-  /*
-    var sin_lat=Math.sin(lat);
-    var cos_lat=Math.cos(lat);
-
-    var sin_delta_lon=Math.sin(delta_lon);
-    var cos_delta_lon=Math.cos(delta_lon);
-
-    var g =this.sin_lat_o * sin_lat +this.cos_lat_o * cos_lat * cos_delta_lon;
-    if (g == -1) {
-      //...reportError("laea:fwd:Point projects to a circle of radius "+ 2 * R);
-      return null;
-    }
-    var ksp = this.a * Math.sqrt(2 / (1 + g));
-    var x = ksp * cos_lat * sin_delta_lon + this.x0;
-    var y = ksp * (this.cos_lat_o * sin_lat - this.sin_lat_o * cos_lat * cos_delta_lon) + this.y0;
-    */
   p.x = this.a * x + this.x0;
   p.y = this.a * y + this.y0;
   return p;
@@ -7411,7 +10513,6 @@ exports.inverse = function(p) {
     rh = Math.sqrt(x * x + y * y);
     phi = rh * 0.5;
     if (phi > 1) {
-      //...reportError("laea:Inv:DataError");
       return null;
     }
     phi = 2 * Math.asin(phi);
@@ -7475,9 +10576,6 @@ exports.inverse = function(p) {
         p.y = this.phi0;
         return p;
       }
-      /*
-          q = this.qp - q;
-          */
       ab = 1 - q / this.qp;
       if (this.mode === this.S_POLE) {
         ab = -ab;
@@ -7487,40 +10585,11 @@ exports.inverse = function(p) {
     phi = this.authlat(Math.asin(ab), this.apa);
   }
 
-  /*
-    var Rh = Math.Math.sqrt(p.x *p.x +p.y * p.y);
-    var temp = Rh / (2 * this.a);
 
-    if (temp > 1) {
-      ...reportError("laea:Inv:DataError");
-      return null;
-    }
-
-    var z = 2 * common.asinz(temp);
-    var sin_z=Math.sin(z);
-    var cos_z=Math.cos(z);
-
-    var lon =this.long0;
-    if (Math.abs(Rh) > common.EPSLN) {
-       var lat = common.asinz(this.sin_lat_o * cos_z +this. cos_lat_o * sin_z *p.y / Rh);
-       var temp =Math.abs(this.lat0) - common.HALF_PI;
-       if (Math.abs(temp) > common.EPSLN) {
-          temp = cos_z -this.sin_lat_o * Math.sin(lat);
-          if(temp!=0) lon=common.adjust_lon(this.long0+Math.atan2(p.x*sin_z*this.cos_lat_o,temp*Rh));
-       } else if (this.lat0 < 0) {
-          lon = common.adjust_lon(this.long0 - Math.atan2(-p.x,p.y));
-       } else {
-          lon = common.adjust_lon(this.long0 + Math.atan2(p.x, -p.y));
-       }
-    } else {
-      lat = this.lat0;
-    }
-    */
-  //return(OK);
   p.x = common.adjust_lon(this.long0 + lam);
   p.y = phi;
   return p;
-}; //lamazInv()
+};
 
 /* determine latitude from authalic latitude */
 exports.P00 = 0.33333333333333333333;
@@ -7550,7 +10619,7 @@ exports.authlat = function(beta, APA) {
 };
 exports.names = ["Lambert Azimuthal Equal Area", "Lambert_Azimuthal_Equal_Area", "laea"];
 
-},{"../common":4}],30:[function(require,module,exports){
+},{"../common":56}],82:[function(require,module,exports){
 var common = require('../common');
 exports.init = function() {
 
@@ -7573,7 +10642,6 @@ exports.init = function() {
 
   // Standard Parallels cannot be equal and on opposite sides of the equator
   if (Math.abs(this.lat1 + this.lat2) < common.EPSLN) {
-    //...reportError("lcc:init: Equal Latitudes");
     return;
   }
 
@@ -7630,7 +10698,6 @@ exports.forward = function(p) {
   else {
     con = lat * this.ns;
     if (con <= 0) {
-      //...reportError("lcc:forward: No Projection");
       return null;
     }
     rh1 = 0;
@@ -7682,7 +10749,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Lambert Tangential Conformal Conic Projection", "Lambert_Conformal_Conic", "Lambert_Conformal_Conic_2SP", "lcc"];
 
-},{"../common":4}],31:[function(require,module,exports){
+},{"../common":56}],83:[function(require,module,exports){
 exports.init = function() {
   //no-op for longlat
 };
@@ -7694,7 +10761,7 @@ exports.forward = identity;
 exports.inverse = identity;
 exports.names = ["longlat", "identity"];
 
-},{}],32:[function(require,module,exports){
+},{}],84:[function(require,module,exports){
 var common = require('../common');
 exports.init = function() {
   var con = this.b / this.a;
@@ -7724,18 +10791,15 @@ exports.init = function() {
   --------------------------------------------------*/
 
 exports.forward = function(p) {
-  //alert("ll2m coords : "+coords);
   var lon = p.x;
   var lat = p.y;
   // convert to radians
   if (lat * common.R2D > 90 && lat * common.R2D < -90 && lon * common.R2D > 180 && lon * common.R2D < -180) {
-    //...reportError("merc:forward: llInputOutOfRange: " + lon + " : " + lat);
     return null;
   }
 
   var x, y;
   if (Math.abs(Math.abs(lat) - common.HALF_PI) <= common.EPSLN) {
-    //...reportError("merc:forward: ll2mAtPoles");
     return null;
   }
   else {
@@ -7771,7 +10835,6 @@ exports.inverse = function(p) {
     var ts = Math.exp(-y / (this.a * this.k0));
     lat = common.phi2z(this.e, ts);
     if (lat === -9999) {
-      //...reportError("merc:inverse: lat = -9999");
       return null;
     }
   }
@@ -7784,7 +10847,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Mercator", "Popular Visualisation Pseudo Mercator", "Mercator_1SP", "Mercator_Auxiliary_Sphere", "merc"];
 
-},{"../common":4}],33:[function(require,module,exports){
+},{"../common":56}],85:[function(require,module,exports){
 var common = require('../common');
 /*
   reference
@@ -7831,11 +10894,9 @@ exports.inverse = function(p) {
 };
 exports.names = ["Miller_Cylindrical", "mill"];
 
-},{"../common":4}],34:[function(require,module,exports){
+},{"../common":56}],86:[function(require,module,exports){
 var common = require('../common');
-exports.init = function() {
-  //no-op
-};
+exports.init = function() {};
 
 /* Mollweide forward equations--mapping lat,long to x,y
     ----------------------------------------------------*/
@@ -7857,10 +10918,6 @@ exports.forward = function(p) {
     theta += delta_theta;
     if (Math.abs(delta_theta) < common.EPSLN) {
       break;
-    }
-    if (i >= 50) {
-      //...reportError("moll:Fwd:IterationError");
-      //return(241);
     }
   }
   theta /= 2;
@@ -7908,14 +10965,14 @@ exports.inverse = function(p) {
     arg = 1;
   }
   var lat = Math.asin(arg);
-  //return(OK);
 
   p.x = lon;
   p.y = lat;
   return p;
 };
 exports.names = ["Mollweide", "moll"];
-},{"../common":4}],35:[function(require,module,exports){
+
+},{"../common":56}],87:[function(require,module,exports){
 var common = require('../common');
 /*
   reference
@@ -8135,7 +11192,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["New_Zealand_Map_Grid", "nzmg"];
-},{"../common":4}],36:[function(require,module,exports){
+},{"../common":56}],88:[function(require,module,exports){
 var common = require('../common');
 
 
@@ -8300,7 +11357,7 @@ exports.inverse = function(p) {
 };
 
 exports.names = ["Hotine_Oblique_Mercator", "Hotine Oblique Mercator", "Hotine_Oblique_Mercator_Azimuth_Natural_Origin", "Hotine_Oblique_Mercator_Azimuth_Center", "omerc"];
-},{"../common":4}],37:[function(require,module,exports){
+},{"../common":56}],89:[function(require,module,exports){
 var common = require('../common');
 exports.init = function() {
   /* Place parameters in static storage for common use
@@ -8420,7 +11477,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Polyconic", "poly"];
-},{"../common":4}],38:[function(require,module,exports){
+},{"../common":56}],90:[function(require,module,exports){
 var common = require('../common');
 exports.init = function() {
   /* Place parameters in static storage for common use
@@ -8519,7 +11576,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Sinusoidal", "sinu"];
-},{"../common":4}],39:[function(require,module,exports){
+},{"../common":56}],91:[function(require,module,exports){
 /*
   references:
     Formules et constantes pour le Calcul pour la
@@ -8601,7 +11658,7 @@ exports.inverse = function(p) {
 
 exports.names = ["somerc"];
 
-},{}],40:[function(require,module,exports){
+},{}],92:[function(require,module,exports){
 var common = require('../common');
 exports.ssfn_ = function(phit, sinphi, eccen) {
   sinphi *= eccen;
@@ -8762,13 +11819,12 @@ exports.inverse = function(p) {
 
 };
 exports.names = ["stere"];
-},{"../common":4}],41:[function(require,module,exports){
+},{"../common":56}],93:[function(require,module,exports){
 var common = require('../common');
 var gauss = require('./gauss');
 exports.init = function() {
   gauss.init.apply(this);
   if (!this.rc) {
-    //...reportError("sterea:init:E_ERROR_0");
     return;
   }
   this.sinc0 = Math.sin(this.phic0);
@@ -8781,7 +11837,7 @@ exports.init = function() {
 
 exports.forward = function(p) {
   var sinc, cosc, cosl, k;
-  p.x = common.adjust_lon(p.x - this.long0); /* adjust del longitude */
+  p.x = common.adjust_lon(p.x - this.long0);
   gauss.forward.apply(this, [p]);
   sinc = Math.sin(p.y);
   cosc = Math.cos(p.y);
@@ -8796,7 +11852,7 @@ exports.forward = function(p) {
 
 exports.inverse = function(p) {
   var sinc, cosc, lon, lat, rho;
-  p.x = (p.x - this.x0) / this.a; /* descale and de-offset */
+  p.x = (p.x - this.x0) / this.a;
   p.y = (p.y - this.y0) / this.a;
 
   p.x /= this.k0;
@@ -8816,12 +11872,13 @@ exports.inverse = function(p) {
   p.x = lon;
   p.y = lat;
   gauss.inverse.apply(this, [p]);
-  p.x = common.adjust_lon(p.x + this.long0); /* adjust longitude to CM */
+  p.x = common.adjust_lon(p.x + this.long0);
   return p;
 };
 
-exports.names = ["Stereographic_North_Pole", "Oblique_Stereographic", "Polar_Stereographic", "sterea"];
-},{"../common":4,"./gauss":25}],42:[function(require,module,exports){
+exports.names = ["Stereographic_North_Pole", "Oblique_Stereographic", "Polar_Stereographic", "sterea","Oblique Stereographic Alternative"];
+
+},{"../common":56,"./gauss":77}],94:[function(require,module,exports){
 var common = require('../common');
 exports.init = function() {
   this.e0 = common.e0fn(this.es);
@@ -8839,16 +11896,15 @@ exports.forward = function(p) {
   var lon = p.x;
   var lat = p.y;
 
-  var delta_lon = common.adjust_lon(lon - this.long0); // Delta longitude
-  var con; // cone constant
+  var delta_lon = common.adjust_lon(lon - this.long0);
+  var con;
   var x, y;
   var sin_phi = Math.sin(lat);
   var cos_phi = Math.cos(lat);
 
-  if (this.sphere) { /* spherical form */
+  if (this.sphere) {
     var b = cos_phi * Math.sin(delta_lon);
     if ((Math.abs(Math.abs(b) - 1)) < 0.0000000001) {
-      //...reportError("tmerc:forward: Point projects into infinity");
       return (93);
     }
     else {
@@ -8883,13 +11939,13 @@ exports.forward = function(p) {
     Transverse Mercator Inverse  -  x/y to long/lat
   */
 exports.inverse = function(p) {
-  var con, phi; /* temporary angles       */
-  var delta_phi; /* difference between longitudes    */
+  var con, phi;
+  var delta_phi;
   var i;
-  var max_iter = 6; /* maximun number of iterations */
+  var max_iter = 6;
   var lat, lon;
 
-  if (this.sphere) { /* spherical form */
+  if (this.sphere) {
     var f = Math.exp(p.x / (this.a * this.k0));
     var g = 0.5 * (f - 1 / f);
     var temp = this.lat0 + p.y / (this.a * this.k0);
@@ -8919,12 +11975,10 @@ exports.inverse = function(p) {
         break;
       }
       if (i >= max_iter) {
-        //...reportError("tmerc:inverse: Latitude failed to converge");
         return (95);
       }
     } // for()
     if (Math.abs(phi) < common.HALF_PI) {
-      // sincos(phi, &sin_phi, &cos_phi);
       var sin_phi = Math.sin(phi);
       var cos_phi = Math.cos(phi);
       var tan_phi = Math.tan(phi);
@@ -8951,13 +12005,12 @@ exports.inverse = function(p) {
 };
 exports.names = ["Transverse_Mercator", "Transverse Mercator", "tmerc"];
 
-},{"../common":4}],43:[function(require,module,exports){
+},{"../common":56}],95:[function(require,module,exports){
 var common = require('../common');
 var tmerc = require('./tmerc');
 exports.dependsOn = 'tmerc';
 exports.init = function() {
   if (!this.zone) {
-    //...reportError("utm:init: zone must be specified for UTM");
     return;
   }
   this.lat0 = 0;
@@ -8971,7 +12024,8 @@ exports.init = function() {
   this.inverse = tmerc.inverse;
 };
 exports.names = ["Universal Transverse Mercator System", "utm"];
-},{"../common":4,"./tmerc":42}],44:[function(require,module,exports){
+
+},{"../common":56,"./tmerc":94}],96:[function(require,module,exports){
 var common = require('../common');
 
 /* Initialize the Van Der Grinten projection
@@ -9090,7 +12144,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Van_der_Grinten_I", "VanDerGrinten", "vandg"];
-},{"../common":4}],45:[function(require,module,exports){
+},{"../common":56}],97:[function(require,module,exports){
 var common = require('./common');
 var datum_transform = require('./datum_transform');
 var adjust_axis = require('./adjust_axis');
@@ -9157,9 +12211,9 @@ module.exports = function transform(source, dest, point) {
 
   return point;
 };
-},{"./Proj":2,"./adjust_axis":3,"./common":4,"./datum_transform":12}],46:[function(require,module,exports){
-module.exports = '1.5.0-dev.2';
-},{}],47:[function(require,module,exports){
+},{"./Proj":54,"./adjust_axis":55,"./common":56,"./datum_transform":64}],98:[function(require,module,exports){
+module.exports = '1.5.0-dev.4';
+},{}],99:[function(require,module,exports){
 var common = require('./common');
 var extend = require('./extend');
 
@@ -9367,580 +12421,7 @@ module.exports = function(wkt, self) {
   return extend(self, obj.output);
 };
 
-},{"./common":4,"./extend":14}]},{},[16])
-(16)
+},{"./common":56,"./extend":66}]},{},[2])
+(2)
 });
 ;
-});
-require.register("calvinmetcalf-parseDBF/index.js", function(exports, require, module){
-function dbfHeader(buffer){
-	var data = new DataView(buffer);
-	var out = {};
-	out.lastUpdated = new Date(data.getUint8(1,true)+1900,data.getUint8(2,true),data.getUint8(3,true));
-	out.records = data.getUint32(4,true);
-	out.headerLen = data.getUint16(8,true);
-	out.recLen = data.getUint16(10,true);
-	return out;
-}
-
-function dbfRowHeader(buffer){
-	var data = new DataView(buffer);
-	var out = [];
-	var offset = 32;
-	while(true){
-		out.push({
-			name : String.fromCharCode.apply(this,(new Uint8Array(buffer,offset,10))).replace(/\0|\s+$/g,''),
-			dataType : String.fromCharCode(data.getUint8(offset+11)),
-			len : data.getUint8(offset+16),
-			decimal : data.getUint8(offset+17)
-		});
-		if(data.getUint8(offset+32)===13){
-			break;
-		}else{
-			offset+=32;
-		}
-	}
-	return out;
-}
-function rowFuncs(buffer,offset,len,type){
-	var data = (new Uint8Array(buffer,offset,len));
-	var textData = String.fromCharCode.apply(this,data).replace(/\0|\s+$/g,'');
-	switch(type){
-		case 'N':
-		case 'F':
-		case 'O':
-			return parseFloat(textData,10);
-		case 'D':
-			return new Date(textData.slice(0,4), parseInt(textData.slice(4,6),10)-1, textData.slice(6,8));
-		case 'L':
-			return textData.toLowerCase() === 'y' || textData.toLowerCase() === 't';
-		default:
-			return textData;
-	}
-}
-function parseRow(buffer,offset,rowHeaders){
-	var out={};
-	var i = 0;
-	var len = rowHeaders.length;
-	var field;
-	var header;
-	while(i<len){
-		header = rowHeaders[i];
-		field = rowFuncs(buffer,offset,header.len,header.dataType);
-		offset += header.len;
-		if(typeof field !== 'undefined'){
-			out[header.name]=field;
-		}
-		i++;
-	}
-	return out;
-}
-module.exports = function(buffer){
-	var rowHeaders = dbfRowHeader(buffer);
-	var header = dbfHeader(buffer);
-	var offset = ((rowHeaders.length+1)<<5)+2;
-	var recLen = header.recLen;
-	var records = header.records;
-	var out = [];
-	while(records){
-		out.push(parseRow(buffer,offset,rowHeaders));
-		offset += recLen;
-		records--;
-	}
-	return out;
-};
-
-});
-require.register("shp/lib/index.js", function(exports, require, module){
-var proj4 = require('proj4');
-var unzip = require('./unzip');
-var binaryAjax = require('./binaryajax');
-var parseShp = require('./parseShp');
-var parseDbf = require('parsedbf');
-var promise = require('lie');
-
-function shp(base, whiteList) {
-	return shp.getShapefile(base, whiteList);
-}
-shp.combine = function(arr) {
-	var out = {};
-	out.type = "FeatureCollection";
-	out.features = [];
-	var i = 0;
-	var len = arr[0].length;
-	while (i < len) {
-		out.features.push({
-			"type": "Feature",
-			"geometry": arr[0][i],
-			"properties": arr[1][i]
-		});
-		i++;
-	}
-	return out;
-};
-shp.parseZip = function(buffer, whiteList) {
-	var key;
-	var zip = unzip(buffer);
-	var names = [];
-	whiteList = whiteList || [];
-	for (key in zip) {
-		if (key.slice(-3).toLowerCase() === "shp") {
-			names.push(key.slice(0, - 4));
-		}
-		else if (key.slice(-3).toLowerCase() === "dbf") {
-			zip[key] = parseDbf(zip[key]);
-		}
-		else if (key.slice(-3).toLowerCase() === "prj") {
-			zip[key] = proj4(zip[key]);
-		}
-		else if (key.slice(-4).toLowerCase() === "json" || whiteList.indexOf(key.split('.').pop()) > -1) {
-			names.push(key);
-		}
-	}
-	var geojson = names.map(function(name) {
-		var parsed;
-		if (name.slice(-4).toLowerCase() === "json") {
-			parsed = JSON.parse(zip[name]);
-			parsed.fileName = name.slice(0, name.lastIndexOf('.'));
-		}
-		else if (whiteList.indexOf(name.slice(name.lastIndexOf('.') + 1)) > -1) {
-			parsed = zip[name];
-			parsed.fileName = name;
-		}
-		else {
-			parsed = shp.combine([parseShp(zip[name + '.shp'], zip[name + '.prj']), zip[name + '.dbf']]);
-			parsed.fileName = name;
-		}
-		return parsed;
-	});
-	if (geojson.length === 1) {
-		return geojson[0];
-	}
-	else {
-		return geojson;
-	}
-};
-
-function getZip(base, whiteList) {
-	return binaryAjax(base).then(function(a) {
-		return shp.parseZip(a, whiteList);
-	});
-}
-shp.getShapefile = function(base, whiteList) {
-	if (typeof base === 'string') {
-		if (base.slice(-4) === '.zip') {
-			return getZip(base, whiteList);
-		}
-		else {
-			return binaryAjax.all([
-				binaryAjax.all([
-				binaryAjax(base + '.shp'),
-				binaryAjax(base + '.prj')]).then(function(args) {
-					return parseShp(args[0], args[1] ? proj4(args[1]) : false);
-				}),
-				binaryAjax(base + '.dbf').then(parseDbf)
-			]).then(shp.combine);
-		}
-	}
-	else {
-		return promise(function(resolve) {
-			resolve(shp.parseZip(base));
-		});
-	}
-};
-module.exports = shp;
-
-});
-require.register("shp/lib/binaryajax.js", function(exports, require, module){
-var promise = require('lie');
-function binaryAjax(url){
-	return promise(function(resolve,reject){
-		var type = url.slice(-3);
-		var ajax = new XMLHttpRequest();
-		ajax.open("GET",url,true);
-		if(type !== 'prj'){
-			ajax.responseType='arraybuffer';
-		}
-		ajax.addEventListener("load",function(){
-			if(ajax.status>399){
-				if(type==='prj'){
-					return resolve(false);
-				}else{
-					return reject(ajax.status);
-				}
-			}
-			resolve(ajax.response);
-		}, false);
-		ajax.send();
-	});
-}
-binaryAjax.all = function(array) {
-    return promise(function(resolve,reject){
-        var len = array.length;
-        var resolved = 0;
-        var out = [];
-        var onSuccess = function(n) {
-            return function(v) {
-                out[n] = v;
-                resolved++;
-                if (resolved === len) {
-                    resolve(out);
-                }
-            };
-        };
-        array.forEach(function(v, i) {
-            v.then(onSuccess(i), function(a) {
-                reject(a);
-            });
-        });
-    });
-};
-module.exports = binaryAjax;
-
-});
-require.register("shp/lib/parseShp.js", function(exports, require, module){
-
-function isClockWise(array){
-	var sum = 0;
-	var i = 1;
-	var len = array.length;
-	var prev,cur;
-	while(i<len){
-		prev = cur||array[0];
-		cur = array[i];
-		sum += ((cur[0]-prev[0])*(cur[1]+prev[1]));
-		i++;
-	}
-	return sum > 0;
-}
-function polyReduce(a,b){
-	if(isClockWise(b)||!a.length){
-		a.push([b]);
-	}else{
-		a[a.length-1].push(b);
-	}
-	return a;
-}
-ParseShp.prototype.parsePoint = function (data){
-	return {
-		"type": "Point",
-		"coordinates":this.parseCoord(data,0)
-	};
-};
-ParseShp.prototype.parseZPoint = function (data){
-	var pointXY = this.parsePoint(data);
-	pointXY.coordinates.push(this.parseCoord(data,16));
-	return pointXY;
-};
-ParseShp.prototype.parsePointArray = function (data,offset,num){
-	var out = [];
-	var done = 0;
-	while(done<num){
-		out.push(this.parseCoord(data,offset));
-		offset += 16;
-		done++;
-	}
-	return out;
-};
-ParseShp.prototype.parseZPointArray = function (data,zOffset,num,coordinates){
-	var i = 0;
-	while(i<num){
-		coordinates[i].push(data.getFloat64(zOffset,true));
-		i++;
-		zOffset += 8;
-	}
-	return coordinates;
-};
-ParseShp.prototype.parseArrayGroup = function (data,offset,partOffset,num,tot){
-	var out = [];
-	var done = 0;
-	var curNum,nextNum=0,pointNumber;
-	while(done<num){
-		done++;
-		partOffset += 4;
-		curNum = nextNum;
-		if(done===num){
-			nextNum = tot;
-		}else{
-			nextNum = data.getInt32(partOffset,true);
-		}
-		pointNumber = nextNum - curNum;
-		if(!pointNumber){
-			continue;
-		}
-		out.push(this.parsePointArray(data,offset,pointNumber));
-		offset += (pointNumber<<4);
-	}
-	return out;
-};
-ParseShp.prototype.parseZArrayGroup = function(data,zOffset,num,coordinates){
-	var i = 0;
-	while(i<num){
-		coordinates[i] = this.parseZPointArray(data,zOffset,coordinates[i].length,coordinates[i]);
-		zOffset += (coordinates[i].length<<3);
-		i++;
-	}
-	return coordinates;
-};
-ParseShp.prototype.parseMultiPoint = function (data){
-	var out = {};
-	out.bbox = [
-		data.getFloat64(0,true),
-		data.getFloat64(8,true),
-		data.getFloat64(16,true),
-		data.getFloat64(24,true)
-	];
-	var num = data.getInt32(32,true);
-	var offset = 36;
-	if(num===1){
-		out.type = "Point";
-		out.coordinates = this.parseCoord(data,offset);
-	}else{
-		out.type = "MultiPoint";
-		out.coordinates = this.parsePointArray(data,offset,num);
-	}
-	return out;
-};
-ParseShp.prototype.parseZMultiPoint = function(data){
-	var geoJson = this.parseMultiPoint(data);
-	var num;
-	if(geoJson.type === "Point"){
-		geoJson.coordinates.push(data.getFloat64(72,true));
-		return geoJson;
-	}else{
-		num = geoJson.coordinates.length;
-	}
-	var zOffset = 56 + (num<<4);
-	geoJson.coordinates =  this.parseZPointArray(data,zOffset,num,geoJson.coordinates);
-	return geoJson;
-};
-ParseShp.prototype.parsePolyline = function (data){
-	var out = {};
-	out.bbox = [
-		data.getFloat64(0,true),
-		data.getFloat64(8,true),
-		data.getFloat64(16,true),
-		data.getFloat64(24,true)
-	];
-	var numParts = data.getInt32(32,true);
-	var num = data.getInt32(36,true);
-	var offset,partOffset;
-	if(numParts === 1){
-		out.type = "LineString";
-		offset = 44;
-		out.coordinates = this.parsePointArray(data,offset,num);
-	}else{
-		out.type = "MultiLineString";
-		offset = 40 + (numParts<<2);
-		partOffset = 40;
-		out.coordinates = this.parseArrayGroup(data,offset,partOffset,numParts,num);
-	}
-	return out;
-};
-ParseShp.prototype.parseZPolyline = function(data){
-	var geoJson = this.parsePolyline(data);
-	var num = geoJson.coordinates.length;
-	var zOffset = 60 + (num<<4);
-	if(geoJson.type === "LineString"){
-		geoJson.coordinates =  this.parseZPointArray(data,zOffset,num,geoJson.coordinates);
-		return geoJson;
-	}else{
-		geoJson.coordinates =  this.parseZArrayGroup(data,zOffset,num,geoJson.coordinates);
-		return geoJson;
-	}
-};
-ParseShp.prototype.polyFuncs = function (out){
-	if(out.type === "LineString"){
-		out.type = "Polygon";
-		out.coordinates = [out.coordinates];
-		return out;
-	}else{
-		out.coordinates = out.coordinates.reduce(polyReduce,[]);
-		if(out.coordinates.length === 1){
-			out.type = "Polygon";
-			out.coordinates = out.coordinates[0];
-			return out;
-		}else{
-			out.type = "MultiPolygon";
-			return out;
-		}
-	}
-};
-ParseShp.prototype.parsePolygon = function (data){
-	return this.polyFuncs(this.parsePolyline(data));
-};
-ParseShp.prototype.parseZPolygon = function(data){
-	return this.polyFuncs(this.parseZPolyline(data));
-};
-var shpFuncObj = {
-	1:'parsePoint',
-	3:'parsePolyline',
-	5:'parsePolygon',
-	8:'parseMultiPoint',
-	11:'parseZPoint',
-	13:'parseZPolyline',
-	15:'parseZPolygon',
-	18:'parseZMultiPoint'
-};
-
-
-
-function makeParseCoord(trans){
-	if(trans){
-		return function(data,offset){
-			return trans.inverse([data.getFloat64(offset,true),data.getFloat64(offset+8,true)]);
-		};
-	}else{
-		return function(data,offset){
-			return [data.getFloat64(offset,true),data.getFloat64(offset+8,true)];
-		};
-	}
-}
-function ParseShp(buffer,trans){
-	if(!(this instanceof ParseShp)){
-		return new ParseShp(buffer,trans);
-	}
-	this.buffer = buffer;
-	this.shpFuncs(trans);
-	this.rows = this.getRows();
-}
-ParseShp.prototype.shpFuncs = function (tran){
-	var num = this.getShpCode();
-	if(num>20){
-		num -= 20;
-	}
-	if(!(num in shpFuncObj)){
-		console.log("I don't know that shp type");
-		return function(){
-			return function(){};
-		};
-	}
-	this.parseFunc = this[shpFuncObj[num]];
-	this.parseCoord = makeParseCoord(tran);
-};
-ParseShp.prototype.getShpCode = function(){
-	return this.parseHeader().shpCode;
-};
-ParseShp.prototype.parseHeader = function (){
-	var view = new DataView(this.buffer,0,100) ;
-	return {
-		length : view.getInt32(6<<2,false),
-		version : view.getInt32(7<<2,true),
-		shpCode : view.getInt32(8<<2,true),
-		bbox : [
-			view.getFloat64(9<<2,true),
-			view.getFloat64(11<<2,true),
-			view.getFloat64(13<<2,true),
-			view.getFloat64(13<<2,true)
-		]
-	};
-};
-ParseShp.prototype.getRows = function(){
-	var offset=100;
-	var len = this.buffer.byteLength;
-	var out = [];
-	var current;
-	while(offset<len){
-		current = this.getRow(offset);
-		offset += 8;
-		offset += current.len;
-		if(current.type){
-			out.push(this.parseFunc(current.data));
-		}
-	}
-	return out;
-};
-ParseShp.prototype.getRow = function(offset){
-	var view = new DataView(this.buffer,offset,12);
-	var len = view.getInt32(4,false)<<1;
-	var data = new DataView(this.buffer,offset+12,len-4);
-	
-	return {
-		id:view.getInt32(0,false),
-		len:len,
-		data:data,
-		type:view.getInt32(8,true)
-	};
-};
-module.exports = function(buffer,trans){
-	return ParseShp(buffer,trans).rows;
-};
-});
-require.register("shp/lib/unzip.js", function(exports, require, module){
-var JSZip = require('jszip');
-module.exports = function(buffer) {
-	var zip = new JSZip(buffer);
-	var files = zip.file(/.+/);
-	var out = {};
-	files.forEach(function(a) {
-		if (a.name.slice(-3).toLowerCase() === "shp" || a.name.slice(-3).toLowerCase() === "dbf") {
-			out[a.name] = a.asText();
-			out[a.name] = a.asArrayBuffer();
-		}
-		else {
-			out[a.name] = a.asText();
-		}
-	});
-	return out;
-};
-
-});
-require.alias("calvinmetcalf-lie/lie.js", "shp/deps/lie/lie.js");
-require.alias("calvinmetcalf-lie/lie.js", "shp/deps/lie/index.js");
-require.alias("calvinmetcalf-lie/lie.js", "lie/index.js");
-require.alias("calvinmetcalf-setImmediate/lib/index.js", "calvinmetcalf-lie/deps/immediate/lib/index.js");
-require.alias("calvinmetcalf-setImmediate/lib/nextTick.js", "calvinmetcalf-lie/deps/immediate/lib/nextTick.js");
-require.alias("calvinmetcalf-setImmediate/lib/postMessage.js", "calvinmetcalf-lie/deps/immediate/lib/postMessage.js");
-require.alias("calvinmetcalf-setImmediate/lib/messageChannel.js", "calvinmetcalf-lie/deps/immediate/lib/messageChannel.js");
-require.alias("calvinmetcalf-setImmediate/lib/stateChange.js", "calvinmetcalf-lie/deps/immediate/lib/stateChange.js");
-require.alias("calvinmetcalf-setImmediate/lib/timeout.js", "calvinmetcalf-lie/deps/immediate/lib/timeout.js");
-require.alias("calvinmetcalf-setImmediate/lib/global.js", "calvinmetcalf-lie/deps/immediate/lib/global.js");
-require.alias("calvinmetcalf-setImmediate/lib/mutation.js", "calvinmetcalf-lie/deps/immediate/lib/mutation.js");
-require.alias("calvinmetcalf-setImmediate/lib/realSetImmediate.js", "calvinmetcalf-lie/deps/immediate/lib/realSetImmediate.js");
-require.alias("calvinmetcalf-setImmediate/lib/index.js", "calvinmetcalf-lie/deps/immediate/index.js");
-require.alias("calvinmetcalf-setImmediate/lib/index.js", "calvinmetcalf-setImmediate/index.js");
-
-require.alias("calvinmetcalf-lie/lie.js", "calvinmetcalf-lie/index.js");
-
-require.alias("calvinmetcalf-jszip/lib/base64.js", "shp/deps/jszip/lib/base64.js");
-require.alias("calvinmetcalf-jszip/lib/compressedObject.js", "shp/deps/jszip/lib/compressedObject.js");
-require.alias("calvinmetcalf-jszip/lib/compressions.js", "shp/deps/jszip/lib/compressions.js");
-require.alias("calvinmetcalf-jszip/lib/dataReader.js", "shp/deps/jszip/lib/dataReader.js");
-require.alias("calvinmetcalf-jszip/lib/defaults.js", "shp/deps/jszip/lib/defaults.js");
-require.alias("calvinmetcalf-jszip/lib/index.js", "shp/deps/jszip/lib/index.js");
-require.alias("calvinmetcalf-jszip/lib/load.js", "shp/deps/jszip/lib/load.js");
-require.alias("calvinmetcalf-jszip/lib/nodeBufferReader.js", "shp/deps/jszip/lib/nodeBufferReader.js");
-require.alias("calvinmetcalf-jszip/lib/object.js", "shp/deps/jszip/lib/object.js");
-require.alias("calvinmetcalf-jszip/lib/signature.js", "shp/deps/jszip/lib/signature.js");
-require.alias("calvinmetcalf-jszip/lib/stringReader.js", "shp/deps/jszip/lib/stringReader.js");
-require.alias("calvinmetcalf-jszip/lib/support.js", "shp/deps/jszip/lib/support.js");
-require.alias("calvinmetcalf-jszip/lib/uint8ArrayReader.js", "shp/deps/jszip/lib/uint8ArrayReader.js");
-require.alias("calvinmetcalf-jszip/lib/utils.js", "shp/deps/jszip/lib/utils.js");
-require.alias("calvinmetcalf-jszip/lib/zipEntries.js", "shp/deps/jszip/lib/zipEntries.js");
-require.alias("calvinmetcalf-jszip/lib/zipEntry.js", "shp/deps/jszip/lib/zipEntry.js");
-require.alias("calvinmetcalf-jszip/lib/flate/index.js", "shp/deps/jszip/lib/flate/index.js");
-require.alias("calvinmetcalf-jszip/lib/flate/deflate.js", "shp/deps/jszip/lib/flate/deflate.js");
-require.alias("calvinmetcalf-jszip/lib/flate/inflate.js", "shp/deps/jszip/lib/flate/inflate.js");
-require.alias("calvinmetcalf-jszip/lib/index.js", "shp/deps/jszip/index.js");
-require.alias("calvinmetcalf-jszip/lib/index.js", "jszip/index.js");
-require.alias("calvinmetcalf-jszip/lib/index.js", "calvinmetcalf-jszip/index.js");
-
-require.alias("proj4js-proj4js/dist/proj4.js", "shp/deps/proj4/dist/proj4.js");
-require.alias("proj4js-proj4js/dist/proj4.js", "shp/deps/proj4/index.js");
-require.alias("proj4js-proj4js/dist/proj4.js", "proj4/index.js");
-require.alias("proj4js-proj4js/dist/proj4.js", "proj4js-proj4js/index.js");
-
-require.alias("calvinmetcalf-parseDBF/index.js", "shp/deps/parsedbf/index.js");
-require.alias("calvinmetcalf-parseDBF/index.js", "shp/deps/parsedbf/index.js");
-require.alias("calvinmetcalf-parseDBF/index.js", "parsedbf/index.js");
-require.alias("calvinmetcalf-parseDBF/index.js", "calvinmetcalf-parseDBF/index.js");
-
-require.alias("shp/lib/index.js", "shp/index.js");
-
-if (typeof exports == "object") {
-  module.exports = require("shp");
-} else if (typeof define == "function" && define.amd) {
-  define(function(){ return require("shp"); });
-} else {
-  this["shp"] = require("shp");
-}})();

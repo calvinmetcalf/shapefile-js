@@ -12,26 +12,22 @@
 <![endif]-->
 <link rel="stylesheet" href="site/gh-fork-ribbon.css" />
 <script src="site/leaflet.js"></script>
+<script>
+	(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-40454900-1', 'calvinmetcalf.github.io');
+  ga('send', 'pageview');
+</script>
 	 </head><body><div class="github-fork-ribbon-wrapper right">
 		<div class="github-fork-ribbon">
 			<a href="https://github.com/calvinmetcalf/shapefile-js">Fork me on GitHub</a>
 		</div>
 	</div>  <div id="map"></div>
-<script src="site/require.js"> </script>
+<script src="dist/shp.min.js"> </script>
 <script>
-require.config({
-    baseUrl: 'dist',
-     //paths:{
-          //	jszip:'node_modules/jszip/jszip',
-          //	proj4:'node_modules/proj4js/proj4'
-         // },
-    use: {
-        leaflet: {
-            attach: 'leaflet'
-        }
-    }
-});
-	require(['shp'],function(shp){
 	 var m= L.map('map').setView([34.74161249883172,18.6328125], 2);
       var geo = L.geoJson({features:[]},{onEachFeature:function popUp(f,l){
     		var out = [];
@@ -46,17 +42,6 @@ require.config({
 		shp(base).then(function(data){
 		geo.addData(data);
 		});
-	});
-
-</script>
-      
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-
-  ga('create', 'UA-40454900-1', 'calvinmetcalf.github.io');
-  ga('send', 'pageview');
 
 </script>
 </body></html>
