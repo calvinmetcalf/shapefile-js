@@ -90,6 +90,12 @@ describe('Shp', function(){
     it('imaginary file file should be rejected', function(){
       return shp('data/notthere').should.be.rejected;
     });
+    it('bad zip be rejected', function(){
+      return shp('data/badzip.zip').should.be.rejected;
+    });
+    it('no shp in zip', function(){
+      return shp('data/noshp.zip').should.be.rejected;
+    });
   });
 
 });

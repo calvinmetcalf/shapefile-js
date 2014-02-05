@@ -3,3 +3,4 @@ node_modules
 .c9revisions
 jam
 components
+.DS_Store
