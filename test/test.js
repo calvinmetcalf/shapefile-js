@@ -83,5 +83,9 @@ describe('Shp', function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(361);
     });
  
+
+  it('bad file should be rejected', function(){
+    return shp('data/bad').should.be.rejected;
   });
 });
+  });
