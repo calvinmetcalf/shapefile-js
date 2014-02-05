@@ -82,10 +82,14 @@ describe('Shp', function(){
     it('should have the right number of features',function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(361);
     });
- 
+  });
+  describe('errors', function(){
+    it('bad file should be rejected', function(){
+      return shp('data/bad').should.be.rejected;
+    });
+    it('imaginary file file should be rejected', function(){
+      return shp('data/notthere').should.be.rejected;
+    });
+  });
 
-  it('bad file should be rejected', function(){
-    return shp('data/bad').should.be.rejected;
-  });
 });
-  });

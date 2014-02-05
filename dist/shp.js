@@ -13,7 +13,7 @@ function binaryAjax(url){
 				if(type==='prj'){
 					return resolve(false);
 				}else{
-					return reject(ajax.status);
+					return reject(new Error(ajax.status));
 				}
 			}
 			resolve(ajax.response);
@@ -335,10 +335,7 @@ ParseShp.prototype.shpFuncs = function (tran){
 		num -= 20;
 	}
 	if(!(num in shpFuncObj)){
-		console.log("I don't know that shp type");
-		return function(){
-			return function(){};
-		};
+		throw new Error("I don't know that shp type");
 	}
 	this.parseFunc = this[shpFuncObj[num]];
 	this.parseCoord = makeParseCoord(tran);
