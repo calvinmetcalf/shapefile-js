@@ -46,25 +46,7 @@ name of the shapefile minus the extension (I.E. the part of the name that's the 
 You could also load the arraybuffers seperately:
 
 ```javascript
-shp.combine([shp.parseShp(shpBuffer),shp.parseDbf(dbfBuffer)]);
-```
-
-if it needs to be projected you can call `shp.proj` which expects a string of WKT transformation info, aka the contents of the .prj
-
-```javascript
-//if it's a string
-var projFunc = shp.proj(prjString);
-//returns func
-
-//if it's an array buffer
-var projFunc = shp.proj(String.fromCharCode.apply(this,new Uint8Array(zip[key])));
-//returns func
-```
-
-which can then be given to parseShp
-
-```javascript
-shp.parseShp(shpBuffer,projFunc);
+shp.combine([shp.parseShp(shpBuffer, /*optional prj str*/),shp.parseDbf(dbfBuffer)]);
 ```
 
 ##Stick it in a worker
