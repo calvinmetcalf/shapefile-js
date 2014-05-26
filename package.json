@@ -39,6 +39,7 @@
     "lie": "~2.5.3",
     "lie-all": "~0.1.5",
     "jszip": "git://github.com/calvinmetcalf/jszip.git#nobuffer",
-    "proj4": "~2.1.0"
+    "proj4": "~2.1.0",
+    "xmlhttprequest": "1.6.0"
   }
 }
