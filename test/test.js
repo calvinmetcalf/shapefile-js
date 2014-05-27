@@ -1,3 +1,10 @@
+var shp = require('../');
+var chai = require('chai');
+chai.should();
+var chaiAsPromised = require("chai-as-promised");
+
+chai.use(chaiAsPromised);
+
 describe('Shp', function(){
   describe('park and rides not zipped', function(){
   		var pandr =  shp('../files/pandr');
@@ -8,7 +15,7 @@ describe('Shp', function(){
     	return pandr.should.eventually.have.property('type', 'FeatureCollection');
     });
     it('should have the right number of features',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.have.length(80);
+    	return pandr.then(function(a){return a.features;}).should.eventually.have.length(81);
     });
   });
   describe('park and rides zipped', function(){

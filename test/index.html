@@ -5,21 +5,14 @@
   <link rel="stylesheet" href="../node_modules/mocha/mocha.css" />
 
   <script src="../node_modules/mocha/mocha.js"></script>
-  <script src="../node_modules/mocha-as-promised/mocha-as-promised.js"></script>
-  <script src="../node_modules/chai/chai.js"></script>
-  <script src="../node_modules/chai-as-promised/lib/chai-as-promised.js"></script>
-  <script src="../dist/shp.js"></script>
+
 
   <script>
   mocha.setup({
-      ui: "bdd",
-      globals: ["console"],
-      timeout: 300000,
-       ignoreLeaks: true
+      ui: "bdd"
     });
-  chai.should();
   </script>
-  <script src="test.js"></script>
+  <script src="./bundle.js"></script>
   </head>
 <body><div id="mocha"></div>
 <script>

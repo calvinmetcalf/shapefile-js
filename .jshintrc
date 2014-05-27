@@ -1,10 +1,17 @@
 {
+  "node" : true,
+  "browser" : true,
   "curly": true,
+  "latedef": "nofunc",
   "eqeqeq": true,
-  "latedef": "latedef",
-  "undef": true,
-  "unused": true,
+  "immed": true,
+  "newcap": true,
+  "noarg": true,
+  "sub": true,
+  "undef": "nofunc",
+  "strict": true,
+  "white": true,
+  "indent": 2,
   "trailing": true,
-  "browser": true,
-  "node": true
+  "quotmark": "single"
 }
