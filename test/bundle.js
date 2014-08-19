@@ -72,13 +72,13 @@ shp.parseZip = function(buffer, whiteList) {
 			names.push(key.slice(0, - 4));
 		}
 		else if (key.slice(-3).toLowerCase() === 'dbf') {
-			zip[key] = parseDbf(zip[key]);
+			zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = parseDbf(zip[key]);
 		}
 		else if (key.slice(-3).toLowerCase() === 'prj') {
-			zip[key] = proj4(zip[key]);
+			zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = proj4(zip[key]);
 		}
 		else if (key.slice(-4).toLowerCase() === 'json' || whiteList.indexOf(key.split('.').pop()) > -1) {
-			names.push(key);
+			names.push(key.slice(0, -3) + key.slice(-3).toLowerCase());
 		}
 	}
 	if (!names.length) {
@@ -15305,8 +15305,8 @@ describe('Shp', function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
     });
   });
-  describe('senate zipped', function(){
-  		var pandr =  shp('http://localhost:3000/test/data/senate.zip');
+  describe('mixed case zipped', function(){
+  		var pandr =  shp('http://localhost:3000/test/data/mixedcase.zip');
     it('should have the right keys', function(){
     	return pandr.should.eventually.contain.keys('type', 'features');
     });
@@ -15315,6 +15315,18 @@ describe('Shp', function(){
     });
     it('should have the right number of features',function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
+    });
+  });
+  describe('senate zipped', function(){
+      var pandr =  shp('http://localhost:3000/test/data/senate.zip');
+    it('should have the right keys', function(){
+      return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type',function(){
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features',function(){
+      return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
     });
   });
   describe('county unzipped', function(){

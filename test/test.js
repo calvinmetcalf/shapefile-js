@@ -42,8 +42,8 @@ describe('Shp', function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
     });
   });
-  describe('senate zipped', function(){
-  		var pandr =  shp('http://localhost:3000/test/data/senate.zip');
+  describe('mixed case zipped', function(){
+  		var pandr =  shp('http://localhost:3000/test/data/mixedcase.zip');
     it('should have the right keys', function(){
     	return pandr.should.eventually.contain.keys('type', 'features');
     });
@@ -52,6 +52,18 @@ describe('Shp', function(){
     });
     it('should have the right number of features',function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
+    });
+  });
+  describe('senate zipped', function(){
+      var pandr =  shp('http://localhost:3000/test/data/senate.zip');
+    it('should have the right keys', function(){
+      return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type',function(){
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features',function(){
+      return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
     });
   });
   describe('county unzipped', function(){
