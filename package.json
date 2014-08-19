@@ -41,7 +41,7 @@
     "parsedbf": "0.0.1",
     "jszip": "git://github.com/calvinmetcalf/jszip.git#nobuffer",
     "proj4": "~2.1.0",
-    "lie": "^2.7.4"
+    "lie": "^2.7.6"
   },
   "browser": {
     "./lib/binaryajax.js": "./lib/binaryajax-browser.js"

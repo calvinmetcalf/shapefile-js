@@ -23,7 +23,7 @@ function binaryAjax(url){
 		ajax.send();
 	});
 }
-},{"lie":66}],2:[function(require,module,exports){
+},{"lie":65}],2:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 var proj4 = require('proj4');
@@ -33,9 +33,18 @@ var parseShp = require('./parseShp');
 var toArrayBuffer = require('./toArrayBuffer');
 var parseDbf = require('parsedbf');
 var Promise = require('lie');
-
+var Cache = require('lru-cache');
+var cache = new Cache({
+	max: 20
+});
 function shp(base, whiteList) {
-	return shp.getShapefile(base, whiteList);
+	if (cache.has(base)) {
+		return Promise.resolve(cache.get(base));
+	}
+	return shp.getShapefile(base, whiteList).then(function (resp) {
+		cache.set(base, resp);
+		return resp;
+	});
 }
 shp.combine = function(arr) {
 	var out = {};
@@ -112,8 +121,9 @@ shp.getShapefile = function(base, whiteList) {
 		else {
 			return Promise.all([
 				Promise.all([
-				binaryAjax(base + '.shp'),
-				binaryAjax(base + '.prj')]).then(function(args) {
+					binaryAjax(base + '.shp'),
+					binaryAjax(base + '.prj')
+				]).then(function(args) {
 					return parseShp(args[0], args[1] ? proj4(args[1]) : false);
 				}),
 				binaryAjax(base + '.dbf').then(parseDbf)
@@ -149,7 +159,7 @@ shp.parseDbf = function (dbf) {
 module.exports = shp;
 
 }).call(this,require("buffer").Buffer)
-},{"./binaryajax":1,"./parseShp":3,"./toArrayBuffer":4,"./unzip":5,"buffer":7,"lie":66,"parsedbf":80,"proj4":116}],3:[function(require,module,exports){
+},{"./binaryajax":1,"./parseShp":3,"./toArrayBuffer":4,"./unzip":5,"buffer":7,"lie":65,"lru-cache":79,"parsedbf":80,"proj4":116}],3:[function(require,module,exports){
 'use strict';
 function isClockWise(array){
 	var sum = 0;
@@ -504,13 +514,8 @@ function Buffer (subject, encoding, noZero) {
 
   var type = typeof subject
 
-  // Workaround: node's base64 implementation allows for non-padded strings
-  // while base64-js does not.
   if (encoding === 'base64' && type === 'string') {
-    subject = stringtrim(subject)
-    while (subject.length % 4 !== 0) {
-      subject = subject + '='
-    }
+    subject = base64clean(subject)
   }
 
   // Find the length
@@ -541,11 +546,12 @@ function Buffer (subject, encoding, noZero) {
     buf._set(subject)
   } else if (isArrayish(subject)) {
     // Treat array-ish objects as a byte array
-    for (i = 0; i < length; i++) {
-      if (Buffer.isBuffer(subject))
+    if (Buffer.isBuffer(subject)) {
+      for (i = 0; i < length; i++)
         buf[i] = subject.readUInt8(i)
-      else
-        buf.writeInt8(subject[i], i)
+    } else {
+      for (i = 0; i < length; i++)
+        buf[i] = ((subject[i] % 256) + 256) % 256
     }
   } else if (type === 'string') {
     buf.write(subject, 0, encoding)
@@ -1466,6 +1472,18 @@ Buffer._augment = function (arr) {
   return arr
 }
 
+var INVALID_BASE64_RE = /[^+\/0-9A-z]/g
+
+function base64clean (str) {
+  // Node strips out invalid characters like \n and \t from the string, base64-js does not
+  str = stringtrim(str).replace(INVALID_BASE64_RE, '')
+  // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
+  while (str.length % 4 !== 0) {
+    str = str + '='
+  }
+  return str
+}
+
 function stringtrim (str) {
   if (str.trim) return str.trim()
   return str.replace(/^\s+|\s+$/g, '')
@@ -1608,7 +1626,6 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     ? Uint8Array
     : Array
 
-	var ZERO   = '0'.charCodeAt(0)
 	var PLUS   = '+'.charCodeAt(0)
 	var SLASH  = '/'.charCodeAt(0)
 	var NUMBER = '0'.charCodeAt(0)
@@ -1717,9 +1734,9 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 		return output
 	}
 
-	module.exports.toByteArray = b64ToByteArray
-	module.exports.fromByteArray = uint8ToBase64
-}())
+	exports.toByteArray = b64ToByteArray
+	exports.fromByteArray = uint8ToBase64
+}(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
 },{}],9:[function(require,module,exports){
 exports.read = function(buffer, offset, isLE, mLen, nBytes) {
@@ -9043,6 +9060,7 @@ module.exports = function all(iterable) {
   }
 
   var len = iterable.length;
+  var called = false;
   if (!len) {
     return resolve([]);
   }
@@ -9058,34 +9076,23 @@ module.exports = function all(iterable) {
   return promise;
   function allResolver(value, i) {
     resolve(value).then(resolveFromAll, function (error) {
-      handlers.reject(promise, error);
+      if (!called) {
+        called = true;
+        handlers.reject(promise, error);
+      }
     });
     function resolveFromAll(outValue) {
       values[i] = outValue;
-      if (++resolved === len) {
+      if (++resolved === len & !called) {
+        called = true;
         handlers.resolve(promise, values);
       }
     }
   }
 };
-},{"./INTERNAL":62,"./handlers":65,"./promise":67,"./reject":69,"./resolve":70}],64:[function(require,module,exports){
-'use strict';
-
-module.exports = getThen;
-
-function getThen(obj) {
-  // Make sure we only access the accessor once as required by the spec
-  var then = obj && obj.then;
-  if (obj && typeof obj === 'object' && typeof then === 'function') {
-    return function appyThen() {
-      then.apply(obj, arguments);
-    };
-  }
-}
-},{}],65:[function(require,module,exports){
+},{"./INTERNAL":62,"./handlers":64,"./promise":66,"./reject":68,"./resolve":69}],64:[function(require,module,exports){
 'use strict';
 var tryCatch = require('./tryCatch');
-var getThen = require('./getThen');
 var resolveThenable = require('./resolveThenable');
 var states = require('./states');
 
@@ -9119,13 +9126,23 @@ exports.reject = function (self, error) {
   }
   return self;
 };
-},{"./getThen":64,"./resolveThenable":71,"./states":72,"./tryCatch":73}],66:[function(require,module,exports){
+
+function getThen(obj) {
+  // Make sure we only access the accessor once as required by the spec
+  var then = obj && obj.then;
+  if (obj && typeof obj === 'object' && typeof then === 'function') {
+    return function appyThen() {
+      then.apply(obj, arguments);
+    };
+  }
+}
+},{"./resolveThenable":70,"./states":71,"./tryCatch":72}],65:[function(require,module,exports){
 module.exports = exports = require('./promise');
 
 exports.resolve = require('./resolve');
 exports.reject = require('./reject');
 exports.all = require('./all');
-},{"./all":63,"./promise":67,"./reject":69,"./resolve":70}],67:[function(require,module,exports){
+},{"./all":63,"./promise":66,"./reject":68,"./resolve":69}],66:[function(require,module,exports){
 'use strict';
 
 var unwrap = require('./unwrap');
@@ -9144,6 +9161,7 @@ function Promise(resolver) {
   }
   this.state = states.PENDING;
   this.queue = [];
+  this.outcome = void 0;
   if (resolver !== INTERNAL) {
     resolveThenable.safely(this, resolver);
   }
@@ -9153,8 +9171,6 @@ Promise.prototype['catch'] = function (onRejected) {
   return this.then(null, onRejected);
 };
 Promise.prototype.then = function (onFulfilled, onRejected) {
-  var onFulfilledFunc = typeof onFulfilled === 'function';
-  var onRejectedFunc = typeof onRejected === 'function';
   if (typeof onFulfilled !== 'function' && this.state === states.FULFILLED ||
     typeof onRejected !== 'function' && this.state === states.REJECTED) {
     return this;
@@ -9172,7 +9188,7 @@ Promise.prototype.then = function (onFulfilled, onRejected) {
   return promise;
 };
 
-},{"./INTERNAL":62,"./queueItem":68,"./resolveThenable":71,"./states":72,"./unwrap":74}],68:[function(require,module,exports){
+},{"./INTERNAL":62,"./queueItem":67,"./resolveThenable":70,"./states":71,"./unwrap":73}],67:[function(require,module,exports){
 'use strict';
 var handlers = require('./handlers');
 var unwrap = require('./unwrap');
@@ -9201,7 +9217,7 @@ QueueItem.prototype.callRejected = function (value) {
 QueueItem.prototype.otherCallRejected = function (value) {
   unwrap(this.promise, this.onRejected, value);
 };
-},{"./handlers":65,"./unwrap":74}],69:[function(require,module,exports){
+},{"./handlers":64,"./unwrap":73}],68:[function(require,module,exports){
 'use strict';
 
 var Promise = require('./promise');
@@ -9213,7 +9229,7 @@ function reject(reason) {
 	var promise = new Promise(INTERNAL);
 	return handlers.reject(promise, reason);
 }
-},{"./INTERNAL":62,"./handlers":65,"./promise":67}],70:[function(require,module,exports){
+},{"./INTERNAL":62,"./handlers":64,"./promise":66}],69:[function(require,module,exports){
 'use strict';
 
 var Promise = require('./promise');
@@ -9248,7 +9264,7 @@ function resolve(value) {
       return EMPTYSTRING;
   }
 }
-},{"./INTERNAL":62,"./handlers":65,"./promise":67}],71:[function(require,module,exports){
+},{"./INTERNAL":62,"./handlers":64,"./promise":66}],70:[function(require,module,exports){
 'use strict';
 var handlers = require('./handlers');
 var tryCatch = require('./tryCatch');
@@ -9281,13 +9297,13 @@ function safelyResolveThenable(self, thenable) {
   }
 }
 exports.safely = safelyResolveThenable;
-},{"./handlers":65,"./tryCatch":73}],72:[function(require,module,exports){
+},{"./handlers":64,"./tryCatch":72}],71:[function(require,module,exports){
 // Lazy man's symbols for states
 
 exports.REJECTED = ['REJECTED'];
 exports.FULFILLED = ['FULFILLED'];
 exports.PENDING = ['PENDING'];
-},{}],73:[function(require,module,exports){
+},{}],72:[function(require,module,exports){
 'use strict';
 
 module.exports = tryCatch;
@@ -9303,7 +9319,7 @@ function tryCatch(func, value) {
   }
   return out;
 }
-},{}],74:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 'use strict';
 
 var immediate = require('immediate');
@@ -9325,11 +9341,10 @@ function unwrap(promise, func, value) {
     }
   });
 }
-},{"./handlers":65,"immediate":75}],75:[function(require,module,exports){
+},{"./handlers":64,"immediate":74}],74:[function(require,module,exports){
 'use strict';
 var types = [
   require('./nextTick'),
-  require('./mutation.js'),
   require('./messageChannel'),
   require('./stateChange'),
   require('./timeout')
@@ -9355,7 +9370,7 @@ var scheduleDrain;
 var i = -1;
 var len = types.length;
 while (++ i < len) {
-  if (types[i] && types[i].test && types[i].test()) {
+  if (types[i].test()) {
     scheduleDrain = types[i].install(drainQueue);
     break;
   }
@@ -9366,7 +9381,7 @@ function immediate(task) {
     scheduleDrain();
   }
 }
-},{"./messageChannel":76,"./mutation.js":77,"./nextTick":6,"./stateChange":78,"./timeout":79}],76:[function(require,module,exports){
+},{"./messageChannel":75,"./nextTick":76,"./stateChange":77,"./timeout":78}],75:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -9387,7 +9402,7 @@ exports.install = function (func) {
   };
 };
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],77:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 (function (global){
 'use strict';
 //based off rsvp https://github.com/tildeio/rsvp.js
@@ -9412,7 +9427,7 @@ exports.install = function (handle) {
   };
 };
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],78:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -9439,7 +9454,7 @@ exports.install = function (handle) {
   };
 };
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],79:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 'use strict';
 exports.test = function () {
   return true;
@@ -9450,6 +9465,260 @@ exports.install = function (t) {
     setTimeout(t, 0);
   };
 };
+},{}],79:[function(require,module,exports){
+;(function () { // closure for web browsers
+
+if (typeof module === 'object' && module.exports) {
+  module.exports = LRUCache
+} else {
+  // just set the global for non-node platforms.
+  this.LRUCache = LRUCache
+}
+
+function hOP (obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key)
+}
+
+function naiveLength () { return 1 }
+
+function LRUCache (options) {
+  if (!(this instanceof LRUCache))
+    return new LRUCache(options)
+
+  if (typeof options === 'number')
+    options = { max: options }
+
+  if (!options)
+    options = {}
+
+  this._max = options.max
+  // Kind of weird to have a default max of Infinity, but oh well.
+  if (!this._max || !(typeof this._max === "number") || this._max <= 0 )
+    this._max = Infinity
+
+  this._lengthCalculator = options.length || naiveLength
+  if (typeof this._lengthCalculator !== "function")
+    this._lengthCalculator = naiveLength
+
+  this._allowStale = options.stale || false
+  this._maxAge = options.maxAge || null
+  this._dispose = options.dispose
+  this.reset()
+}
+
+// resize the cache when the max changes.
+Object.defineProperty(LRUCache.prototype, "max",
+  { set : function (mL) {
+      if (!mL || !(typeof mL === "number") || mL <= 0 ) mL = Infinity
+      this._max = mL
+      if (this._length > this._max) trim(this)
+    }
+  , get : function () { return this._max }
+  , enumerable : true
+  })
+
+// resize the cache when the lengthCalculator changes.
+Object.defineProperty(LRUCache.prototype, "lengthCalculator",
+  { set : function (lC) {
+      if (typeof lC !== "function") {
+        this._lengthCalculator = naiveLength
+        this._length = this._itemCount
+        for (var key in this._cache) {
+          this._cache[key].length = 1
+        }
+      } else {
+        this._lengthCalculator = lC
+        this._length = 0
+        for (var key in this._cache) {
+          this._cache[key].length = this._lengthCalculator(this._cache[key].value)
+          this._length += this._cache[key].length
+        }
+      }
+
+      if (this._length > this._max) trim(this)
+    }
+  , get : function () { return this._lengthCalculator }
+  , enumerable : true
+  })
+
+Object.defineProperty(LRUCache.prototype, "length",
+  { get : function () { return this._length }
+  , enumerable : true
+  })
+
+
+Object.defineProperty(LRUCache.prototype, "itemCount",
+  { get : function () { return this._itemCount }
+  , enumerable : true
+  })
+
+LRUCache.prototype.forEach = function (fn, thisp) {
+  thisp = thisp || this
+  var i = 0;
+  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
+    i++
+    var hit = this._lruList[k]
+    if (this._maxAge && (Date.now() - hit.now > this._maxAge)) {
+      del(this, hit)
+      if (!this._allowStale) hit = undefined
+    }
+    if (hit) {
+      fn.call(thisp, hit.value, hit.key, this)
+    }
+  }
+}
+
+LRUCache.prototype.keys = function () {
+  var keys = new Array(this._itemCount)
+  var i = 0
+  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
+    var hit = this._lruList[k]
+    keys[i++] = hit.key
+  }
+  return keys
+}
+
+LRUCache.prototype.values = function () {
+  var values = new Array(this._itemCount)
+  var i = 0
+  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
+    var hit = this._lruList[k]
+    values[i++] = hit.value
+  }
+  return values
+}
+
+LRUCache.prototype.reset = function () {
+  if (this._dispose && this._cache) {
+    for (var k in this._cache) {
+      this._dispose(k, this._cache[k].value)
+    }
+  }
+
+  this._cache = Object.create(null) // hash of items by key
+  this._lruList = Object.create(null) // list of items in order of use recency
+  this._mru = 0 // most recently used
+  this._lru = 0 // least recently used
+  this._length = 0 // number of items in the list
+  this._itemCount = 0
+}
+
+// Provided for debugging/dev purposes only. No promises whatsoever that
+// this API stays stable.
+LRUCache.prototype.dump = function () {
+  return this._cache
+}
+
+LRUCache.prototype.dumpLru = function () {
+  return this._lruList
+}
+
+LRUCache.prototype.set = function (key, value) {
+  if (hOP(this._cache, key)) {
+    // dispose of the old one before overwriting
+    if (this._dispose) this._dispose(key, this._cache[key].value)
+    if (this._maxAge) this._cache[key].now = Date.now()
+    this._cache[key].value = value
+    this.get(key)
+    return true
+  }
+
+  var len = this._lengthCalculator(value)
+  var age = this._maxAge ? Date.now() : 0
+  var hit = new Entry(key, value, this._mru++, len, age)
+
+  // oversized objects fall out of cache automatically.
+  if (hit.length > this._max) {
+    if (this._dispose) this._dispose(key, value)
+    return false
+  }
+
+  this._length += hit.length
+  this._lruList[hit.lu] = this._cache[key] = hit
+  this._itemCount ++
+
+  if (this._length > this._max) trim(this)
+  return true
+}
+
+LRUCache.prototype.has = function (key) {
+  if (!hOP(this._cache, key)) return false
+  var hit = this._cache[key]
+  if (this._maxAge && (Date.now() - hit.now > this._maxAge)) {
+    return false
+  }
+  return true
+}
+
+LRUCache.prototype.get = function (key) {
+  return get(this, key, true)
+}
+
+LRUCache.prototype.peek = function (key) {
+  return get(this, key, false)
+}
+
+LRUCache.prototype.pop = function () {
+  var hit = this._lruList[this._lru]
+  del(this, hit)
+  return hit || null
+}
+
+LRUCache.prototype.del = function (key) {
+  del(this, this._cache[key])
+}
+
+function get (self, key, doUse) {
+  var hit = self._cache[key]
+  if (hit) {
+    if (self._maxAge && (Date.now() - hit.now > self._maxAge)) {
+      del(self, hit)
+      if (!self._allowStale) hit = undefined
+    } else {
+      if (doUse) use(self, hit)
+    }
+    if (hit) hit = hit.value
+  }
+  return hit
+}
+
+function use (self, hit) {
+  shiftLU(self, hit)
+  hit.lu = self._mru ++
+  self._lruList[hit.lu] = hit
+}
+
+function trim (self) {
+  while (self._lru < self._mru && self._length > self._max)
+    del(self, self._lruList[self._lru])
+}
+
+function shiftLU (self, hit) {
+  delete self._lruList[ hit.lu ]
+  while (self._lru < self._mru && !self._lruList[self._lru]) self._lru ++
+}
+
+function del (self, hit) {
+  if (hit) {
+    if (self._dispose) self._dispose(hit.key, hit.value)
+    self._length -= hit.length
+    self._itemCount --
+    delete self._cache[ hit.key ]
+    shiftLU(self, hit)
+  }
+}
+
+// classy, since V8 prefers predictable objects.
+function Entry (key, value, lu, length, now) {
+  this.key = key
+  this.value = value
+  this.lu = lu
+  this.length = length
+  this.now = now
+}
+
+})()
+
 },{}],80:[function(require,module,exports){
 function dbfHeader(buffer){
 	var data = new DataView(buffer);
@@ -14911,7 +15180,7 @@ function getMinNorthing(zoneLetter) {
 },{}],148:[function(require,module,exports){
 module.exports={
   "name": "proj4",
-  "version": "2.1.2",
+  "version": "2.1.4",
   "description": "Proj4js is a JavaScript library to transform point coordinates from one coordinate system to another, including datum transformations.",
   "main": "lib/index.js",
   "directories": {
@@ -14987,12 +15256,8 @@ module.exports={
     "url": "https://github.com/proj4js/proj4js/issues"
   },
   "homepage": "https://github.com/proj4js/proj4js",
-  "_id": "proj4@2.1.2",
-  "dist": {
-    "shasum": "441a504df53f84440b88f8f30db332d133e85f90"
-  },
-  "_from": "proj4@~2.1.0",
-  "_resolved": "https://registry.npmjs.org/proj4/-/proj4-2.1.2.tgz"
+  "_id": "proj4@2.1.4",
+  "_from": "proj4@~2.1.0"
 }
 
 },{}],149:[function(require,module,exports){
@@ -15005,7 +15270,7 @@ chai.use(chaiAsPromised);
 
 describe('Shp', function(){
   describe('park and rides not zipped', function(){
-  		var pandr =  shp('../files/pandr');
+  		var pandr =  shp('http://localhost:3000/files/pandr');
     it('should have the right keys', function(){
     	return pandr.should.eventually.contain.keys('type', 'features');
     });
@@ -15017,7 +15282,7 @@ describe('Shp', function(){
     });
   });
   describe('park and rides zipped', function(){
-  		var pandr =  shp('../files/pandr.zip');
+  		var pandr =  shp('http://localhost:3000/files/pandr.zip');
     it('should have the right keys', function(){
     	return pandr.should.eventually.contain.keys('type', 'features');
     });
@@ -15029,7 +15294,7 @@ describe('Shp', function(){
     });
   });
   describe('senate unzipped', function(){
-  		var pandr =  shp('data/senate');
+  		var pandr =  shp('http://localhost:3000/test/data/senate');
     it('should have the right keys', function(){
     	return pandr.should.eventually.contain.keys('type', 'features');
     });
@@ -15041,7 +15306,7 @@ describe('Shp', function(){
     });
   });
   describe('senate zipped', function(){
-  		var pandr =  shp('data/senate.zip');
+  		var pandr =  shp('http://localhost:3000/test/data/senate.zip');
     it('should have the right keys', function(){
     	return pandr.should.eventually.contain.keys('type', 'features');
     });
@@ -15053,7 +15318,7 @@ describe('Shp', function(){
     });
   });
   describe('county unzipped', function(){
-  		var pandr =  shp('data/counties');
+  		var pandr =  shp('http://localhost:3000/test/data/counties');
     it('should have the right keys', function(){
     	return pandr.should.eventually.contain.keys('type', 'features');
     });
@@ -15065,7 +15330,7 @@ describe('Shp', function(){
     });
   });
   describe('county zipped', function(){
-  		var pandr =  shp('data/counties.zip');
+  		var pandr =  shp('http://localhost:3000/test/data/counties.zip');
     it('should have the right keys', function(){
     	return pandr.should.eventually.contain.keys('type', 'features');
     });
@@ -15077,7 +15342,7 @@ describe('Shp', function(){
     });
   });
   describe('trains zipped', function(){
-  		var pandr =  shp('data/train_stations.zip');
+  		var pandr =  shp('http://localhost:3000/test/data/train_stations.zip');
     it('should have the right keys', function(){
     	return pandr.should.eventually.contain.keys('type', 'features');
     });
@@ -15090,16 +15355,20 @@ describe('Shp', function(){
   });
   describe('errors', function(){
     it('bad file should be rejected', function(){
-      return shp('data/bad').should.be.rejected;
+      return shp('http://localhost:3000/test/data/bad').should.be.rejected;
     });
-    it('imaginary file file should be rejected', function(){
-      return shp('data/notthere').should.be.rejected;
+    it('imaginary file file should be rejected', function(done){
+      shp('http://localhost:3000/test/data/notthere').then(function () {
+        done(true);
+      }, function () {
+        done();
+      });
     });
     it('bad zip be rejected', function(){
-      return shp('data/badzip.zip').should.be.rejected;
+      return shp('http://localhost:3000/test/data/badzip.zip').should.be.rejected;
     });
     it('no shp in zip', function(){
-      return shp('data/noshp.zip').should.be.rejected;
+      return shp('http://localhost:3000/test/data/noshp.zip').should.be.rejected;
     });
   });
 
