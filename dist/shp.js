@@ -7824,6 +7824,7 @@ function cleanWKT(wkt) {
     ['false_easting', 'False_Easting'],
     ['false_northing', 'False_Northing'],
     ['central_meridian', 'Central_Meridian'],
+    ['latitude_of_origin', 'Central_Parallel'],
     ['latitude_of_origin', 'Latitude_Of_Origin'],
     ['scale_factor', 'Scale_Factor'],
     ['k0', 'scale_factor'],
