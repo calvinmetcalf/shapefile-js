@@ -68,7 +68,7 @@ shp.parseZip = function(buffer, whiteList) {
 	var names = [];
 	whiteList = whiteList || [];
 	for (key in zip) {
-		if (key.lastIndexOf('__MACOSX', 0) !== 0) {
+		if (key.indexOf('__MACOSX') !== -1) {
 			continue;
 		}
 		if (key.slice(-3).toLowerCase() === 'shp') {
