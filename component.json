@@ -1,8 +1,8 @@
 {
   "name": "shp",
-  "repo": "calvinmetcalf/shapefile-js",
+  "version": "3.1.1",
   "description": "A binary shapefile loader, for javascript. Not many caveats",
-  "version": "2.2.0",
+  "repo": "calvinmetcalf/shapefile-js",
   "keywords": [],
   "development": {},
   "license": "MIT",

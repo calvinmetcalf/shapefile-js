@@ -1,11 +1,11 @@
 {
   "name": "shp",
-  "version": "2.2.0",
+  "version": "3.1.1",
+  "description": "A binary shapefile loader, for javascript. Not many caveats",
   "homepage": "https://github.com/calvinmetcalf/shapefile-js",
   "authors": [
     "Calvin Metcalf <calvin.metcalf@state.ma.us>"
   ],
-  "description": "A binary shapefile loader, for javascript. Not many caveats",
   "main": "dist/shp.js",
   "keywords": [
     "shp",
