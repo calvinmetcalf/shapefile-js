@@ -38,10 +38,11 @@
     "AJAX & Websockets"
   ],
   "dependencies": {
-    "parsedbf": "0.0.1",
     "jszip": "git://github.com/calvinmetcalf/jszip.git#nobuffer",
-    "proj4": "~2.1.0",
-    "lie": "^2.7.6"
+    "lie": "^2.7.6",
+    "lru-cache": "^2.5.0",
+    "parsedbf": "0.0.1",
+    "proj4": "~2.1.0"
   },
   "browser": {
     "./lib/binaryajax.js": "./lib/binaryajax-browser.js"
