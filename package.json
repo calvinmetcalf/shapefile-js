@@ -10,7 +10,9 @@
   "scripts": {
     "test": "mocha ./test/test.js",
     "hint": "jshint ./lib/*.js",
-    "build-test": "browserify ./test/test.js > ./test/bundle.js"
+    "build-test": "browserify ./test/test.js > ./test/bundle.js",
+    "build": "browserify . -s shp > ./dist/shp.js",
+    "min": "browserify . -s shp | uglifyjs -mc > ./dist/shp.min.js"
   },
   "author": "Calvin Metcalf",
   "license": "MIT",
@@ -38,7 +40,7 @@
     "AJAX & Websockets"
   ],
   "dependencies": {
-    "jszip": "git://github.com/calvinmetcalf/jszip.git#nobuffer",
+    "jszip": "^2.4.0",
     "lie": "^2.7.6",
     "lru-cache": "^2.5.0",
     "parsedbf": "0.0.1",
