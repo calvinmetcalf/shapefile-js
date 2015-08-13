@@ -23,7 +23,7 @@ function binaryAjax(url){
 		ajax.send();
 	});
 }
-},{"lie":52}],2:[function(require,module,exports){
+},{"lie":51}],2:[function(require,module,exports){
 'use strict';
 function isClockWise(array){
 	var sum = 0;
@@ -314,7 +314,6 @@ module.exports = function(buffer) {
 	var out = {};
 	files.forEach(function(a) {
 		if (a.name.slice(-3).toLowerCase() === 'shp' || a.name.slice(-3).toLowerCase() === 'dbf') {
-			out[a.name] = a.asText();
 			out[a.name] = a.asArrayBuffer();
 		}
 		else {
@@ -324,9 +323,7 @@ module.exports = function(buffer) {
 	return out;
 };
 
-},{"jszip":18}],5:[function(require,module,exports){
-
-},{}],6:[function(require,module,exports){
+},{"jszip":17}],5:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -353,31 +350,35 @@ var rootParent = {}
  * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
  * Opera 11.6+, iOS 4.2+.
  *
+ * Due to various browser bugs, sometimes the Object implementation will be used even
+ * when the browser supports typed arrays.
+ *
  * Note:
  *
- * - Implementation must support adding new properties to `Uint8Array` instances.
- *   Firefox 4-29 lacked support, fixed in Firefox 30+.
- *   See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
+ *   - Firefox 4-29 lacks support for adding new properties to `Uint8Array` instances,
+ *     See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
  *
- *  - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
+ *   - Safari 5-7 lacks support for changing the `Object.prototype.constructor` property
+ *     on objects.
  *
- *  - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
- *    incorrect length in some situations.
+ *   - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
  *
- * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they will
- * get the Object implementation, which is slower but will work correctly.
+ *   - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
+ *     incorrect length in some situations.
+
+ * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they
+ * get the Object implementation, which is slower but behaves correctly.
  */
 Buffer.TYPED_ARRAY_SUPPORT = (function () {
-  function Foo () {}
+  function Bar () {}
   try {
-    var buf = new ArrayBuffer(0)
-    var arr = new Uint8Array(buf)
+    var arr = new Uint8Array(1)
     arr.foo = function () { return 42 }
-    arr.constructor = Foo
+    arr.constructor = Bar
     return arr.foo() === 42 && // typed array instances can be augmented
-        arr.constructor === Foo && // constructor can be set
+        arr.constructor === Bar && // constructor can be set
         typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
-        new Uint8Array(1).subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
+        arr.subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
   } catch (e) {
     return false
   }
@@ -455,8 +456,13 @@ function fromObject (that, object) {
     throw new TypeError('must start with number, buffer, array or string')
   }
 
-  if (typeof ArrayBuffer !== 'undefined' && object.buffer instanceof ArrayBuffer) {
-    return fromTypedArray(that, object)
+  if (typeof ArrayBuffer !== 'undefined') {
+    if (object.buffer instanceof ArrayBuffer) {
+      return fromTypedArray(that, object)
+    }
+    if (object instanceof ArrayBuffer) {
+      return fromArrayBuffer(that, object)
+    }
   }
 
   if (object.length) return fromArrayLike(that, object)
@@ -489,6 +495,18 @@ function fromTypedArray (that, array) {
   // of the old Buffer constructor.
   for (var i = 0; i < length; i += 1) {
     that[i] = array[i] & 255
+  }
+  return that
+}
+
+function fromArrayBuffer (that, array) {
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    // Return an augmented `Uint8Array` instance, for best performance
+    array.byteLength
+    that = Buffer._augment(new Uint8Array(array))
+  } else {
+    // Fallback: Return an object instance of the Buffer class
+    that = fromTypedArray(that, new Uint8Array(array))
   }
   return that
 }
@@ -610,8 +628,6 @@ Buffer.concat = function concat (list, length) {
 
   if (list.length === 0) {
     return new Buffer(0)
-  } else if (list.length === 1) {
-    return list[0]
   }
 
   var i
@@ -786,13 +802,13 @@ Buffer.prototype.indexOf = function indexOf (val, byteOffset) {
   throw new TypeError('val must be string, number or Buffer')
 }
 
-// `get` will be removed in Node 0.13+
+// `get` is deprecated
 Buffer.prototype.get = function get (offset) {
   console.log('.get() is deprecated. Access using array indexes instead.')
   return this.readUInt8(offset)
 }
 
-// `set` will be removed in Node 0.13+
+// `set` is deprecated
 Buffer.prototype.set = function set (v, offset) {
   console.log('.set() is deprecated. Access using array indexes instead.')
   return this.writeUInt8(v, offset)
@@ -933,20 +949,84 @@ function base64Slice (buf, start, end) {
 }
 
 function utf8Slice (buf, start, end) {
-  var res = ''
-  var tmp = ''
   end = Math.min(buf.length, end)
+  var firstByte
+  var secondByte
+  var thirdByte
+  var fourthByte
+  var bytesPerSequence
+  var tempCodePoint
+  var codePoint
+  var res = []
+  var i = start
 
-  for (var i = start; i < end; i++) {
-    if (buf[i] <= 0x7F) {
-      res += decodeUtf8Char(tmp) + String.fromCharCode(buf[i])
-      tmp = ''
+  for (; i < end; i += bytesPerSequence) {
+    firstByte = buf[i]
+    codePoint = 0xFFFD
+
+    if (firstByte > 0xEF) {
+      bytesPerSequence = 4
+    } else if (firstByte > 0xDF) {
+      bytesPerSequence = 3
+    } else if (firstByte > 0xBF) {
+      bytesPerSequence = 2
     } else {
-      tmp += '%' + buf[i].toString(16)
+      bytesPerSequence = 1
     }
+
+    if (i + bytesPerSequence <= end) {
+      switch (bytesPerSequence) {
+        case 1:
+          if (firstByte < 0x80) {
+            codePoint = firstByte
+          }
+          break
+        case 2:
+          secondByte = buf[i + 1]
+          if ((secondByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
+            if (tempCodePoint > 0x7F) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 3:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
+            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 4:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          fourthByte = buf[i + 3]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
+            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
+              codePoint = tempCodePoint
+            }
+          }
+      }
+    }
+
+    if (codePoint === 0xFFFD) {
+      // we generated an invalid codePoint so make sure to only advance by 1 byte
+      bytesPerSequence = 1
+    } else if (codePoint > 0xFFFF) {
+      // encode to utf16 (surrogate pair dance)
+      codePoint -= 0x10000
+      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
+      codePoint = 0xDC00 | codePoint & 0x3FF
+    }
+
+    res.push(codePoint)
   }
 
-  return res + decodeUtf8Char(tmp)
+  return String.fromCharCode.apply(String, res)
 }
 
 function asciiSlice (buf, start, end) {
@@ -1481,9 +1561,16 @@ Buffer.prototype.copy = function copy (target, targetStart, start, end) {
   }
 
   var len = end - start
+  var i
 
-  if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
-    for (var i = 0; i < len; i++) {
+  if (this === target && start < targetStart && targetStart < end) {
+    // descending copy from end
+    for (i = len - 1; i >= 0; i--) {
+      target[i + targetStart] = this[i + start]
+    }
+  } else if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
+    // ascending copy from start
+    for (i = 0; i < len; i++) {
       target[i + targetStart] = this[i + start]
     }
   } else {
@@ -1559,7 +1646,7 @@ Buffer._augment = function _augment (arr) {
   // save reference to original Uint8Array set method before overwriting
   arr._set = arr.set
 
-  // deprecated, will be removed in node 0.13+
+  // deprecated
   arr.get = BP.get
   arr.set = BP.set
 
@@ -1615,7 +1702,7 @@ Buffer._augment = function _augment (arr) {
   return arr
 }
 
-var INVALID_BASE64_RE = /[^+\/0-9A-z\-]/g
+var INVALID_BASE64_RE = /[^+\/0-9A-Za-z-_]/g
 
 function base64clean (str) {
   // Node strips out invalid characters like \n and \t from the string, base64-js does not
@@ -1645,47 +1732,48 @@ function utf8ToBytes (string, units) {
   var length = string.length
   var leadSurrogate = null
   var bytes = []
-  var i = 0
 
-  for (; i < length; i++) {
+  for (var i = 0; i < length; i++) {
     codePoint = string.charCodeAt(i)
 
     // is surrogate component
     if (codePoint > 0xD7FF && codePoint < 0xE000) {
       // last char was a lead
-      if (leadSurrogate) {
-        // 2 leads in a row
-        if (codePoint < 0xDC00) {
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          leadSurrogate = codePoint
-          continue
-        } else {
-          // valid surrogate pair
-          codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
-          leadSurrogate = null
-        }
-      } else {
+      if (!leadSurrogate) {
         // no lead yet
-
         if (codePoint > 0xDBFF) {
           // unexpected trail
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
           continue
+
         } else if (i + 1 === length) {
           // unpaired lead
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
           continue
-        } else {
-          // valid lead
-          leadSurrogate = codePoint
-          continue
         }
+
+        // valid lead
+        leadSurrogate = codePoint
+
+        continue
       }
+
+      // 2 leads in a row
+      if (codePoint < 0xDC00) {
+        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+        leadSurrogate = codePoint
+        continue
+      }
+
+      // valid surrogate pair
+      codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
+
     } else if (leadSurrogate) {
       // valid bmp char, but last char was a lead
       if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-      leadSurrogate = null
     }
+
+    leadSurrogate = null
 
     // encode utf8
     if (codePoint < 0x80) {
@@ -1704,7 +1792,7 @@ function utf8ToBytes (string, units) {
         codePoint >> 0x6 & 0x3F | 0x80,
         codePoint & 0x3F | 0x80
       )
-    } else if (codePoint < 0x200000) {
+    } else if (codePoint < 0x110000) {
       if ((units -= 4) < 0) break
       bytes.push(
         codePoint >> 0x12 | 0xF0,
@@ -1757,15 +1845,7 @@ function blitBuffer (src, dst, offset, length) {
   return i
 }
 
-function decodeUtf8Char (str) {
-  try {
-    return decodeURIComponent(str)
-  } catch (err) {
-    return String.fromCharCode(0xFFFD) // UTF 8 invalid char
-  }
-}
-
-},{"base64-js":7,"ieee754":8,"is-array":9}],7:[function(require,module,exports){
+},{"base64-js":6,"ieee754":7,"is-array":8}],6:[function(require,module,exports){
 var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 ;(function (exports) {
@@ -1891,7 +1971,7 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	exports.fromByteArray = uint8ToBase64
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
-},{}],8:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -1977,7 +2057,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],9:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 
 /**
  * isArray
@@ -2012,7 +2092,7 @@ module.exports = isArray || function (val) {
   return !! val && '[object Array]' == str.call(val);
 };
 
-},{}],10:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 'use strict';
 // private property
 var _keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
@@ -2084,7 +2164,7 @@ exports.decode = function(input, utf8) {
 
 };
 
-},{}],11:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 'use strict';
 function CompressedObject() {
     this.compressedSize = 0;
@@ -2114,7 +2194,7 @@ CompressedObject.prototype = {
 };
 module.exports = CompressedObject;
 
-},{}],12:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 'use strict';
 exports.STORE = {
     magic: "\x00\x00",
@@ -2129,7 +2209,7 @@ exports.STORE = {
 };
 exports.DEFLATE = require('./flate');
 
-},{"./flate":17}],13:[function(require,module,exports){
+},{"./flate":16}],12:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -2233,7 +2313,7 @@ module.exports = function crc32(input, crc) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./utils":30}],14:[function(require,module,exports){
+},{"./utils":29}],13:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -2342,7 +2422,7 @@ DataReader.prototype = {
 };
 module.exports = DataReader;
 
-},{"./utils":30}],15:[function(require,module,exports){
+},{"./utils":29}],14:[function(require,module,exports){
 'use strict';
 exports.base64 = false;
 exports.binary = false;
@@ -2355,7 +2435,7 @@ exports.comment = null;
 exports.unixPermissions = null;
 exports.dosPermissions = null;
 
-},{}],16:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -2462,7 +2542,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./utils":30}],17:[function(require,module,exports){
+},{"./utils":29}],16:[function(require,module,exports){
 'use strict';
 var USE_TYPEDARRAY = (typeof Uint8Array !== 'undefined') && (typeof Uint16Array !== 'undefined') && (typeof Uint32Array !== 'undefined');
 
@@ -2480,7 +2560,7 @@ exports.uncompress =  function(input) {
     return pako.inflateRaw(input);
 };
 
-},{"pako":33}],18:[function(require,module,exports){
+},{"pako":32}],17:[function(require,module,exports){
 'use strict';
 
 var base64 = require('./base64');
@@ -2561,7 +2641,7 @@ JSZip.base64 = {
 JSZip.compressions = require('./compressions');
 module.exports = JSZip;
 
-},{"./base64":10,"./compressions":12,"./defaults":15,"./deprecatedPublicUtils":16,"./load":19,"./object":22,"./support":26}],19:[function(require,module,exports){
+},{"./base64":9,"./compressions":11,"./defaults":14,"./deprecatedPublicUtils":15,"./load":18,"./object":21,"./support":25}],18:[function(require,module,exports){
 'use strict';
 var base64 = require('./base64');
 var ZipEntries = require('./zipEntries');
@@ -2594,7 +2674,7 @@ module.exports = function(data, options) {
     return this;
 };
 
-},{"./base64":10,"./zipEntries":31}],20:[function(require,module,exports){
+},{"./base64":9,"./zipEntries":30}],19:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 module.exports = function(data, encoding){
@@ -2605,7 +2685,7 @@ module.exports.test = function(b){
 };
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":6}],21:[function(require,module,exports){
+},{"buffer":5}],20:[function(require,module,exports){
 'use strict';
 var Uint8ArrayReader = require('./uint8ArrayReader');
 
@@ -2627,7 +2707,7 @@ NodeBufferReader.prototype.readData = function(size) {
 };
 module.exports = NodeBufferReader;
 
-},{"./uint8ArrayReader":27}],22:[function(require,module,exports){
+},{"./uint8ArrayReader":26}],21:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var utils = require('./utils');
@@ -3512,7 +3592,7 @@ var out = {
 };
 module.exports = out;
 
-},{"./base64":10,"./compressedObject":11,"./compressions":12,"./crc32":13,"./defaults":15,"./nodeBuffer":20,"./signature":23,"./stringWriter":25,"./support":26,"./uint8ArrayWriter":28,"./utf8":29,"./utils":30}],23:[function(require,module,exports){
+},{"./base64":9,"./compressedObject":10,"./compressions":11,"./crc32":12,"./defaults":14,"./nodeBuffer":19,"./signature":22,"./stringWriter":24,"./support":25,"./uint8ArrayWriter":27,"./utf8":28,"./utils":29}],22:[function(require,module,exports){
 'use strict';
 exports.LOCAL_FILE_HEADER = "PK\x03\x04";
 exports.CENTRAL_FILE_HEADER = "PK\x01\x02";
@@ -3521,7 +3601,7 @@ exports.ZIP64_CENTRAL_DIRECTORY_LOCATOR = "PK\x06\x07";
 exports.ZIP64_CENTRAL_DIRECTORY_END = "PK\x06\x06";
 exports.DATA_DESCRIPTOR = "PK\x07\x08";
 
-},{}],24:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 var utils = require('./utils');
@@ -3559,7 +3639,7 @@ StringReader.prototype.readData = function(size) {
 };
 module.exports = StringReader;
 
-},{"./dataReader":14,"./utils":30}],25:[function(require,module,exports){
+},{"./dataReader":13,"./utils":29}],24:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -3591,7 +3671,7 @@ StringWriter.prototype = {
 
 module.exports = StringWriter;
 
-},{"./utils":30}],26:[function(require,module,exports){
+},{"./utils":29}],25:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 exports.base64 = true;
@@ -3629,7 +3709,7 @@ else {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":6}],27:[function(require,module,exports){
+},{"buffer":5}],26:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 
@@ -3678,7 +3758,7 @@ Uint8ArrayReader.prototype.readData = function(size) {
 };
 module.exports = Uint8ArrayReader;
 
-},{"./dataReader":14}],28:[function(require,module,exports){
+},{"./dataReader":13}],27:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -3716,7 +3796,7 @@ Uint8ArrayWriter.prototype = {
 
 module.exports = Uint8ArrayWriter;
 
-},{"./utils":30}],29:[function(require,module,exports){
+},{"./utils":29}],28:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -3925,7 +4005,7 @@ exports.utf8decode = function utf8decode(buf) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./nodeBuffer":20,"./support":26,"./utils":30}],30:[function(require,module,exports){
+},{"./nodeBuffer":19,"./support":25,"./utils":29}],29:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var compressions = require('./compressions');
@@ -4253,7 +4333,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./compressions":12,"./nodeBuffer":20,"./support":26}],31:[function(require,module,exports){
+},{"./compressions":11,"./nodeBuffer":19,"./support":25}],30:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var NodeBufferReader = require('./nodeBufferReader');
@@ -4476,7 +4556,7 @@ ZipEntries.prototype = {
 // }}} end of ZipEntries
 module.exports = ZipEntries;
 
-},{"./nodeBufferReader":21,"./object":22,"./signature":23,"./stringReader":24,"./support":26,"./uint8ArrayReader":27,"./utils":30,"./zipEntry":32}],32:[function(require,module,exports){
+},{"./nodeBufferReader":20,"./object":21,"./signature":22,"./stringReader":23,"./support":25,"./uint8ArrayReader":26,"./utils":29,"./zipEntry":31}],31:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var utils = require('./utils');
@@ -4788,7 +4868,7 @@ ZipEntry.prototype = {
 };
 module.exports = ZipEntry;
 
-},{"./compressedObject":11,"./object":22,"./stringReader":24,"./utils":30}],33:[function(require,module,exports){
+},{"./compressedObject":10,"./object":21,"./stringReader":23,"./utils":29}],32:[function(require,module,exports){
 // Top level file is just a mixin of submodules & constants
 'use strict';
 
@@ -4804,7 +4884,7 @@ assign(pako, deflate, inflate, constants);
 
 module.exports = pako;
 
-},{"./lib/deflate":34,"./lib/inflate":35,"./lib/utils/common":36,"./lib/zlib/constants":39}],34:[function(require,module,exports){
+},{"./lib/deflate":33,"./lib/inflate":34,"./lib/utils/common":35,"./lib/zlib/constants":38}],33:[function(require,module,exports){
 'use strict';
 
 
@@ -5182,7 +5262,7 @@ exports.deflate = deflate;
 exports.deflateRaw = deflateRaw;
 exports.gzip = gzip;
 
-},{"./utils/common":36,"./utils/strings":37,"./zlib/deflate.js":41,"./zlib/messages":46,"./zlib/zstream":48}],35:[function(require,module,exports){
+},{"./utils/common":35,"./utils/strings":36,"./zlib/deflate.js":40,"./zlib/messages":45,"./zlib/zstream":47}],34:[function(require,module,exports){
 'use strict';
 
 
@@ -5563,7 +5643,7 @@ exports.inflate = inflate;
 exports.inflateRaw = inflateRaw;
 exports.ungzip  = inflate;
 
-},{"./utils/common":36,"./utils/strings":37,"./zlib/constants":39,"./zlib/gzheader":42,"./zlib/inflate.js":44,"./zlib/messages":46,"./zlib/zstream":48}],36:[function(require,module,exports){
+},{"./utils/common":35,"./utils/strings":36,"./zlib/constants":38,"./zlib/gzheader":41,"./zlib/inflate.js":43,"./zlib/messages":45,"./zlib/zstream":47}],35:[function(require,module,exports){
 'use strict';
 
 
@@ -5667,7 +5747,7 @@ exports.setTyped = function (on) {
 
 exports.setTyped(TYPED_OK);
 
-},{}],37:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 // String encode/decode helpers
 'use strict';
 
@@ -5854,7 +5934,7 @@ exports.utf8border = function(buf, max) {
   return (pos + _utf8len[buf[pos]] > max) ? pos : max;
 };
 
-},{"./common":36}],38:[function(require,module,exports){
+},{"./common":35}],37:[function(require,module,exports){
 'use strict';
 
 // Note: adler32 takes 12% for level 0 and 2% for level 6.
@@ -5888,7 +5968,7 @@ function adler32(adler, buf, len, pos) {
 
 module.exports = adler32;
 
-},{}],39:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 module.exports = {
 
   /* Allowed flush values; see deflate() and inflate() below for details */
@@ -5937,7 +6017,7 @@ module.exports = {
   //Z_NULL:                 null // Use -1 or null inline, depending on var type
 };
 
-},{}],40:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 'use strict';
 
 // Note: we can't get significant speed boost here.
@@ -5980,7 +6060,7 @@ function crc32(crc, buf, len, pos) {
 
 module.exports = crc32;
 
-},{}],41:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 'use strict';
 
 var utils   = require('../utils/common');
@@ -7747,7 +7827,7 @@ exports.deflatePrime = deflatePrime;
 exports.deflateTune = deflateTune;
 */
 
-},{"../utils/common":36,"./adler32":38,"./crc32":40,"./messages":46,"./trees":47}],42:[function(require,module,exports){
+},{"../utils/common":35,"./adler32":37,"./crc32":39,"./messages":45,"./trees":46}],41:[function(require,module,exports){
 'use strict';
 
 
@@ -7789,7 +7869,7 @@ function GZheader() {
 
 module.exports = GZheader;
 
-},{}],43:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 'use strict';
 
 // See state defs from inflate.js
@@ -8116,7 +8196,7 @@ module.exports = function inflate_fast(strm, start) {
   return;
 };
 
-},{}],44:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 'use strict';
 
 
@@ -9621,7 +9701,7 @@ exports.inflateSyncPoint = inflateSyncPoint;
 exports.inflateUndermine = inflateUndermine;
 */
 
-},{"../utils/common":36,"./adler32":38,"./crc32":40,"./inffast":43,"./inftrees":45}],45:[function(require,module,exports){
+},{"../utils/common":35,"./adler32":37,"./crc32":39,"./inffast":42,"./inftrees":44}],44:[function(require,module,exports){
 'use strict';
 
 
@@ -9950,7 +10030,7 @@ module.exports = function inflate_table(type, lens, lens_index, codes, table, ta
   return 0;
 };
 
-},{"../utils/common":36}],46:[function(require,module,exports){
+},{"../utils/common":35}],45:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -9965,7 +10045,7 @@ module.exports = {
   '-6':   'incompatible version' /* Z_VERSION_ERROR (-6) */
 };
 
-},{}],47:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 'use strict';
 
 
@@ -11166,7 +11246,7 @@ exports._tr_flush_block  = _tr_flush_block;
 exports._tr_tally = _tr_tally;
 exports._tr_align = _tr_align;
 
-},{"../utils/common":36}],48:[function(require,module,exports){
+},{"../utils/common":35}],47:[function(require,module,exports){
 'use strict';
 
 
@@ -11197,13 +11277,13 @@ function ZStream() {
 
 module.exports = ZStream;
 
-},{}],49:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 'use strict';
 
 module.exports = INTERNAL;
 
 function INTERNAL() {}
-},{}],50:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 'use strict';
 var Promise = require('./promise');
 var reject = require('./reject');
@@ -11247,7 +11327,7 @@ function all(iterable) {
     }
   }
 }
-},{"./INTERNAL":49,"./handlers":51,"./promise":53,"./reject":56,"./resolve":57}],51:[function(require,module,exports){
+},{"./INTERNAL":48,"./handlers":50,"./promise":52,"./reject":55,"./resolve":56}],50:[function(require,module,exports){
 'use strict';
 var tryCatch = require('./tryCatch');
 var resolveThenable = require('./resolveThenable');
@@ -11294,7 +11374,7 @@ function getThen(obj) {
   }
 }
 
-},{"./resolveThenable":58,"./states":59,"./tryCatch":60}],52:[function(require,module,exports){
+},{"./resolveThenable":57,"./states":58,"./tryCatch":59}],51:[function(require,module,exports){
 module.exports = exports = require('./promise');
 
 exports.resolve = require('./resolve');
@@ -11302,7 +11382,7 @@ exports.reject = require('./reject');
 exports.all = require('./all');
 exports.race = require('./race');
 
-},{"./all":50,"./promise":53,"./race":55,"./reject":56,"./resolve":57}],53:[function(require,module,exports){
+},{"./all":49,"./promise":52,"./race":54,"./reject":55,"./resolve":56}],52:[function(require,module,exports){
 'use strict';
 
 var unwrap = require('./unwrap');
@@ -11346,7 +11426,7 @@ Promise.prototype.then = function (onFulfilled, onRejected) {
   return promise;
 };
 
-},{"./INTERNAL":49,"./queueItem":54,"./resolveThenable":58,"./states":59,"./unwrap":61}],54:[function(require,module,exports){
+},{"./INTERNAL":48,"./queueItem":53,"./resolveThenable":57,"./states":58,"./unwrap":60}],53:[function(require,module,exports){
 'use strict';
 var handlers = require('./handlers');
 var unwrap = require('./unwrap');
@@ -11376,7 +11456,7 @@ QueueItem.prototype.otherCallRejected = function (value) {
   unwrap(this.promise, this.onRejected, value);
 };
 
-},{"./handlers":51,"./unwrap":61}],55:[function(require,module,exports){
+},{"./handlers":50,"./unwrap":60}],54:[function(require,module,exports){
 'use strict';
 var Promise = require('./promise');
 var reject = require('./reject');
@@ -11417,7 +11497,7 @@ function race(iterable) {
   }
 }
 
-},{"./INTERNAL":49,"./handlers":51,"./promise":53,"./reject":56,"./resolve":57}],56:[function(require,module,exports){
+},{"./INTERNAL":48,"./handlers":50,"./promise":52,"./reject":55,"./resolve":56}],55:[function(require,module,exports){
 'use strict';
 
 var Promise = require('./promise');
@@ -11429,7 +11509,7 @@ function reject(reason) {
 	var promise = new Promise(INTERNAL);
 	return handlers.reject(promise, reason);
 }
-},{"./INTERNAL":49,"./handlers":51,"./promise":53}],57:[function(require,module,exports){
+},{"./INTERNAL":48,"./handlers":50,"./promise":52}],56:[function(require,module,exports){
 'use strict';
 
 var Promise = require('./promise');
@@ -11464,7 +11544,7 @@ function resolve(value) {
       return EMPTYSTRING;
   }
 }
-},{"./INTERNAL":49,"./handlers":51,"./promise":53}],58:[function(require,module,exports){
+},{"./INTERNAL":48,"./handlers":50,"./promise":52}],57:[function(require,module,exports){
 'use strict';
 var handlers = require('./handlers');
 var tryCatch = require('./tryCatch');
@@ -11497,14 +11577,14 @@ function safelyResolveThenable(self, thenable) {
   }
 }
 exports.safely = safelyResolveThenable;
-},{"./handlers":51,"./tryCatch":60}],59:[function(require,module,exports){
+},{"./handlers":50,"./tryCatch":59}],58:[function(require,module,exports){
 // Lazy man's symbols for states
 
 exports.REJECTED = ['REJECTED'];
 exports.FULFILLED = ['FULFILLED'];
 exports.PENDING = ['PENDING'];
 
-},{}],60:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
 'use strict';
 
 module.exports = tryCatch;
@@ -11520,7 +11600,7 @@ function tryCatch(func, value) {
   }
   return out;
 }
-},{}],61:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 'use strict';
 
 var immediate = require('immediate');
@@ -11542,15 +11622,52 @@ function unwrap(promise, func, value) {
     }
   });
 }
-},{"./handlers":51,"immediate":62}],62:[function(require,module,exports){
+},{"./handlers":50,"immediate":61}],61:[function(require,module,exports){
+(function (global){
 'use strict';
-var types = [
-  require('./nextTick'),
-  require('./mutation.js'),
-  require('./messageChannel'),
-  require('./stateChange'),
-  require('./timeout')
-];
+var Mutation = global.MutationObserver || global.WebKitMutationObserver;
+
+var scheduleDrain;
+
+{
+  if (Mutation) {
+    var called = 0;
+    var observer = new Mutation(nextTick);
+    var element = global.document.createTextNode('');
+    observer.observe(element, {
+      characterData: true
+    });
+    scheduleDrain = function () {
+      element.data = (called = ++called % 2);
+    };
+  } else if (!global.setImmediate && typeof global.MessageChannel !== 'undefined') {
+    var channel = new global.MessageChannel();
+    channel.port1.onmessage = nextTick;
+    scheduleDrain = function () {
+      channel.port2.postMessage(0);
+    };
+  } else if ('document' in global && 'onreadystatechange' in global.document.createElement('script')) {
+    scheduleDrain = function () {
+
+      // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
+      // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
+      var scriptEl = global.document.createElement('script');
+      scriptEl.onreadystatechange = function () {
+        nextTick();
+
+        scriptEl.onreadystatechange = null;
+        scriptEl.parentNode.removeChild(scriptEl);
+        scriptEl = null;
+      };
+      global.document.documentElement.appendChild(scriptEl);
+    };
+  } else {
+    scheduleDrain = function () {
+      setTimeout(nextTick, 0);
+    };
+  }
+}
+
 var draining;
 var queue = [];
 //named nextTick for less confusing stack traces
@@ -11569,106 +11686,16 @@ function nextTick() {
   }
   draining = false;
 }
-var scheduleDrain;
-var i = -1;
-var len = types.length;
-while (++ i < len) {
-  if (types[i] && types[i].test && types[i].test()) {
-    scheduleDrain = types[i].install(nextTick);
-    break;
-  }
-}
+
 module.exports = immediate;
 function immediate(task) {
   if (queue.push(task) === 1 && !draining) {
     scheduleDrain();
   }
 }
-},{"./messageChannel":63,"./mutation.js":64,"./nextTick":5,"./stateChange":65,"./timeout":66}],63:[function(require,module,exports){
-(function (global){
-'use strict';
 
-exports.test = function () {
-  if (global.setImmediate) {
-    // we can only get here in IE10
-    // which doesn't handel postMessage well
-    return false;
-  }
-  return typeof global.MessageChannel !== 'undefined';
-};
-
-exports.install = function (func) {
-  var channel = new global.MessageChannel();
-  channel.port1.onmessage = func;
-  return function () {
-    channel.port2.postMessage(0);
-  };
-};
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],64:[function(require,module,exports){
-(function (global){
-'use strict';
-//based off rsvp https://github.com/tildeio/rsvp.js
-//license https://github.com/tildeio/rsvp.js/blob/master/LICENSE
-//https://github.com/tildeio/rsvp.js/blob/master/lib/rsvp/asap.js
-
-var Mutation = global.MutationObserver || global.WebKitMutationObserver;
-
-exports.test = function () {
-  return Mutation;
-};
-
-exports.install = function (handle) {
-  var called = 0;
-  var observer = new Mutation(handle);
-  var element = global.document.createTextNode('');
-  observer.observe(element, {
-    characterData: true
-  });
-  return function () {
-    element.data = (called = ++called % 2);
-  };
-};
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],65:[function(require,module,exports){
-(function (global){
-'use strict';
-
-exports.test = function () {
-  return 'document' in global && 'onreadystatechange' in global.document.createElement('script');
-};
-
-exports.install = function (handle) {
-  return function () {
-
-    // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
-    // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
-    var scriptEl = global.document.createElement('script');
-    scriptEl.onreadystatechange = function () {
-      handle();
-
-      scriptEl.onreadystatechange = null;
-      scriptEl.parentNode.removeChild(scriptEl);
-      scriptEl = null;
-    };
-    global.document.documentElement.appendChild(scriptEl);
-
-    return handle;
-  };
-};
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],66:[function(require,module,exports){
-'use strict';
-exports.test = function () {
-  return true;
-};
-
-exports.install = function (t) {
-  return function () {
-    setTimeout(t, 0);
-  };
-};
-},{}],67:[function(require,module,exports){
+},{}],62:[function(require,module,exports){
 ;(function () { // closure for web browsers
 
 if (typeof module === 'object' && module.exports) {
@@ -11944,7 +11971,7 @@ function Entry (key, value, lu, length, now, maxAge) {
 
 })()
 
-},{}],68:[function(require,module,exports){
+},{}],63:[function(require,module,exports){
 function dbfHeader(buffer){
 	var data = new DataView(buffer);
 	var out = {};
@@ -12022,7 +12049,7 @@ module.exports = function(buffer){
 	return out;
 };
 
-},{}],69:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 var mgrs = require('mgrs');
 
 function Point(x, y, z) {
@@ -12058,7 +12085,7 @@ Point.prototype.toMGRS = function(accuracy) {
   return mgrs.forward([this.x, this.y], accuracy);
 };
 module.exports = Point;
-},{"mgrs":135}],70:[function(require,module,exports){
+},{"mgrs":131}],65:[function(require,module,exports){
 var parseCode = require("./parseCode");
 var extend = require('./extend');
 var projections = require('./projections');
@@ -12093,7 +12120,7 @@ Projection.projections = projections;
 Projection.projections.start();
 module.exports = Projection;
 
-},{"./deriveConstants":100,"./extend":101,"./parseCode":105,"./projections":107}],71:[function(require,module,exports){
+},{"./deriveConstants":96,"./extend":97,"./parseCode":101,"./projections":103}],66:[function(require,module,exports){
 module.exports = function(crs, denorm, point) {
   var xin = point.x,
     yin = point.y,
@@ -12146,49 +12173,54 @@ module.exports = function(crs, denorm, point) {
   return point;
 };
 
-},{}],72:[function(require,module,exports){
+},{}],67:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var sign = require('./sign');
 
 module.exports = function(x) {
   return (Math.abs(x) < HALF_PI) ? x : (x - (sign(x) * Math.PI));
 };
-},{"./sign":89}],73:[function(require,module,exports){
+},{"./sign":84}],68:[function(require,module,exports){
 var TWO_PI = Math.PI * 2;
+// SPI is slightly greater than Math.PI, so values that exceed the -180..180
+// degree range by a tiny amount don't get wrapped. This prevents points that
+// have drifted from their original location along the 180th meridian (due to
+// floating point error) from changing their sign.
+var SPI = 3.14159265359;
 var sign = require('./sign');
 
 module.exports = function(x) {
-  return (Math.abs(x) < Math.PI) ? x : (x - (sign(x) * TWO_PI));
+  return (Math.abs(x) <= SPI) ? x : (x - (sign(x) * TWO_PI));
 };
-},{"./sign":89}],74:[function(require,module,exports){
+},{"./sign":84}],69:[function(require,module,exports){
 module.exports = function(x) {
   if (Math.abs(x) > 1) {
     x = (x > 1) ? 1 : -1;
   }
   return Math.asin(x);
 };
-},{}],75:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 module.exports = function(x) {
   return (1 - 0.25 * x * (1 + x / 16 * (3 + 1.25 * x)));
 };
-},{}],76:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
 module.exports = function(x) {
   return (0.375 * x * (1 + 0.25 * x * (1 + 0.46875 * x)));
 };
-},{}],77:[function(require,module,exports){
+},{}],72:[function(require,module,exports){
 module.exports = function(x) {
   return (0.05859375 * x * x * (1 + 0.75 * x));
 };
-},{}],78:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 module.exports = function(x) {
   return (x * x * x * (35 / 3072));
 };
-},{}],79:[function(require,module,exports){
+},{}],74:[function(require,module,exports){
 module.exports = function(a, e, sinphi) {
   var temp = e * sinphi;
   return a / Math.sqrt(1 - temp * temp);
 };
-},{}],80:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 module.exports = function(ml, e0, e1, e2, e3) {
   var phi;
   var dphi;
@@ -12205,7 +12237,7 @@ module.exports = function(ml, e0, e1, e2, e3) {
   //..reportError("IMLFN-CONV:Latitude failed to converge after 15 iterations");
   return NaN;
 };
-},{}],81:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 
 module.exports = function(eccent, q) {
@@ -12238,16 +12270,16 @@ module.exports = function(eccent, q) {
   //console.log("IQSFN-CONV:Latitude failed to converge after 30 iterations");
   return NaN;
 };
-},{}],82:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 module.exports = function(e0, e1, e2, e3, phi) {
   return (e0 * phi - e1 * Math.sin(2 * phi) + e2 * Math.sin(4 * phi) - e3 * Math.sin(6 * phi));
 };
-},{}],83:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 module.exports = function(eccent, sinphi, cosphi) {
   var con = eccent * sinphi;
   return cosphi / (Math.sqrt(1 - con * con));
 };
-},{}],84:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 module.exports = function(eccent, ts) {
   var eccnth = 0.5 * eccent;
@@ -12264,7 +12296,7 @@ module.exports = function(eccent, ts) {
   //console.log("phi2z has NoConvergence");
   return -9999;
 };
-},{}],85:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 var C00 = 1;
 var C02 = 0.25;
 var C04 = 0.046875;
@@ -12289,7 +12321,7 @@ module.exports = function(es) {
   en[4] = t * es * C88;
   return en;
 };
-},{}],86:[function(require,module,exports){
+},{}],81:[function(require,module,exports){
 var pj_mlfn = require("./pj_mlfn");
 var EPSLN = 1.0e-10;
 var MAX_ITER = 20;
@@ -12310,13 +12342,13 @@ module.exports = function(arg, es, en) {
   //..reportError("cass:pj_inv_mlfn: Convergence error");
   return phi;
 };
-},{"./pj_mlfn":87}],87:[function(require,module,exports){
+},{"./pj_mlfn":82}],82:[function(require,module,exports){
 module.exports = function(phi, sphi, cphi, en) {
   cphi *= sphi;
   sphi *= sphi;
   return (en[0] * phi - cphi * (en[1] + sphi * (en[2] + sphi * (en[3] + sphi * en[4]))));
 };
-},{}],88:[function(require,module,exports){
+},{}],83:[function(require,module,exports){
 module.exports = function(eccent, sinphi) {
   var con;
   if (eccent > 1.0e-7) {
@@ -12327,15 +12359,15 @@ module.exports = function(eccent, sinphi) {
     return (2 * sinphi);
   }
 };
-},{}],89:[function(require,module,exports){
+},{}],84:[function(require,module,exports){
 module.exports = function(x) {
   return x<0 ? -1 : 1;
 };
-},{}],90:[function(require,module,exports){
+},{}],85:[function(require,module,exports){
 module.exports = function(esinp, exp) {
   return (Math.pow((1 - esinp) / (1 + esinp), exp));
 };
-},{}],91:[function(require,module,exports){
+},{}],86:[function(require,module,exports){
 module.exports = function (array){
   var out = {
     x: array[0],
@@ -12349,7 +12381,7 @@ module.exports = function (array){
   }
   return out;
 };
-},{}],92:[function(require,module,exports){
+},{}],87:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 
 module.exports = function(eccent, phi, sinphi) {
@@ -12358,7 +12390,7 @@ module.exports = function(eccent, phi, sinphi) {
   con = Math.pow(((1 - con) / (1 + con)), com);
   return (Math.tan(0.5 * (HALF_PI - phi)) / con);
 };
-},{}],93:[function(require,module,exports){
+},{}],88:[function(require,module,exports){
 exports.wgs84 = {
   towgs84: "0,0,0",
   ellipse: "WGS84",
@@ -12439,7 +12471,7 @@ exports.rnb72 = {
   ellipse: "intl",
   datumName: "Reseau National Belge 1972"
 };
-},{}],94:[function(require,module,exports){
+},{}],89:[function(require,module,exports){
 exports.MERIT = {
   a: 6378137.0,
   rf: 298.257,
@@ -12655,7 +12687,7 @@ exports.sphere = {
   b: 6370997.0,
   ellipseName: "Normal Sphere (r=6370997)"
 };
-},{}],95:[function(require,module,exports){
+},{}],90:[function(require,module,exports){
 exports.greenwich = 0.0; //"0dE",
 exports.lisbon = -9.131906111111; //"9d07'54.862\"W",
 exports.paris = 2.337229166667; //"2d20'14.025\"E",
@@ -12669,7 +12701,11 @@ exports.brussels = 4.367975; //"4d22'4.71\"E",
 exports.stockholm = 18.058277777778; //"18d3'29.8\"E",
 exports.athens = 23.7163375; //"23d42'58.815\"E",
 exports.oslo = 10.722916666667; //"10d43'22.5\"E"
-},{}],96:[function(require,module,exports){
+},{}],91:[function(require,module,exports){
+exports.ft = {to_meter: 0.3048};
+exports['us-ft'] = {to_meter: 1200 / 3937};
+
+},{}],92:[function(require,module,exports){
 var proj = require('./Proj');
 var transform = require('./transform');
 var wgs84 = proj('WGS84');
@@ -12734,7 +12770,7 @@ function proj4(fromProj, toProj, coord) {
   }
 }
 module.exports = proj4;
-},{"./Proj":70,"./transform":133}],97:[function(require,module,exports){
+},{"./Proj":65,"./transform":129}],93:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var PJD_3PARAM = 1;
 var PJD_7PARAM = 2;
@@ -13140,7 +13176,7 @@ datum.prototype = {
 */
 module.exports = datum;
 
-},{}],98:[function(require,module,exports){
+},{}],94:[function(require,module,exports){
 var PJD_3PARAM = 1;
 var PJD_7PARAM = 2;
 var PJD_GRIDSHIFT = 3;
@@ -13241,7 +13277,7 @@ module.exports = function(source, dest, point) {
 };
 
 
-},{}],99:[function(require,module,exports){
+},{}],95:[function(require,module,exports){
 var globals = require('./global');
 var parseProj = require('./projString');
 var wkt = require('./wkt');
@@ -13250,11 +13286,16 @@ function defs(name) {
   /*global console*/
   var that = this;
   if (arguments.length === 2) {
-    if (arguments[1][0] === '+') {
-      defs[name] = parseProj(arguments[1]);
-    }
-    else {
-      defs[name] = wkt(arguments[1]);
+    var def = arguments[1];
+    if (typeof def === 'string') {
+      if (def.charAt(0) === '+') {
+        defs[name] = parseProj(arguments[1]);
+      }
+      else {
+        defs[name] = wkt(arguments[1]);
+      }
+    } else {
+      defs[name] = def;
     }
   }
   else if (arguments.length === 1) {
@@ -13269,7 +13310,9 @@ function defs(name) {
       });
     }
     else if (typeof name === 'string') {
-
+      if (name in defs) {
+        return defs[name];
+      }
     }
     else if ('EPSG' in name) {
       defs['EPSG:' + name.EPSG] = name;
@@ -13291,7 +13334,7 @@ function defs(name) {
 globals(defs);
 module.exports = defs;
 
-},{"./global":102,"./projString":106,"./wkt":134}],100:[function(require,module,exports){
+},{"./global":98,"./projString":102,"./wkt":130}],96:[function(require,module,exports){
 var Datum = require('./constants/Datum');
 var Ellipsoid = require('./constants/Ellipsoid');
 var extend = require('./extend');
@@ -13343,10 +13386,13 @@ module.exports = function(json) {
     json.axis = "enu";
   }
 
-  json.datum = datum(json);
+  if (!json.datum) {
+    json.datum = datum(json);
+  }
   return json;
 };
-},{"./constants/Datum":93,"./constants/Ellipsoid":94,"./datum":97,"./extend":101}],101:[function(require,module,exports){
+
+},{"./constants/Datum":88,"./constants/Ellipsoid":89,"./datum":93,"./extend":97}],97:[function(require,module,exports){
 module.exports = function(destination, source) {
   destination = destination || {};
   var value, property;
@@ -13362,20 +13408,20 @@ module.exports = function(destination, source) {
   return destination;
 };
 
-},{}],102:[function(require,module,exports){
+},{}],98:[function(require,module,exports){
 module.exports = function(defs) {
-  defs('WGS84', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
   defs('EPSG:4326', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
   defs('EPSG:4269', "+title=NAD83 (long/lat) +proj=longlat +a=6378137.0 +b=6356752.31414036 +ellps=GRS80 +datum=NAD83 +units=degrees");
   defs('EPSG:3857', "+title=WGS 84 / Pseudo-Mercator +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +no_defs");
 
+  defs.WGS84 = defs['EPSG:4326'];
   defs['EPSG:3785'] = defs['EPSG:3857']; // maintain backward compat, official code is 3857
   defs.GOOGLE = defs['EPSG:3857'];
   defs['EPSG:900913'] = defs['EPSG:3857'];
   defs['EPSG:102113'] = defs['EPSG:3857'];
 };
 
-},{}],103:[function(require,module,exports){
+},{}],99:[function(require,module,exports){
 var projs = [
   require('./projections/tmerc'),
   require('./projections/utm'),
@@ -13405,7 +13451,7 @@ module.exports = function(proj4){
     proj4.Proj.projections.add(proj);
   });
 };
-},{"./projections/aea":108,"./projections/aeqd":109,"./projections/cass":110,"./projections/cea":111,"./projections/eqc":112,"./projections/eqdc":113,"./projections/gnom":115,"./projections/krovak":116,"./projections/laea":117,"./projections/lcc":118,"./projections/mill":121,"./projections/moll":122,"./projections/nzmg":123,"./projections/omerc":124,"./projections/poly":125,"./projections/sinu":126,"./projections/somerc":127,"./projections/stere":128,"./projections/sterea":129,"./projections/tmerc":130,"./projections/utm":131,"./projections/vandg":132}],104:[function(require,module,exports){
+},{"./projections/aea":104,"./projections/aeqd":105,"./projections/cass":106,"./projections/cea":107,"./projections/eqc":108,"./projections/eqdc":109,"./projections/gnom":111,"./projections/krovak":112,"./projections/laea":113,"./projections/lcc":114,"./projections/mill":117,"./projections/moll":118,"./projections/nzmg":119,"./projections/omerc":120,"./projections/poly":121,"./projections/sinu":122,"./projections/somerc":123,"./projections/stere":124,"./projections/sterea":125,"./projections/tmerc":126,"./projections/utm":127,"./projections/vandg":128}],100:[function(require,module,exports){
 var proj4 = require('./core');
 proj4.defaultDatum = 'WGS84'; //default datum
 proj4.Proj = require('./Proj');
@@ -13418,7 +13464,7 @@ proj4.mgrs = require('mgrs');
 proj4.version = require('../package.json').version;
 require('./includedProjections')(proj4);
 module.exports = proj4;
-},{"../package.json":136,"./Point":69,"./Proj":70,"./common/toPoint":91,"./core":96,"./defs":99,"./includedProjections":103,"./transform":133,"mgrs":135}],105:[function(require,module,exports){
+},{"../package.json":132,"./Point":64,"./Proj":65,"./common/toPoint":86,"./core":92,"./defs":95,"./includedProjections":99,"./transform":129,"mgrs":131}],101:[function(require,module,exports){
 var defs = require('./defs');
 var wkt = require('./wkt');
 var projStr = require('./projString');
@@ -13455,12 +13501,13 @@ function parse(code){
 }
 
 module.exports = parse;
-},{"./defs":99,"./projString":106,"./wkt":134}],106:[function(require,module,exports){
+},{"./defs":95,"./projString":102,"./wkt":130}],102:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var PrimeMeridian = require('./constants/PrimeMeridian');
+var units = require('./constants/units');
+
 module.exports = function(defData) {
   var self = {};
-
   var paramObj = {};
   defData.split("+").map(function(v) {
     return v.trim();
@@ -13476,7 +13523,7 @@ module.exports = function(defData) {
     proj: 'projName',
     datum: 'datumCode',
     rf: function(v) {
-      self.rf = parseFloat(v, 10);
+      self.rf = parseFloat(v);
     },
     lat_0: function(v) {
       self.lat0 = v * D2R;
@@ -13506,16 +13553,22 @@ module.exports = function(defData) {
       self.longc = v * D2R;
     },
     x_0: function(v) {
-      self.x0 = parseFloat(v, 10);
+      self.x0 = parseFloat(v);
     },
     y_0: function(v) {
-      self.y0 = parseFloat(v, 10);
+      self.y0 = parseFloat(v);
     },
     k_0: function(v) {
-      self.k0 = parseFloat(v, 10);
+      self.k0 = parseFloat(v);
     },
     k: function(v) {
-      self.k0 = parseFloat(v, 10);
+      self.k0 = parseFloat(v);
+    },
+    a: function(v) {
+      self.a = parseFloat(v);
+    },
+    b: function(v) {
+      self.b = parseFloat(v);
     },
     r_a: function() {
       self.R_A = true;
@@ -13528,17 +13581,23 @@ module.exports = function(defData) {
     },
     towgs84: function(v) {
       self.datum_params = v.split(",").map(function(a) {
-        return parseFloat(a, 10);
+        return parseFloat(a);
       });
     },
     to_meter: function(v) {
-      self.to_meter = parseFloat(v, 10);
+      self.to_meter = parseFloat(v);
+    },
+    units: function(v) {
+      self.units = v;
+      if (units[v]) {
+        self.to_meter = units[v].to_meter;
+      }
     },
     from_greenwich: function(v) {
       self.from_greenwich = v * D2R;
     },
     pm: function(v) {
-      self.from_greenwich = (PrimeMeridian[v] ? PrimeMeridian[v] : parseFloat(v, 10)) * D2R;
+      self.from_greenwich = (PrimeMeridian[v] ? PrimeMeridian[v] : parseFloat(v)) * D2R;
     },
     nadgrids: function(v) {
       if (v === '@null') {
@@ -13576,7 +13635,7 @@ module.exports = function(defData) {
   return self;
 };
 
-},{"./constants/PrimeMeridian":95}],107:[function(require,module,exports){
+},{"./constants/PrimeMeridian":90,"./constants/units":91}],103:[function(require,module,exports){
 var projs = [
   require('./projections/merc'),
   require('./projections/longlat')
@@ -13612,7 +13671,7 @@ exports.start = function() {
   projs.forEach(add);
 };
 
-},{"./projections/longlat":119,"./projections/merc":120}],108:[function(require,module,exports){
+},{"./projections/longlat":115,"./projections/merc":116}],104:[function(require,module,exports){
 var EPSLN = 1.0e-10;
 var msfnz = require('../common/msfnz');
 var qsfnz = require('../common/qsfnz');
@@ -13735,7 +13794,7 @@ exports.phi1z = function(eccent, qs) {
 };
 exports.names = ["Albers_Conic_Equal_Area", "Albers", "aea"];
 
-},{"../common/adjust_lon":73,"../common/asinz":74,"../common/msfnz":83,"../common/qsfnz":88}],109:[function(require,module,exports){
+},{"../common/adjust_lon":68,"../common/asinz":69,"../common/msfnz":78,"../common/qsfnz":83}],105:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
@@ -13934,7 +13993,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Azimuthal_Equidistant", "aeqd"];
 
-},{"../common/adjust_lon":73,"../common/asinz":74,"../common/e0fn":75,"../common/e1fn":76,"../common/e2fn":77,"../common/e3fn":78,"../common/gN":79,"../common/imlfn":80,"../common/mlfn":82}],110:[function(require,module,exports){
+},{"../common/adjust_lon":68,"../common/asinz":69,"../common/e0fn":70,"../common/e1fn":71,"../common/e2fn":72,"../common/e3fn":73,"../common/gN":74,"../common/imlfn":75,"../common/mlfn":77}],106:[function(require,module,exports){
 var mlfn = require('../common/mlfn');
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
@@ -14038,7 +14097,7 @@ exports.inverse = function(p) {
 
 };
 exports.names = ["Cassini", "Cassini_Soldner", "cass"];
-},{"../common/adjust_lat":72,"../common/adjust_lon":73,"../common/e0fn":75,"../common/e1fn":76,"../common/e2fn":77,"../common/e3fn":78,"../common/gN":79,"../common/imlfn":80,"../common/mlfn":82}],111:[function(require,module,exports){
+},{"../common/adjust_lat":67,"../common/adjust_lon":68,"../common/e0fn":70,"../common/e1fn":71,"../common/e2fn":72,"../common/e3fn":73,"../common/gN":74,"../common/imlfn":75,"../common/mlfn":77}],107:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var qsfnz = require('../common/qsfnz');
 var msfnz = require('../common/msfnz');
@@ -14103,7 +14162,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["cea"];
 
-},{"../common/adjust_lon":73,"../common/iqsfnz":81,"../common/msfnz":83,"../common/qsfnz":88}],112:[function(require,module,exports){
+},{"../common/adjust_lon":68,"../common/iqsfnz":76,"../common/msfnz":78,"../common/qsfnz":83}],108:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var adjust_lat = require('../common/adjust_lat');
 exports.init = function() {
@@ -14146,7 +14205,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Equirectangular", "Equidistant_Cylindrical", "eqc"];
 
-},{"../common/adjust_lat":72,"../common/adjust_lon":73}],113:[function(require,module,exports){
+},{"../common/adjust_lat":67,"../common/adjust_lon":68}],109:[function(require,module,exports){
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
 var e2fn = require('../common/e2fn');
@@ -14258,7 +14317,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Equidistant_Conic", "eqdc"];
 
-},{"../common/adjust_lat":72,"../common/adjust_lon":73,"../common/e0fn":75,"../common/e1fn":76,"../common/e2fn":77,"../common/e3fn":78,"../common/imlfn":80,"../common/mlfn":82,"../common/msfnz":83}],114:[function(require,module,exports){
+},{"../common/adjust_lat":67,"../common/adjust_lon":68,"../common/e0fn":70,"../common/e1fn":71,"../common/e2fn":72,"../common/e3fn":73,"../common/imlfn":75,"../common/mlfn":77,"../common/msfnz":78}],110:[function(require,module,exports){
 var FORTPI = Math.PI/4;
 var srat = require('../common/srat');
 var HALF_PI = Math.PI/2;
@@ -14305,7 +14364,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["gauss"];
 
-},{"../common/srat":90}],115:[function(require,module,exports){
+},{"../common/srat":85}],111:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var EPSLN = 1.0e-10;
 var asinz = require('../common/asinz');
@@ -14406,7 +14465,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["gnom"];
 
-},{"../common/adjust_lon":73,"../common/asinz":74}],116:[function(require,module,exports){
+},{"../common/adjust_lon":68,"../common/asinz":69}],112:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 exports.init = function() {
   this.a = 6377397.155;
@@ -14506,7 +14565,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Krovak", "krovak"];
 
-},{"../common/adjust_lon":73}],117:[function(require,module,exports){
+},{"../common/adjust_lon":68}],113:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var FORTPI = Math.PI/4;
 var EPSLN = 1.0e-10;
@@ -14796,7 +14855,7 @@ exports.authlat = function(beta, APA) {
 };
 exports.names = ["Lambert Azimuthal Equal Area", "Lambert_Azimuthal_Equal_Area", "laea"];
 
-},{"../common/adjust_lon":73,"../common/qsfnz":88}],118:[function(require,module,exports){
+},{"../common/adjust_lon":68,"../common/qsfnz":83}],114:[function(require,module,exports){
 var EPSLN = 1.0e-10;
 var msfnz = require('../common/msfnz');
 var tsfnz = require('../common/tsfnz');
@@ -14933,7 +14992,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Lambert Tangential Conformal Conic Projection", "Lambert_Conformal_Conic", "Lambert_Conformal_Conic_2SP", "lcc"];
 
-},{"../common/adjust_lon":73,"../common/msfnz":83,"../common/phi2z":84,"../common/sign":89,"../common/tsfnz":92}],119:[function(require,module,exports){
+},{"../common/adjust_lon":68,"../common/msfnz":78,"../common/phi2z":79,"../common/sign":84,"../common/tsfnz":87}],115:[function(require,module,exports){
 exports.init = function() {
   //no-op for longlat
 };
@@ -14945,7 +15004,7 @@ exports.forward = identity;
 exports.inverse = identity;
 exports.names = ["longlat", "identity"];
 
-},{}],120:[function(require,module,exports){
+},{}],116:[function(require,module,exports){
 var msfnz = require('../common/msfnz');
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
@@ -15044,7 +15103,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Mercator", "Popular Visualisation Pseudo Mercator", "Mercator_1SP", "Mercator_Auxiliary_Sphere", "merc"];
 
-},{"../common/adjust_lon":73,"../common/msfnz":83,"../common/phi2z":84,"../common/tsfnz":92}],121:[function(require,module,exports){
+},{"../common/adjust_lon":68,"../common/msfnz":78,"../common/phi2z":79,"../common/tsfnz":87}],117:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 /*
   reference
@@ -15091,7 +15150,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Miller_Cylindrical", "mill"];
 
-},{"../common/adjust_lon":73}],122:[function(require,module,exports){
+},{"../common/adjust_lon":68}],118:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var EPSLN = 1.0e-10;
 exports.init = function() {};
@@ -15170,7 +15229,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Mollweide", "moll"];
 
-},{"../common/adjust_lon":73}],123:[function(require,module,exports){
+},{"../common/adjust_lon":68}],119:[function(require,module,exports){
 var SEC_TO_RAD = 4.84813681109535993589914102357e-6;
 /*
   reference
@@ -15390,7 +15449,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["New_Zealand_Map_Grid", "nzmg"];
-},{}],124:[function(require,module,exports){
+},{}],120:[function(require,module,exports){
 var tsfnz = require('../common/tsfnz');
 var adjust_lon = require('../common/adjust_lon');
 var phi2z = require('../common/phi2z');
@@ -15559,7 +15618,7 @@ exports.inverse = function(p) {
 };
 
 exports.names = ["Hotine_Oblique_Mercator", "Hotine Oblique Mercator", "Hotine_Oblique_Mercator_Azimuth_Natural_Origin", "Hotine_Oblique_Mercator_Azimuth_Center", "omerc"];
-},{"../common/adjust_lon":73,"../common/phi2z":84,"../common/tsfnz":92}],125:[function(require,module,exports){
+},{"../common/adjust_lon":68,"../common/phi2z":79,"../common/tsfnz":87}],121:[function(require,module,exports){
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
 var e2fn = require('../common/e2fn');
@@ -15688,7 +15747,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Polyconic", "poly"];
-},{"../common/adjust_lat":72,"../common/adjust_lon":73,"../common/e0fn":75,"../common/e1fn":76,"../common/e2fn":77,"../common/e3fn":78,"../common/gN":79,"../common/mlfn":82}],126:[function(require,module,exports){
+},{"../common/adjust_lat":67,"../common/adjust_lon":68,"../common/e0fn":70,"../common/e1fn":71,"../common/e2fn":72,"../common/e3fn":73,"../common/gN":74,"../common/mlfn":77}],122:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var adjust_lat = require('../common/adjust_lat');
 var pj_enfn = require('../common/pj_enfn');
@@ -15795,7 +15854,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Sinusoidal", "sinu"];
-},{"../common/adjust_lat":72,"../common/adjust_lon":73,"../common/asinz":74,"../common/pj_enfn":85,"../common/pj_inv_mlfn":86,"../common/pj_mlfn":87}],127:[function(require,module,exports){
+},{"../common/adjust_lat":67,"../common/adjust_lon":68,"../common/asinz":69,"../common/pj_enfn":80,"../common/pj_inv_mlfn":81,"../common/pj_mlfn":82}],123:[function(require,module,exports){
 /*
   references:
     Formules et constantes pour le Calcul pour la
@@ -15877,7 +15936,7 @@ exports.inverse = function(p) {
 
 exports.names = ["somerc"];
 
-},{}],128:[function(require,module,exports){
+},{}],124:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
 var sign = require('../common/sign');
@@ -16043,8 +16102,9 @@ exports.inverse = function(p) {
   return p;
 
 };
-exports.names = ["stere"];
-},{"../common/adjust_lon":73,"../common/msfnz":83,"../common/phi2z":84,"../common/sign":89,"../common/tsfnz":92}],129:[function(require,module,exports){
+exports.names = ["stere", "Stereographic_South_Pole", "Polar Stereographic (variant B)"];
+
+},{"../common/adjust_lon":68,"../common/msfnz":78,"../common/phi2z":79,"../common/sign":84,"../common/tsfnz":87}],125:[function(require,module,exports){
 var gauss = require('./gauss');
 var adjust_lon = require('../common/adjust_lon');
 exports.init = function() {
@@ -16103,7 +16163,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Stereographic_North_Pole", "Oblique_Stereographic", "Polar_Stereographic", "sterea","Oblique Stereographic Alternative"];
 
-},{"../common/adjust_lon":73,"./gauss":114}],130:[function(require,module,exports){
+},{"../common/adjust_lon":68,"./gauss":110}],126:[function(require,module,exports){
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
 var e2fn = require('../common/e2fn');
@@ -16240,7 +16300,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Transverse_Mercator", "Transverse Mercator", "tmerc"];
 
-},{"../common/adjust_lon":73,"../common/asinz":74,"../common/e0fn":75,"../common/e1fn":76,"../common/e2fn":77,"../common/e3fn":78,"../common/mlfn":82,"../common/sign":89}],131:[function(require,module,exports){
+},{"../common/adjust_lon":68,"../common/asinz":69,"../common/e0fn":70,"../common/e1fn":71,"../common/e2fn":72,"../common/e3fn":73,"../common/mlfn":77,"../common/sign":84}],127:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var tmerc = require('./tmerc');
 exports.dependsOn = 'tmerc';
@@ -16260,7 +16320,7 @@ exports.init = function() {
 };
 exports.names = ["Universal Transverse Mercator System", "utm"];
 
-},{"./tmerc":130}],132:[function(require,module,exports){
+},{"./tmerc":126}],128:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
@@ -16381,7 +16441,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Van_der_Grinten_I", "VanDerGrinten", "vandg"];
-},{"../common/adjust_lon":73,"../common/asinz":74}],133:[function(require,module,exports){
+},{"../common/adjust_lon":68,"../common/asinz":69}],129:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var R2D = 57.29577951308232088;
 var PJD_3PARAM = 1;
@@ -16454,7 +16514,7 @@ module.exports = function transform(source, dest, point) {
 
   return point;
 };
-},{"./Proj":70,"./adjust_axis":71,"./common/toPoint":91,"./datum_transform":98}],134:[function(require,module,exports){
+},{"./Proj":65,"./adjust_axis":66,"./common/toPoint":86,"./datum_transform":94}],130:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var extend = require('./extend');
 
@@ -16612,6 +16672,9 @@ function cleanWKT(wkt) {
       wkt.a = wkt.GEOGCS.DATUM.SPHEROID.a;
       wkt.rf = parseFloat(wkt.GEOGCS.DATUM.SPHEROID.rf, 10);
     }
+    if (~wkt.datumCode.indexOf('osgb_1936')) {
+      wkt.datumCode = "osgb36";
+    }
   }
   if (wkt.b && !isFinite(wkt.b)) {
     wkt.b = wkt.a;
@@ -16631,6 +16694,7 @@ function cleanWKT(wkt) {
     ['false_northing', 'False_Northing'],
     ['central_meridian', 'Central_Meridian'],
     ['latitude_of_origin', 'Latitude_Of_Origin'],
+    ['latitude_of_origin', 'Central_Parallel'],
     ['scale_factor', 'Scale_Factor'],
     ['k0', 'scale_factor'],
     ['latitude_of_center', 'Latitude_of_center'],
@@ -16648,12 +16712,16 @@ function cleanWKT(wkt) {
     ['srsCode', 'name']
   ];
   list.forEach(renamer);
-  if (!wkt.long0 && wkt.longc && (wkt.PROJECTION === 'Albers_Conic_Equal_Area' || wkt.PROJECTION === "Lambert_Azimuthal_Equal_Area")) {
+  if (!wkt.long0 && wkt.longc && (wkt.projName === 'Albers_Conic_Equal_Area' || wkt.projName === "Lambert_Azimuthal_Equal_Area")) {
     wkt.long0 = wkt.longc;
+  }
+  if (!wkt.lat_ts && wkt.lat1 && (wkt.projName === 'Stereographic_South_Pole' || wkt.projName === 'Polar Stereographic (variant B)')) {
+    wkt.lat0 = d2r(wkt.lat1 > 0 ? 90 : -90);
+    wkt.lat_ts = wkt.lat1;
   }
 }
 module.exports = function(wkt, self) {
-  var lisp = JSON.parse(("," + wkt).replace(/\s*\,\s*([A-Z_0-9]+?)(\[)/g, ',["$1",').slice(1).replace(/\s*\,\s*([A-Z_0-9]+?)\]/g, ',"$1"]'));
+  var lisp = JSON.parse(("," + wkt).replace(/\s*\,\s*([A-Z_0-9]+?)(\[)/g, ',["$1",').slice(1).replace(/\s*\,\s*([A-Z_0-9]+?)\]/g, ',"$1"]').replace(/,\["VERTCS".+/,''));
   var type = lisp.shift();
   var name = lisp.shift();
   lisp.unshift(['name', name]);
@@ -16665,7 +16733,7 @@ module.exports = function(wkt, self) {
   return extend(self, obj.output);
 };
 
-},{"./extend":101}],135:[function(require,module,exports){
+},{"./extend":97}],131:[function(require,module,exports){
 
 
 
@@ -16705,7 +16773,7 @@ var Z = 90; // Z
  * @param {object} ll Object literal with lat and lon properties on a
  *     WGS84 ellipsoid.
  * @param {int} accuracy Accuracy in digits (5 for 1 m, 4 for 10 m, 3 for
- *      100 m, 4 for 1000 m or 5 for 10000 m). Optional, default is 5.
+ *      100 m, 2 for 1000 m or 1 for 10000 m). Optional, default is 5.
  * @return {string} the MGRS string for the given location and accuracy.
  */
 exports.forward = function(ll, accuracy) {
@@ -16726,12 +16794,18 @@ exports.forward = function(ll, accuracy) {
  */
 exports.inverse = function(mgrs) {
   var bbox = UTMtoLL(decode(mgrs.toUpperCase()));
+  if (bbox.lat && bbox.lon) {
+    return [bbox.lon, bbox.lat, bbox.lon, bbox.lat];
+  }
   return [bbox.left, bbox.bottom, bbox.right, bbox.top];
 };
 
-exports.toPoint = function(mgrsStr) {
-  var llbbox = exports.inverse(mgrsStr);
-  return [(llbbox[2] + llbbox[0]) / 2, (llbbox[3] + llbbox[1]) / 2];
+exports.toPoint = function(mgrs) {
+  var bbox = UTMtoLL(decode(mgrs.toUpperCase()));
+  if (bbox.lat && bbox.lon) {
+    return [bbox.lon, bbox.lat];
+  }
+  return [(bbox.left + bbox.right) / 2, (bbox.top + bbox.bottom) / 2];
 };
 /**
  * Conversion from degrees to radians.
@@ -17021,8 +17095,9 @@ function getLetterDesignator(lat) {
  * @return {string} MGRS string for the given UTM location.
  */
 function encode(utm, accuracy) {
-  var seasting = "" + utm.easting,
-    snorthing = "" + utm.northing;
+  // prepend with leading zeroes
+  var seasting = "00000" + utm.easting,
+    snorthing = "00000" + utm.northing;
 
   return utm.zoneNumber + utm.zoneLetter + get100kID(utm.easting, utm.northing, utm.zoneNumber) + seasting.substr(seasting.length - 5, accuracy) + snorthing.substr(snorthing.length - 5, accuracy);
 }
@@ -17402,10 +17477,10 @@ function getMinNorthing(zoneLetter) {
 
 }
 
-},{}],136:[function(require,module,exports){
+},{}],132:[function(require,module,exports){
 module.exports={
   "name": "proj4",
-  "version": "2.1.4",
+  "version": "2.3.7",
   "description": "Proj4js is a JavaScript library to transform point coordinates from one coordinate system to another, including datum transformations.",
   "main": "lib/index.js",
   "directories": {
@@ -17446,7 +17521,7 @@ module.exports={
     "tin": "~0.4.0"
   },
   "dependencies": {
-    "mgrs": "0.0.0"
+    "mgrs": "~0.0.2"
   },
   "contributors": [
     {
@@ -17475,20 +17550,19 @@ module.exports={
       "name": "S. Nelson"
     }
   ],
+  "gitHead": "52b3a4f6bf8b609251d06f1f7ddd29d7074f3ce4",
   "bugs": {
     "url": "https://github.com/proj4js/proj4js/issues"
   },
-  "homepage": "https://github.com/proj4js/proj4js",
-  "_id": "proj4@2.1.4",
-  "dist": {
-    "shasum": "d57b39ae1ed47b207d0fc7b0010498dc35fd6d09",
-    "tarball": "http://registry.npmjs.org/proj4/-/proj4-2.1.4.tgz"
-  },
-  "_from": "proj4@>=2.1.0 <2.2.0",
-  "_npmVersion": "1.4.3",
+  "homepage": "https://github.com/proj4js/proj4js#readme",
+  "_id": "proj4@2.3.7",
+  "_shasum": "248a30b2dc346dd1896dc5526c1a5e6b546f334a",
+  "_from": "proj4@>=2.1.0 <3.0.0",
+  "_npmVersion": "2.11.2",
+  "_nodeVersion": "0.12.5",
   "_npmUser": {
-    "name": "cwmma",
-    "email": "calvin.metcalf@gmail.com"
+    "name": "ahocevar",
+    "email": "andreas.hocevar@gmail.com"
   },
   "maintainers": [
     {
@@ -17500,12 +17574,14 @@ module.exports={
       "email": "andreas.hocevar@gmail.com"
     }
   ],
-  "_shasum": "d57b39ae1ed47b207d0fc7b0010498dc35fd6d09",
-  "_resolved": "https://registry.npmjs.org/proj4/-/proj4-2.1.4.tgz",
-  "readme": "ERROR: No README data found!"
+  "dist": {
+    "shasum": "248a30b2dc346dd1896dc5526c1a5e6b546f334a",
+    "tarball": "http://registry.npmjs.org/proj4/-/proj4-2.3.7.tgz"
+  },
+  "_resolved": "https://registry.npmjs.org/proj4/-/proj4-2.3.7.tgz"
 }
 
-},{}],137:[function(require,module,exports){
+},{}],133:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 var proj4 = require('proj4');
@@ -17646,5 +17722,5 @@ shp.parseDbf = function (dbf) {
 module.exports = shp;
 
 }).call(this,require("buffer").Buffer)
-},{"./binaryajax":1,"./parseShp":2,"./toArrayBuffer":3,"./unzip":4,"buffer":6,"lie":52,"lru-cache":67,"parsedbf":68,"proj4":104}]},{},[137])(137)
+},{"./binaryajax":1,"./parseShp":2,"./toArrayBuffer":3,"./unzip":4,"buffer":5,"lie":51,"lru-cache":62,"parsedbf":63,"proj4":100}]},{},[133])(133)
 });

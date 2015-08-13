@@ -1,6 +1,6 @@
 {
   "name": "shp",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "description": "A binary shapefile loader, for javascript. Not many caveats",
   "homepage": "https://github.com/calvinmetcalf/shapefile-js",
   "authors": [
