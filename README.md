@@ -118,3 +118,7 @@ Main library MIT license, original version was less permissive but there is 0 co
 - MA town boundaries from [MassGIS](http://www.mass.gov/anf/research-and-tech/it-serv-and-support/application-serv/office-of-geographic-information-massgis/) and is public domain
 - NJ County Boundaries from [NJgin](https://njgin.state.nj.us/NJ_NJGINExplorer/index.jsp) and should be public domain.
 - [Proj4js](https://github.com/proj4js/proj4js) by me et al MIT
+
+[![Dependency Status](https://david-dm.org/calvinmetcalf/shapefile-js.svg)](https://david-dm.org/calvinmetcalf/shapefile-js)
+[![devDependency Status](https://david-dm.org/calvinmetcalf/shapefile-js/dev-status.svg)](https://david-dm.org/calvinmetcalf/shapefile-js#info=devDependencies)
+[![peerDependency Status](https://david-dm.org/calvinmetcalf/shapefile-js/peer-status.svg)](https://david-dm.org/calvinmetcalf/shapefile-js#info=peerDependencies)
