@@ -26,7 +26,7 @@
     "lie": "^2.9.1",
     "lru-cache": "^2.7.0",
     "mocha": "^2.3.3",
-    "parsedbf": "0.0.1",
+    "parsedbf": "0.1.0",
     "proj4": "^2.1.4",
     "testling": "^1.6.1",
     "uglify-js": "^2.4.13"
