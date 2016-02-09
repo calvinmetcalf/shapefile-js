@@ -23,7 +23,7 @@ function binaryAjax(url){
 		ajax.send();
 	});
 }
-},{"lie":52}],2:[function(require,module,exports){
+},{"lie":37}],2:[function(require,module,exports){
 'use strict';
 function isClockWise(array){
 	var sum = 0;
@@ -324,19 +324,147 @@ module.exports = function(buffer) {
 	return out;
 };
 
-},{"jszip":18}],5:[function(require,module,exports){
+},{"jszip":19}],5:[function(require,module,exports){
+var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+;(function (exports) {
+	'use strict';
+
+  var Arr = (typeof Uint8Array !== 'undefined')
+    ? Uint8Array
+    : Array
+
+	var PLUS   = '+'.charCodeAt(0)
+	var SLASH  = '/'.charCodeAt(0)
+	var NUMBER = '0'.charCodeAt(0)
+	var LOWER  = 'a'.charCodeAt(0)
+	var UPPER  = 'A'.charCodeAt(0)
+	var PLUS_URL_SAFE = '-'.charCodeAt(0)
+	var SLASH_URL_SAFE = '_'.charCodeAt(0)
+
+	function decode (elt) {
+		var code = elt.charCodeAt(0)
+		if (code === PLUS ||
+		    code === PLUS_URL_SAFE)
+			return 62 // '+'
+		if (code === SLASH ||
+		    code === SLASH_URL_SAFE)
+			return 63 // '/'
+		if (code < NUMBER)
+			return -1 //no match
+		if (code < NUMBER + 10)
+			return code - NUMBER + 26 + 26
+		if (code < UPPER + 26)
+			return code - UPPER
+		if (code < LOWER + 26)
+			return code - LOWER + 26
+	}
+
+	function b64ToByteArray (b64) {
+		var i, j, l, tmp, placeHolders, arr
+
+		if (b64.length % 4 > 0) {
+			throw new Error('Invalid string. Length must be a multiple of 4')
+		}
+
+		// the number of equal signs (place holders)
+		// if there are two placeholders, than the two characters before it
+		// represent one byte
+		// if there is only one, then the three characters before it represent 2 bytes
+		// this is just a cheap hack to not do indexOf twice
+		var len = b64.length
+		placeHolders = '=' === b64.charAt(len - 2) ? 2 : '=' === b64.charAt(len - 1) ? 1 : 0
+
+		// base64 is 4/3 + up to two characters of the original data
+		arr = new Arr(b64.length * 3 / 4 - placeHolders)
+
+		// if there are placeholders, only get up to the last complete 4 chars
+		l = placeHolders > 0 ? b64.length - 4 : b64.length
+
+		var L = 0
+
+		function push (v) {
+			arr[L++] = v
+		}
+
+		for (i = 0, j = 0; i < l; i += 4, j += 3) {
+			tmp = (decode(b64.charAt(i)) << 18) | (decode(b64.charAt(i + 1)) << 12) | (decode(b64.charAt(i + 2)) << 6) | decode(b64.charAt(i + 3))
+			push((tmp & 0xFF0000) >> 16)
+			push((tmp & 0xFF00) >> 8)
+			push(tmp & 0xFF)
+		}
+
+		if (placeHolders === 2) {
+			tmp = (decode(b64.charAt(i)) << 2) | (decode(b64.charAt(i + 1)) >> 4)
+			push(tmp & 0xFF)
+		} else if (placeHolders === 1) {
+			tmp = (decode(b64.charAt(i)) << 10) | (decode(b64.charAt(i + 1)) << 4) | (decode(b64.charAt(i + 2)) >> 2)
+			push((tmp >> 8) & 0xFF)
+			push(tmp & 0xFF)
+		}
+
+		return arr
+	}
+
+	function uint8ToBase64 (uint8) {
+		var i,
+			extraBytes = uint8.length % 3, // if we have 1 byte left, pad 2 bytes
+			output = "",
+			temp, length
+
+		function encode (num) {
+			return lookup.charAt(num)
+		}
+
+		function tripletToBase64 (num) {
+			return encode(num >> 18 & 0x3F) + encode(num >> 12 & 0x3F) + encode(num >> 6 & 0x3F) + encode(num & 0x3F)
+		}
+
+		// go through the array every three bytes, we'll deal with trailing stuff later
+		for (i = 0, length = uint8.length - extraBytes; i < length; i += 3) {
+			temp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
+			output += tripletToBase64(temp)
+		}
+
+		// pad the end with zeros, but make sure to not forget the extra bytes
+		switch (extraBytes) {
+			case 1:
+				temp = uint8[uint8.length - 1]
+				output += encode(temp >> 2)
+				output += encode((temp << 4) & 0x3F)
+				output += '=='
+				break
+			case 2:
+				temp = (uint8[uint8.length - 2] << 8) + (uint8[uint8.length - 1])
+				output += encode(temp >> 10)
+				output += encode((temp >> 4) & 0x3F)
+				output += encode((temp << 2) & 0x3F)
+				output += '='
+				break
+		}
+
+		return output
+	}
+
+	exports.toByteArray = b64ToByteArray
+	exports.fromByteArray = uint8ToBase64
+}(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
 },{}],6:[function(require,module,exports){
+(function (global){
 /*!
  * The buffer module from node.js, for the browser.
  *
  * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
  * @license  MIT
  */
+/* eslint-disable no-proto */
+
+'use strict'
 
 var base64 = require('base64-js')
 var ieee754 = require('ieee754')
-var isArray = require('is-array')
+var isArray = require('isarray')
 
 exports.Buffer = Buffer
 exports.SlowBuffer = SlowBuffer
@@ -353,35 +481,43 @@ var rootParent = {}
  * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
  * Opera 11.6+, iOS 4.2+.
  *
+ * Due to various browser bugs, sometimes the Object implementation will be used even
+ * when the browser supports typed arrays.
+ *
  * Note:
  *
- * - Implementation must support adding new properties to `Uint8Array` instances.
- *   Firefox 4-29 lacked support, fixed in Firefox 30+.
- *   See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
+ *   - Firefox 4-29 lacks support for adding new properties to `Uint8Array` instances,
+ *     See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
  *
- *  - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
+ *   - Safari 5-7 lacks support for changing the `Object.prototype.constructor` property
+ *     on objects.
  *
- *  - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
- *    incorrect length in some situations.
+ *   - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
  *
- * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they will
- * get the Object implementation, which is slower but will work correctly.
+ *   - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
+ *     incorrect length in some situations.
+
+ * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they
+ * get the Object implementation, which is slower but behaves correctly.
  */
-Buffer.TYPED_ARRAY_SUPPORT = (function () {
-  function Foo () {}
+Buffer.TYPED_ARRAY_SUPPORT = global.TYPED_ARRAY_SUPPORT !== undefined
+  ? global.TYPED_ARRAY_SUPPORT
+  : typedArraySupport()
+
+function typedArraySupport () {
+  function Bar () {}
   try {
-    var buf = new ArrayBuffer(0)
-    var arr = new Uint8Array(buf)
+    var arr = new Uint8Array(1)
     arr.foo = function () { return 42 }
-    arr.constructor = Foo
+    arr.constructor = Bar
     return arr.foo() === 42 && // typed array instances can be augmented
-        arr.constructor === Foo && // constructor can be set
+        arr.constructor === Bar && // constructor can be set
         typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
-        new Uint8Array(1).subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
+        arr.subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
   } catch (e) {
     return false
   }
-})()
+}
 
 function kMaxLength () {
   return Buffer.TYPED_ARRAY_SUPPORT
@@ -408,8 +544,10 @@ function Buffer (arg) {
     return new Buffer(arg)
   }
 
-  this.length = 0
-  this.parent = undefined
+  if (!Buffer.TYPED_ARRAY_SUPPORT) {
+    this.length = 0
+    this.parent = undefined
+  }
 
   // Common case.
   if (typeof arg === 'number') {
@@ -455,8 +593,13 @@ function fromObject (that, object) {
     throw new TypeError('must start with number, buffer, array or string')
   }
 
-  if (typeof ArrayBuffer !== 'undefined' && object.buffer instanceof ArrayBuffer) {
-    return fromTypedArray(that, object)
+  if (typeof ArrayBuffer !== 'undefined') {
+    if (object.buffer instanceof ArrayBuffer) {
+      return fromTypedArray(that, object)
+    }
+    if (object instanceof ArrayBuffer) {
+      return fromArrayBuffer(that, object)
+    }
   }
 
   if (object.length) return fromArrayLike(that, object)
@@ -493,6 +636,18 @@ function fromTypedArray (that, array) {
   return that
 }
 
+function fromArrayBuffer (that, array) {
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    // Return an augmented `Uint8Array` instance, for best performance
+    array.byteLength
+    that = Buffer._augment(new Uint8Array(array))
+  } else {
+    // Fallback: Return an object instance of the Buffer class
+    that = fromTypedArray(that, new Uint8Array(array))
+  }
+  return that
+}
+
 function fromArrayLike (that, array) {
   var length = checked(array.length) | 0
   that = allocate(that, length)
@@ -520,10 +675,20 @@ function fromJsonObject (that, object) {
   return that
 }
 
+if (Buffer.TYPED_ARRAY_SUPPORT) {
+  Buffer.prototype.__proto__ = Uint8Array.prototype
+  Buffer.__proto__ = Uint8Array
+} else {
+  // pre-set for values that may exist in the future
+  Buffer.prototype.length = undefined
+  Buffer.prototype.parent = undefined
+}
+
 function allocate (that, length) {
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     // Return an augmented `Uint8Array` instance, for best performance
     that = Buffer._augment(new Uint8Array(length))
+    that.__proto__ = Buffer.prototype
   } else {
     // Fallback: Return an object instance of the Buffer class
     that.length = length
@@ -610,8 +775,6 @@ Buffer.concat = function concat (list, length) {
 
   if (list.length === 0) {
     return new Buffer(0)
-  } else if (list.length === 1) {
-    return list[0]
   }
 
   var i
@@ -668,10 +831,6 @@ function byteLength (string, encoding) {
   }
 }
 Buffer.byteLength = byteLength
-
-// pre-set for values that may exist in the future
-Buffer.prototype.length = undefined
-Buffer.prototype.parent = undefined
 
 function slowToString (encoding, start, end) {
   var loweredCase = false
@@ -786,13 +945,13 @@ Buffer.prototype.indexOf = function indexOf (val, byteOffset) {
   throw new TypeError('val must be string, number or Buffer')
 }
 
-// `get` will be removed in Node 0.13+
+// `get` is deprecated
 Buffer.prototype.get = function get (offset) {
   console.log('.get() is deprecated. Access using array indexes instead.')
   return this.readUInt8(offset)
 }
 
-// `set` will be removed in Node 0.13+
+// `set` is deprecated
 Buffer.prototype.set = function set (v, offset) {
   console.log('.set() is deprecated. Access using array indexes instead.')
   return this.writeUInt8(v, offset)
@@ -933,20 +1092,99 @@ function base64Slice (buf, start, end) {
 }
 
 function utf8Slice (buf, start, end) {
-  var res = ''
-  var tmp = ''
   end = Math.min(buf.length, end)
+  var res = []
 
-  for (var i = start; i < end; i++) {
-    if (buf[i] <= 0x7F) {
-      res += decodeUtf8Char(tmp) + String.fromCharCode(buf[i])
-      tmp = ''
-    } else {
-      tmp += '%' + buf[i].toString(16)
+  var i = start
+  while (i < end) {
+    var firstByte = buf[i]
+    var codePoint = null
+    var bytesPerSequence = (firstByte > 0xEF) ? 4
+      : (firstByte > 0xDF) ? 3
+      : (firstByte > 0xBF) ? 2
+      : 1
+
+    if (i + bytesPerSequence <= end) {
+      var secondByte, thirdByte, fourthByte, tempCodePoint
+
+      switch (bytesPerSequence) {
+        case 1:
+          if (firstByte < 0x80) {
+            codePoint = firstByte
+          }
+          break
+        case 2:
+          secondByte = buf[i + 1]
+          if ((secondByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
+            if (tempCodePoint > 0x7F) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 3:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
+            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 4:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          fourthByte = buf[i + 3]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
+            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
+              codePoint = tempCodePoint
+            }
+          }
+      }
     }
+
+    if (codePoint === null) {
+      // we did not generate a valid codePoint so insert a
+      // replacement char (U+FFFD) and advance only 1 byte
+      codePoint = 0xFFFD
+      bytesPerSequence = 1
+    } else if (codePoint > 0xFFFF) {
+      // encode to utf16 (surrogate pair dance)
+      codePoint -= 0x10000
+      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
+      codePoint = 0xDC00 | codePoint & 0x3FF
+    }
+
+    res.push(codePoint)
+    i += bytesPerSequence
   }
 
-  return res + decodeUtf8Char(tmp)
+  return decodeCodePointsArray(res)
+}
+
+// Based on http://stackoverflow.com/a/22747272/680742, the browser with
+// the lowest limit is Chrome, with 0x10000 args.
+// We go 1 magnitude less, for safety
+var MAX_ARGUMENTS_LENGTH = 0x1000
+
+function decodeCodePointsArray (codePoints) {
+  var len = codePoints.length
+  if (len <= MAX_ARGUMENTS_LENGTH) {
+    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
+  }
+
+  // Decode in chunks to avoid "call stack size exceeded".
+  var res = ''
+  var i = 0
+  while (i < len) {
+    res += String.fromCharCode.apply(
+      String,
+      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
+    )
+  }
+  return res
 }
 
 function asciiSlice (buf, start, end) {
@@ -1235,7 +1473,7 @@ Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
   offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
   if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
-  this[offset] = value
+  this[offset] = (value & 0xff)
   return offset + 1
 }
 
@@ -1252,7 +1490,7 @@ Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert
   offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = value
+    this[offset] = (value & 0xff)
     this[offset + 1] = (value >>> 8)
   } else {
     objectWriteUInt16(this, value, offset, true)
@@ -1266,7 +1504,7 @@ Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert
   if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     this[offset] = (value >>> 8)
-    this[offset + 1] = value
+    this[offset + 1] = (value & 0xff)
   } else {
     objectWriteUInt16(this, value, offset, false)
   }
@@ -1288,7 +1526,7 @@ Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert
     this[offset + 3] = (value >>> 24)
     this[offset + 2] = (value >>> 16)
     this[offset + 1] = (value >>> 8)
-    this[offset] = value
+    this[offset] = (value & 0xff)
   } else {
     objectWriteUInt32(this, value, offset, true)
   }
@@ -1303,7 +1541,7 @@ Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert
     this[offset] = (value >>> 24)
     this[offset + 1] = (value >>> 16)
     this[offset + 2] = (value >>> 8)
-    this[offset + 3] = value
+    this[offset + 3] = (value & 0xff)
   } else {
     objectWriteUInt32(this, value, offset, false)
   }
@@ -1356,7 +1594,7 @@ Buffer.prototype.writeInt8 = function writeInt8 (value, offset, noAssert) {
   if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
   if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
   if (value < 0) value = 0xff + value + 1
-  this[offset] = value
+  this[offset] = (value & 0xff)
   return offset + 1
 }
 
@@ -1365,7 +1603,7 @@ Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) 
   offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = value
+    this[offset] = (value & 0xff)
     this[offset + 1] = (value >>> 8)
   } else {
     objectWriteUInt16(this, value, offset, true)
@@ -1379,7 +1617,7 @@ Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) 
   if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     this[offset] = (value >>> 8)
-    this[offset + 1] = value
+    this[offset + 1] = (value & 0xff)
   } else {
     objectWriteUInt16(this, value, offset, false)
   }
@@ -1391,7 +1629,7 @@ Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) 
   offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = value
+    this[offset] = (value & 0xff)
     this[offset + 1] = (value >>> 8)
     this[offset + 2] = (value >>> 16)
     this[offset + 3] = (value >>> 24)
@@ -1410,7 +1648,7 @@ Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) 
     this[offset] = (value >>> 24)
     this[offset + 1] = (value >>> 16)
     this[offset + 2] = (value >>> 8)
-    this[offset + 3] = value
+    this[offset + 3] = (value & 0xff)
   } else {
     objectWriteUInt32(this, value, offset, false)
   }
@@ -1481,9 +1719,16 @@ Buffer.prototype.copy = function copy (target, targetStart, start, end) {
   }
 
   var len = end - start
+  var i
 
-  if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
-    for (var i = 0; i < len; i++) {
+  if (this === target && start < targetStart && targetStart < end) {
+    // descending copy from end
+    for (i = len - 1; i >= 0; i--) {
+      target[i + targetStart] = this[i + start]
+    }
+  } else if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
+    // ascending copy from start
+    for (i = 0; i < len; i++) {
       target[i + targetStart] = this[i + start]
     }
   } else {
@@ -1559,7 +1804,7 @@ Buffer._augment = function _augment (arr) {
   // save reference to original Uint8Array set method before overwriting
   arr._set = arr.set
 
-  // deprecated, will be removed in node 0.13+
+  // deprecated
   arr.get = BP.get
   arr.set = BP.set
 
@@ -1615,7 +1860,7 @@ Buffer._augment = function _augment (arr) {
   return arr
 }
 
-var INVALID_BASE64_RE = /[^+\/0-9A-z\-]/g
+var INVALID_BASE64_RE = /[^+\/0-9A-Za-z-_]/g
 
 function base64clean (str) {
   // Node strips out invalid characters like \n and \t from the string, base64-js does not
@@ -1645,28 +1890,15 @@ function utf8ToBytes (string, units) {
   var length = string.length
   var leadSurrogate = null
   var bytes = []
-  var i = 0
 
-  for (; i < length; i++) {
+  for (var i = 0; i < length; i++) {
     codePoint = string.charCodeAt(i)
 
     // is surrogate component
     if (codePoint > 0xD7FF && codePoint < 0xE000) {
       // last char was a lead
-      if (leadSurrogate) {
-        // 2 leads in a row
-        if (codePoint < 0xDC00) {
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          leadSurrogate = codePoint
-          continue
-        } else {
-          // valid surrogate pair
-          codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
-          leadSurrogate = null
-        }
-      } else {
+      if (!leadSurrogate) {
         // no lead yet
-
         if (codePoint > 0xDBFF) {
           // unexpected trail
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
@@ -1675,17 +1907,29 @@ function utf8ToBytes (string, units) {
           // unpaired lead
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
           continue
-        } else {
-          // valid lead
-          leadSurrogate = codePoint
-          continue
         }
+
+        // valid lead
+        leadSurrogate = codePoint
+
+        continue
       }
+
+      // 2 leads in a row
+      if (codePoint < 0xDC00) {
+        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+        leadSurrogate = codePoint
+        continue
+      }
+
+      // valid surrogate pair
+      codePoint = (leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00) + 0x10000
     } else if (leadSurrogate) {
       // valid bmp char, but last char was a lead
       if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-      leadSurrogate = null
     }
+
+    leadSurrogate = null
 
     // encode utf8
     if (codePoint < 0x80) {
@@ -1704,7 +1948,7 @@ function utf8ToBytes (string, units) {
         codePoint >> 0x6 & 0x3F | 0x80,
         codePoint & 0x3F | 0x80
       )
-    } else if (codePoint < 0x200000) {
+    } else if (codePoint < 0x110000) {
       if ((units -= 4) < 0) break
       bytes.push(
         codePoint >> 0x12 | 0xF0,
@@ -1757,139 +2001,13 @@ function blitBuffer (src, dst, offset, length) {
   return i
 }
 
-function decodeUtf8Char (str) {
-  try {
-    return decodeURIComponent(str)
-  } catch (err) {
-    return String.fromCharCode(0xFFFD) // UTF 8 invalid char
-  }
-}
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"base64-js":5,"ieee754":8,"isarray":7}],7:[function(require,module,exports){
+var toString = {}.toString;
 
-},{"base64-js":7,"ieee754":8,"is-array":9}],7:[function(require,module,exports){
-var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-;(function (exports) {
-	'use strict';
-
-  var Arr = (typeof Uint8Array !== 'undefined')
-    ? Uint8Array
-    : Array
-
-	var PLUS   = '+'.charCodeAt(0)
-	var SLASH  = '/'.charCodeAt(0)
-	var NUMBER = '0'.charCodeAt(0)
-	var LOWER  = 'a'.charCodeAt(0)
-	var UPPER  = 'A'.charCodeAt(0)
-	var PLUS_URL_SAFE = '-'.charCodeAt(0)
-	var SLASH_URL_SAFE = '_'.charCodeAt(0)
-
-	function decode (elt) {
-		var code = elt.charCodeAt(0)
-		if (code === PLUS ||
-		    code === PLUS_URL_SAFE)
-			return 62 // '+'
-		if (code === SLASH ||
-		    code === SLASH_URL_SAFE)
-			return 63 // '/'
-		if (code < NUMBER)
-			return -1 //no match
-		if (code < NUMBER + 10)
-			return code - NUMBER + 26 + 26
-		if (code < UPPER + 26)
-			return code - UPPER
-		if (code < LOWER + 26)
-			return code - LOWER + 26
-	}
-
-	function b64ToByteArray (b64) {
-		var i, j, l, tmp, placeHolders, arr
-
-		if (b64.length % 4 > 0) {
-			throw new Error('Invalid string. Length must be a multiple of 4')
-		}
-
-		// the number of equal signs (place holders)
-		// if there are two placeholders, than the two characters before it
-		// represent one byte
-		// if there is only one, then the three characters before it represent 2 bytes
-		// this is just a cheap hack to not do indexOf twice
-		var len = b64.length
-		placeHolders = '=' === b64.charAt(len - 2) ? 2 : '=' === b64.charAt(len - 1) ? 1 : 0
-
-		// base64 is 4/3 + up to two characters of the original data
-		arr = new Arr(b64.length * 3 / 4 - placeHolders)
-
-		// if there are placeholders, only get up to the last complete 4 chars
-		l = placeHolders > 0 ? b64.length - 4 : b64.length
-
-		var L = 0
-
-		function push (v) {
-			arr[L++] = v
-		}
-
-		for (i = 0, j = 0; i < l; i += 4, j += 3) {
-			tmp = (decode(b64.charAt(i)) << 18) | (decode(b64.charAt(i + 1)) << 12) | (decode(b64.charAt(i + 2)) << 6) | decode(b64.charAt(i + 3))
-			push((tmp & 0xFF0000) >> 16)
-			push((tmp & 0xFF00) >> 8)
-			push(tmp & 0xFF)
-		}
-
-		if (placeHolders === 2) {
-			tmp = (decode(b64.charAt(i)) << 2) | (decode(b64.charAt(i + 1)) >> 4)
-			push(tmp & 0xFF)
-		} else if (placeHolders === 1) {
-			tmp = (decode(b64.charAt(i)) << 10) | (decode(b64.charAt(i + 1)) << 4) | (decode(b64.charAt(i + 2)) >> 2)
-			push((tmp >> 8) & 0xFF)
-			push(tmp & 0xFF)
-		}
-
-		return arr
-	}
-
-	function uint8ToBase64 (uint8) {
-		var i,
-			extraBytes = uint8.length % 3, // if we have 1 byte left, pad 2 bytes
-			output = "",
-			temp, length
-
-		function encode (num) {
-			return lookup.charAt(num)
-		}
-
-		function tripletToBase64 (num) {
-			return encode(num >> 18 & 0x3F) + encode(num >> 12 & 0x3F) + encode(num >> 6 & 0x3F) + encode(num & 0x3F)
-		}
-
-		// go through the array every three bytes, we'll deal with trailing stuff later
-		for (i = 0, length = uint8.length - extraBytes; i < length; i += 3) {
-			temp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
-			output += tripletToBase64(temp)
-		}
-
-		// pad the end with zeros, but make sure to not forget the extra bytes
-		switch (extraBytes) {
-			case 1:
-				temp = uint8[uint8.length - 1]
-				output += encode(temp >> 2)
-				output += encode((temp << 4) & 0x3F)
-				output += '=='
-				break
-			case 2:
-				temp = (uint8[uint8.length - 2] << 8) + (uint8[uint8.length - 1])
-				output += encode(temp >> 10)
-				output += encode((temp >> 4) & 0x3F)
-				output += encode((temp << 2) & 0x3F)
-				output += '='
-				break
-		}
-
-		return output
-	}
-
-	exports.toByteArray = b64ToByteArray
-	exports.fromByteArray = uint8ToBase64
-}(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
+module.exports = Array.isArray || function (arr) {
+  return toString.call(arr) == '[object Array]';
+};
 
 },{}],8:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
@@ -1978,41 +2096,98 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
 }
 
 },{}],9:[function(require,module,exports){
+(function (global){
+'use strict';
+var Mutation = global.MutationObserver || global.WebKitMutationObserver;
 
-/**
- * isArray
- */
+var scheduleDrain;
 
-var isArray = Array.isArray;
+{
+  if (Mutation) {
+    var called = 0;
+    var observer = new Mutation(nextTick);
+    var element = global.document.createTextNode('');
+    observer.observe(element, {
+      characterData: true
+    });
+    scheduleDrain = function () {
+      element.data = (called = ++called % 2);
+    };
+  } else if (!global.setImmediate && typeof global.MessageChannel !== 'undefined') {
+    var channel = new global.MessageChannel();
+    channel.port1.onmessage = nextTick;
+    scheduleDrain = function () {
+      channel.port2.postMessage(0);
+    };
+  } else if ('document' in global && 'onreadystatechange' in global.document.createElement('script')) {
+    scheduleDrain = function () {
 
-/**
- * toString
- */
+      // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
+      // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
+      var scriptEl = global.document.createElement('script');
+      scriptEl.onreadystatechange = function () {
+        nextTick();
 
-var str = Object.prototype.toString;
+        scriptEl.onreadystatechange = null;
+        scriptEl.parentNode.removeChild(scriptEl);
+        scriptEl = null;
+      };
+      global.document.documentElement.appendChild(scriptEl);
+    };
+  } else {
+    scheduleDrain = function () {
+      setTimeout(nextTick, 0);
+    };
+  }
+}
 
-/**
- * Whether or not the given `val`
- * is an array.
- *
- * example:
- *
- *        isArray([]);
- *        // > true
- *        isArray(arguments);
- *        // > false
- *        isArray('');
- *        // > false
- *
- * @param {mixed} val
- * @return {bool}
- */
+var draining;
+var queue = [];
+//named nextTick for less confusing stack traces
+function nextTick() {
+  draining = true;
+  var i, oldQueue;
+  var len = queue.length;
+  while (len) {
+    oldQueue = queue;
+    queue = [];
+    i = -1;
+    while (++i < len) {
+      oldQueue[i]();
+    }
+    len = queue.length;
+  }
+  draining = false;
+}
 
-module.exports = isArray || function (val) {
-  return !! val && '[object Array]' == str.call(val);
-};
+module.exports = immediate;
+function immediate(task) {
+  if (queue.push(task) === 1 && !draining) {
+    scheduleDrain();
+  }
+}
 
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],10:[function(require,module,exports){
+/**
+ * Determine if an object is Buffer
+ *
+ * Author:   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * License:  MIT
+ *
+ * `npm install is-buffer`
+ */
+
+module.exports = function (obj) {
+  return !!(obj != null &&
+    (obj._isBuffer || // For Safari 5-7 (missing Object.prototype.constructor)
+      (obj.constructor &&
+      typeof obj.constructor.isBuffer === 'function' &&
+      obj.constructor.isBuffer(obj))
+    ))
+}
+
+},{}],11:[function(require,module,exports){
 'use strict';
 // private property
 var _keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
@@ -2084,7 +2259,7 @@ exports.decode = function(input, utf8) {
 
 };
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 'use strict';
 function CompressedObject() {
     this.compressedSize = 0;
@@ -2114,7 +2289,7 @@ CompressedObject.prototype = {
 };
 module.exports = CompressedObject;
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 'use strict';
 exports.STORE = {
     magic: "\x00\x00",
@@ -2129,7 +2304,7 @@ exports.STORE = {
 };
 exports.DEFLATE = require('./flate');
 
-},{"./flate":17}],13:[function(require,module,exports){
+},{"./flate":18}],14:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -2233,7 +2408,7 @@ module.exports = function crc32(input, crc) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./utils":30}],14:[function(require,module,exports){
+},{"./utils":31}],15:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -2342,7 +2517,7 @@ DataReader.prototype = {
 };
 module.exports = DataReader;
 
-},{"./utils":30}],15:[function(require,module,exports){
+},{"./utils":31}],16:[function(require,module,exports){
 'use strict';
 exports.base64 = false;
 exports.binary = false;
@@ -2355,7 +2530,7 @@ exports.comment = null;
 exports.unixPermissions = null;
 exports.dosPermissions = null;
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -2462,7 +2637,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./utils":30}],17:[function(require,module,exports){
+},{"./utils":31}],18:[function(require,module,exports){
 'use strict';
 var USE_TYPEDARRAY = (typeof Uint8Array !== 'undefined') && (typeof Uint16Array !== 'undefined') && (typeof Uint32Array !== 'undefined');
 
@@ -2480,7 +2655,7 @@ exports.uncompress =  function(input) {
     return pako.inflateRaw(input);
 };
 
-},{"pako":33}],18:[function(require,module,exports){
+},{"pako":49}],19:[function(require,module,exports){
 'use strict';
 
 var base64 = require('./base64');
@@ -2561,7 +2736,7 @@ JSZip.base64 = {
 JSZip.compressions = require('./compressions');
 module.exports = JSZip;
 
-},{"./base64":10,"./compressions":12,"./defaults":15,"./deprecatedPublicUtils":16,"./load":19,"./object":22,"./support":26}],19:[function(require,module,exports){
+},{"./base64":11,"./compressions":13,"./defaults":16,"./deprecatedPublicUtils":17,"./load":20,"./object":23,"./support":27}],20:[function(require,module,exports){
 'use strict';
 var base64 = require('./base64');
 var ZipEntries = require('./zipEntries');
@@ -2594,7 +2769,7 @@ module.exports = function(data, options) {
     return this;
 };
 
-},{"./base64":10,"./zipEntries":31}],20:[function(require,module,exports){
+},{"./base64":11,"./zipEntries":32}],21:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 module.exports = function(data, encoding){
@@ -2605,7 +2780,7 @@ module.exports.test = function(b){
 };
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":6}],21:[function(require,module,exports){
+},{"buffer":6}],22:[function(require,module,exports){
 'use strict';
 var Uint8ArrayReader = require('./uint8ArrayReader');
 
@@ -2627,7 +2802,7 @@ NodeBufferReader.prototype.readData = function(size) {
 };
 module.exports = NodeBufferReader;
 
-},{"./uint8ArrayReader":27}],22:[function(require,module,exports){
+},{"./uint8ArrayReader":28}],23:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var utils = require('./utils');
@@ -3512,7 +3687,7 @@ var out = {
 };
 module.exports = out;
 
-},{"./base64":10,"./compressedObject":11,"./compressions":12,"./crc32":13,"./defaults":15,"./nodeBuffer":20,"./signature":23,"./stringWriter":25,"./support":26,"./uint8ArrayWriter":28,"./utf8":29,"./utils":30}],23:[function(require,module,exports){
+},{"./base64":11,"./compressedObject":12,"./compressions":13,"./crc32":14,"./defaults":16,"./nodeBuffer":21,"./signature":24,"./stringWriter":26,"./support":27,"./uint8ArrayWriter":29,"./utf8":30,"./utils":31}],24:[function(require,module,exports){
 'use strict';
 exports.LOCAL_FILE_HEADER = "PK\x03\x04";
 exports.CENTRAL_FILE_HEADER = "PK\x01\x02";
@@ -3521,7 +3696,7 @@ exports.ZIP64_CENTRAL_DIRECTORY_LOCATOR = "PK\x06\x07";
 exports.ZIP64_CENTRAL_DIRECTORY_END = "PK\x06\x06";
 exports.DATA_DESCRIPTOR = "PK\x07\x08";
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 var utils = require('./utils');
@@ -3559,7 +3734,7 @@ StringReader.prototype.readData = function(size) {
 };
 module.exports = StringReader;
 
-},{"./dataReader":14,"./utils":30}],25:[function(require,module,exports){
+},{"./dataReader":15,"./utils":31}],26:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -3591,7 +3766,7 @@ StringWriter.prototype = {
 
 module.exports = StringWriter;
 
-},{"./utils":30}],26:[function(require,module,exports){
+},{"./utils":31}],27:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 exports.base64 = true;
@@ -3629,7 +3804,7 @@ else {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":6}],27:[function(require,module,exports){
+},{"buffer":6}],28:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 
@@ -3678,7 +3853,7 @@ Uint8ArrayReader.prototype.readData = function(size) {
 };
 module.exports = Uint8ArrayReader;
 
-},{"./dataReader":14}],28:[function(require,module,exports){
+},{"./dataReader":15}],29:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -3716,7 +3891,7 @@ Uint8ArrayWriter.prototype = {
 
 module.exports = Uint8ArrayWriter;
 
-},{"./utils":30}],29:[function(require,module,exports){
+},{"./utils":31}],30:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -3925,7 +4100,7 @@ exports.utf8decode = function utf8decode(buf) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./nodeBuffer":20,"./support":26,"./utils":30}],30:[function(require,module,exports){
+},{"./nodeBuffer":21,"./support":27,"./utils":31}],31:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var compressions = require('./compressions');
@@ -4253,7 +4428,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./compressions":12,"./nodeBuffer":20,"./support":26}],31:[function(require,module,exports){
+},{"./compressions":13,"./nodeBuffer":21,"./support":27}],32:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var NodeBufferReader = require('./nodeBufferReader');
@@ -4476,7 +4651,7 @@ ZipEntries.prototype = {
 // }}} end of ZipEntries
 module.exports = ZipEntries;
 
-},{"./nodeBufferReader":21,"./object":22,"./signature":23,"./stringReader":24,"./support":26,"./uint8ArrayReader":27,"./utils":30,"./zipEntry":32}],32:[function(require,module,exports){
+},{"./nodeBufferReader":22,"./object":23,"./signature":24,"./stringReader":25,"./support":27,"./uint8ArrayReader":28,"./utils":31,"./zipEntry":33}],33:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var utils = require('./utils');
@@ -4788,7 +4963,1432 @@ ZipEntry.prototype = {
 };
 module.exports = ZipEntry;
 
-},{"./compressedObject":11,"./object":22,"./stringReader":24,"./utils":30}],33:[function(require,module,exports){
+},{"./compressedObject":12,"./object":23,"./stringReader":25,"./utils":31}],34:[function(require,module,exports){
+'use strict';
+
+module.exports = INTERNAL;
+
+function INTERNAL() {}
+},{}],35:[function(require,module,exports){
+'use strict';
+var Promise = require('./promise');
+var reject = require('./reject');
+var resolve = require('./resolve');
+var INTERNAL = require('./INTERNAL');
+var handlers = require('./handlers');
+module.exports = all;
+function all(iterable) {
+  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
+    return reject(new TypeError('must be an array'));
+  }
+
+  var len = iterable.length;
+  var called = false;
+  if (!len) {
+    return resolve([]);
+  }
+
+  var values = new Array(len);
+  var resolved = 0;
+  var i = -1;
+  var promise = new Promise(INTERNAL);
+  
+  while (++i < len) {
+    allResolver(iterable[i], i);
+  }
+  return promise;
+  function allResolver(value, i) {
+    resolve(value).then(resolveFromAll, function (error) {
+      if (!called) {
+        called = true;
+        handlers.reject(promise, error);
+      }
+    });
+    function resolveFromAll(outValue) {
+      values[i] = outValue;
+      if (++resolved === len & !called) {
+        called = true;
+        handlers.resolve(promise, values);
+      }
+    }
+  }
+}
+},{"./INTERNAL":34,"./handlers":36,"./promise":38,"./reject":41,"./resolve":42}],36:[function(require,module,exports){
+'use strict';
+var tryCatch = require('./tryCatch');
+var resolveThenable = require('./resolveThenable');
+var states = require('./states');
+
+exports.resolve = function (self, value) {
+  var result = tryCatch(getThen, value);
+  if (result.status === 'error') {
+    return exports.reject(self, result.value);
+  }
+  var thenable = result.value;
+
+  if (thenable) {
+    resolveThenable.safely(self, thenable);
+  } else {
+    self.state = states.FULFILLED;
+    self.outcome = value;
+    var i = -1;
+    var len = self.queue.length;
+    while (++i < len) {
+      self.queue[i].callFulfilled(value);
+    }
+  }
+  return self;
+};
+exports.reject = function (self, error) {
+  self.state = states.REJECTED;
+  self.outcome = error;
+  var i = -1;
+  var len = self.queue.length;
+  while (++i < len) {
+    self.queue[i].callRejected(error);
+  }
+  return self;
+};
+
+function getThen(obj) {
+  // Make sure we only access the accessor once as required by the spec
+  var then = obj && obj.then;
+  if (obj && typeof obj === 'object' && typeof then === 'function') {
+    return function appyThen() {
+      then.apply(obj, arguments);
+    };
+  }
+}
+
+},{"./resolveThenable":43,"./states":44,"./tryCatch":45}],37:[function(require,module,exports){
+module.exports = exports = require('./promise');
+
+exports.resolve = require('./resolve');
+exports.reject = require('./reject');
+exports.all = require('./all');
+exports.race = require('./race');
+
+},{"./all":35,"./promise":38,"./race":40,"./reject":41,"./resolve":42}],38:[function(require,module,exports){
+'use strict';
+
+var unwrap = require('./unwrap');
+var INTERNAL = require('./INTERNAL');
+var resolveThenable = require('./resolveThenable');
+var states = require('./states');
+var QueueItem = require('./queueItem');
+
+module.exports = Promise;
+function Promise(resolver) {
+  if (!(this instanceof Promise)) {
+    return new Promise(resolver);
+  }
+  if (typeof resolver !== 'function') {
+    throw new TypeError('resolver must be a function');
+  }
+  this.state = states.PENDING;
+  this.queue = [];
+  this.outcome = void 0;
+  if (resolver !== INTERNAL) {
+    resolveThenable.safely(this, resolver);
+  }
+}
+
+Promise.prototype['catch'] = function (onRejected) {
+  return this.then(null, onRejected);
+};
+Promise.prototype.then = function (onFulfilled, onRejected) {
+  if (typeof onFulfilled !== 'function' && this.state === states.FULFILLED ||
+    typeof onRejected !== 'function' && this.state === states.REJECTED) {
+    return this;
+  }
+  var promise = new Promise(INTERNAL);
+  if (this.state !== states.PENDING) {
+    var resolver = this.state === states.FULFILLED ? onFulfilled : onRejected;
+    unwrap(promise, resolver, this.outcome);
+  } else {
+    this.queue.push(new QueueItem(promise, onFulfilled, onRejected));
+  }
+
+  return promise;
+};
+
+},{"./INTERNAL":34,"./queueItem":39,"./resolveThenable":43,"./states":44,"./unwrap":46}],39:[function(require,module,exports){
+'use strict';
+var handlers = require('./handlers');
+var unwrap = require('./unwrap');
+
+module.exports = QueueItem;
+function QueueItem(promise, onFulfilled, onRejected) {
+  this.promise = promise;
+  if (typeof onFulfilled === 'function') {
+    this.onFulfilled = onFulfilled;
+    this.callFulfilled = this.otherCallFulfilled;
+  }
+  if (typeof onRejected === 'function') {
+    this.onRejected = onRejected;
+    this.callRejected = this.otherCallRejected;
+  }
+}
+QueueItem.prototype.callFulfilled = function (value) {
+  handlers.resolve(this.promise, value);
+};
+QueueItem.prototype.otherCallFulfilled = function (value) {
+  unwrap(this.promise, this.onFulfilled, value);
+};
+QueueItem.prototype.callRejected = function (value) {
+  handlers.reject(this.promise, value);
+};
+QueueItem.prototype.otherCallRejected = function (value) {
+  unwrap(this.promise, this.onRejected, value);
+};
+
+},{"./handlers":36,"./unwrap":46}],40:[function(require,module,exports){
+'use strict';
+var Promise = require('./promise');
+var reject = require('./reject');
+var resolve = require('./resolve');
+var INTERNAL = require('./INTERNAL');
+var handlers = require('./handlers');
+module.exports = race;
+function race(iterable) {
+  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
+    return reject(new TypeError('must be an array'));
+  }
+
+  var len = iterable.length;
+  var called = false;
+  if (!len) {
+    return resolve([]);
+  }
+
+  var i = -1;
+  var promise = new Promise(INTERNAL);
+
+  while (++i < len) {
+    resolver(iterable[i]);
+  }
+  return promise;
+  function resolver(value) {
+    resolve(value).then(function (response) {
+      if (!called) {
+        called = true;
+        handlers.resolve(promise, response);
+      }
+    }, function (error) {
+      if (!called) {
+        called = true;
+        handlers.reject(promise, error);
+      }
+    });
+  }
+}
+
+},{"./INTERNAL":34,"./handlers":36,"./promise":38,"./reject":41,"./resolve":42}],41:[function(require,module,exports){
+'use strict';
+
+var Promise = require('./promise');
+var INTERNAL = require('./INTERNAL');
+var handlers = require('./handlers');
+module.exports = reject;
+
+function reject(reason) {
+	var promise = new Promise(INTERNAL);
+	return handlers.reject(promise, reason);
+}
+},{"./INTERNAL":34,"./handlers":36,"./promise":38}],42:[function(require,module,exports){
+'use strict';
+
+var Promise = require('./promise');
+var INTERNAL = require('./INTERNAL');
+var handlers = require('./handlers');
+module.exports = resolve;
+
+var FALSE = handlers.resolve(new Promise(INTERNAL), false);
+var NULL = handlers.resolve(new Promise(INTERNAL), null);
+var UNDEFINED = handlers.resolve(new Promise(INTERNAL), void 0);
+var ZERO = handlers.resolve(new Promise(INTERNAL), 0);
+var EMPTYSTRING = handlers.resolve(new Promise(INTERNAL), '');
+
+function resolve(value) {
+  if (value) {
+    if (value instanceof Promise) {
+      return value;
+    }
+    return handlers.resolve(new Promise(INTERNAL), value);
+  }
+  var valueType = typeof value;
+  switch (valueType) {
+    case 'boolean':
+      return FALSE;
+    case 'undefined':
+      return UNDEFINED;
+    case 'object':
+      return NULL;
+    case 'number':
+      return ZERO;
+    case 'string':
+      return EMPTYSTRING;
+  }
+}
+},{"./INTERNAL":34,"./handlers":36,"./promise":38}],43:[function(require,module,exports){
+'use strict';
+var handlers = require('./handlers');
+var tryCatch = require('./tryCatch');
+function safelyResolveThenable(self, thenable) {
+  // Either fulfill, reject or reject with error
+  var called = false;
+  function onError(value) {
+    if (called) {
+      return;
+    }
+    called = true;
+    handlers.reject(self, value);
+  }
+
+  function onSuccess(value) {
+    if (called) {
+      return;
+    }
+    called = true;
+    handlers.resolve(self, value);
+  }
+
+  function tryToUnwrap() {
+    thenable(onSuccess, onError);
+  }
+  
+  var result = tryCatch(tryToUnwrap);
+  if (result.status === 'error') {
+    onError(result.value);
+  }
+}
+exports.safely = safelyResolveThenable;
+},{"./handlers":36,"./tryCatch":45}],44:[function(require,module,exports){
+// Lazy man's symbols for states
+
+exports.REJECTED = ['REJECTED'];
+exports.FULFILLED = ['FULFILLED'];
+exports.PENDING = ['PENDING'];
+
+},{}],45:[function(require,module,exports){
+'use strict';
+
+module.exports = tryCatch;
+
+function tryCatch(func, value) {
+  var out = {};
+  try {
+    out.value = func(value);
+    out.status = 'success';
+  } catch (e) {
+    out.status = 'error';
+    out.value = e;
+  }
+  return out;
+}
+},{}],46:[function(require,module,exports){
+'use strict';
+
+var immediate = require('immediate');
+var handlers = require('./handlers');
+module.exports = unwrap;
+
+function unwrap(promise, func, value) {
+  immediate(function () {
+    var returnValue;
+    try {
+      returnValue = func(value);
+    } catch (e) {
+      return handlers.reject(promise, e);
+    }
+    if (returnValue === promise) {
+      handlers.reject(promise, new TypeError('Cannot resolve promise with itself'));
+    } else {
+      handlers.resolve(promise, returnValue);
+    }
+  });
+}
+},{"./handlers":36,"immediate":9}],47:[function(require,module,exports){
+;(function () { // closure for web browsers
+
+if (typeof module === 'object' && module.exports) {
+  module.exports = LRUCache
+} else {
+  // just set the global for non-node platforms.
+  this.LRUCache = LRUCache
+}
+
+function hOP (obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key)
+}
+
+function naiveLength () { return 1 }
+
+var didTypeWarning = false
+function typeCheckKey(key) {
+  if (!didTypeWarning && typeof key !== 'string' && typeof key !== 'number') {
+    didTypeWarning = true
+    console.error(new TypeError("LRU: key must be a string or number. Almost certainly a bug! " + typeof key).stack)
+  }
+}
+
+function LRUCache (options) {
+  if (!(this instanceof LRUCache))
+    return new LRUCache(options)
+
+  if (typeof options === 'number')
+    options = { max: options }
+
+  if (!options)
+    options = {}
+
+  this._max = options.max
+  // Kind of weird to have a default max of Infinity, but oh well.
+  if (!this._max || !(typeof this._max === "number") || this._max <= 0 )
+    this._max = Infinity
+
+  this._lengthCalculator = options.length || naiveLength
+  if (typeof this._lengthCalculator !== "function")
+    this._lengthCalculator = naiveLength
+
+  this._allowStale = options.stale || false
+  this._maxAge = options.maxAge || null
+  this._dispose = options.dispose
+  this.reset()
+}
+
+// resize the cache when the max changes.
+Object.defineProperty(LRUCache.prototype, "max",
+  { set : function (mL) {
+      if (!mL || !(typeof mL === "number") || mL <= 0 ) mL = Infinity
+      this._max = mL
+      if (this._length > this._max) trim(this)
+    }
+  , get : function () { return this._max }
+  , enumerable : true
+  })
+
+// resize the cache when the lengthCalculator changes.
+Object.defineProperty(LRUCache.prototype, "lengthCalculator",
+  { set : function (lC) {
+      if (typeof lC !== "function") {
+        this._lengthCalculator = naiveLength
+        this._length = this._itemCount
+        for (var key in this._cache) {
+          this._cache[key].length = 1
+        }
+      } else {
+        this._lengthCalculator = lC
+        this._length = 0
+        for (var key in this._cache) {
+          this._cache[key].length = this._lengthCalculator(this._cache[key].value)
+          this._length += this._cache[key].length
+        }
+      }
+
+      if (this._length > this._max) trim(this)
+    }
+  , get : function () { return this._lengthCalculator }
+  , enumerable : true
+  })
+
+Object.defineProperty(LRUCache.prototype, "length",
+  { get : function () { return this._length }
+  , enumerable : true
+  })
+
+
+Object.defineProperty(LRUCache.prototype, "itemCount",
+  { get : function () { return this._itemCount }
+  , enumerable : true
+  })
+
+LRUCache.prototype.forEach = function (fn, thisp) {
+  thisp = thisp || this
+  var i = 0
+  var itemCount = this._itemCount
+
+  for (var k = this._mru - 1; k >= 0 && i < itemCount; k--) if (this._lruList[k]) {
+    i++
+    var hit = this._lruList[k]
+    if (isStale(this, hit)) {
+      del(this, hit)
+      if (!this._allowStale) hit = undefined
+    }
+    if (hit) {
+      fn.call(thisp, hit.value, hit.key, this)
+    }
+  }
+}
+
+LRUCache.prototype.keys = function () {
+  var keys = new Array(this._itemCount)
+  var i = 0
+  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
+    var hit = this._lruList[k]
+    keys[i++] = hit.key
+  }
+  return keys
+}
+
+LRUCache.prototype.values = function () {
+  var values = new Array(this._itemCount)
+  var i = 0
+  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
+    var hit = this._lruList[k]
+    values[i++] = hit.value
+  }
+  return values
+}
+
+LRUCache.prototype.reset = function () {
+  if (this._dispose && this._cache) {
+    for (var k in this._cache) {
+      this._dispose(k, this._cache[k].value)
+    }
+  }
+
+  this._cache = Object.create(null) // hash of items by key
+  this._lruList = Object.create(null) // list of items in order of use recency
+  this._mru = 0 // most recently used
+  this._lru = 0 // least recently used
+  this._length = 0 // number of items in the list
+  this._itemCount = 0
+}
+
+LRUCache.prototype.dump = function () {
+  var arr = []
+  var i = 0
+
+  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
+    var hit = this._lruList[k]
+    if (!isStale(this, hit)) {
+      //Do not store staled hits
+      ++i
+      arr.push({
+        k: hit.key,
+        v: hit.value,
+        e: hit.now + (hit.maxAge || 0)
+      });
+    }
+  }
+  //arr has the most read first
+  return arr
+}
+
+LRUCache.prototype.dumpLru = function () {
+  return this._lruList
+}
+
+LRUCache.prototype.set = function (key, value, maxAge) {
+  maxAge = maxAge || this._maxAge
+  typeCheckKey(key)
+
+  var now = maxAge ? Date.now() : 0
+  var len = this._lengthCalculator(value)
+
+  if (hOP(this._cache, key)) {
+    if (len > this._max) {
+      del(this, this._cache[key])
+      return false
+    }
+    // dispose of the old one before overwriting
+    if (this._dispose)
+      this._dispose(key, this._cache[key].value)
+
+    this._cache[key].now = now
+    this._cache[key].maxAge = maxAge
+    this._cache[key].value = value
+    this._length += (len - this._cache[key].length)
+    this._cache[key].length = len
+    this.get(key)
+
+    if (this._length > this._max)
+      trim(this)
+
+    return true
+  }
+
+  var hit = new Entry(key, value, this._mru++, len, now, maxAge)
+
+  // oversized objects fall out of cache automatically.
+  if (hit.length > this._max) {
+    if (this._dispose) this._dispose(key, value)
+    return false
+  }
+
+  this._length += hit.length
+  this._lruList[hit.lu] = this._cache[key] = hit
+  this._itemCount ++
+
+  if (this._length > this._max)
+    trim(this)
+
+  return true
+}
+
+LRUCache.prototype.has = function (key) {
+  typeCheckKey(key)
+  if (!hOP(this._cache, key)) return false
+  var hit = this._cache[key]
+  if (isStale(this, hit)) {
+    return false
+  }
+  return true
+}
+
+LRUCache.prototype.get = function (key) {
+  typeCheckKey(key)
+  return get(this, key, true)
+}
+
+LRUCache.prototype.peek = function (key) {
+  typeCheckKey(key)
+  return get(this, key, false)
+}
+
+LRUCache.prototype.pop = function () {
+  var hit = this._lruList[this._lru]
+  del(this, hit)
+  return hit || null
+}
+
+LRUCache.prototype.del = function (key) {
+  typeCheckKey(key)
+  del(this, this._cache[key])
+}
+
+LRUCache.prototype.load = function (arr) {
+  //reset the cache
+  this.reset();
+
+  var now = Date.now()
+  //A previous serialized cache has the most recent items first
+  for (var l = arr.length - 1; l >= 0; l-- ) {
+    var hit = arr[l]
+    typeCheckKey(hit.k)
+    var expiresAt = hit.e || 0
+    if (expiresAt === 0) {
+      //the item was created without expiration in a non aged cache
+      this.set(hit.k, hit.v)
+    } else {
+      var maxAge = expiresAt - now
+      //dont add already expired items
+      if (maxAge > 0) this.set(hit.k, hit.v, maxAge)
+    }
+  }
+}
+
+function get (self, key, doUse) {
+  typeCheckKey(key)
+  var hit = self._cache[key]
+  if (hit) {
+    if (isStale(self, hit)) {
+      del(self, hit)
+      if (!self._allowStale) hit = undefined
+    } else {
+      if (doUse) use(self, hit)
+    }
+    if (hit) hit = hit.value
+  }
+  return hit
+}
+
+function isStale(self, hit) {
+  if (!hit || (!hit.maxAge && !self._maxAge)) return false
+  var stale = false;
+  var diff = Date.now() - hit.now
+  if (hit.maxAge) {
+    stale = diff > hit.maxAge
+  } else {
+    stale = self._maxAge && (diff > self._maxAge)
+  }
+  return stale;
+}
+
+function use (self, hit) {
+  shiftLU(self, hit)
+  hit.lu = self._mru ++
+  self._lruList[hit.lu] = hit
+}
+
+function trim (self) {
+  while (self._lru < self._mru && self._length > self._max)
+    del(self, self._lruList[self._lru])
+}
+
+function shiftLU (self, hit) {
+  delete self._lruList[ hit.lu ]
+  while (self._lru < self._mru && !self._lruList[self._lru]) self._lru ++
+}
+
+function del (self, hit) {
+  if (hit) {
+    if (self._dispose) self._dispose(hit.key, hit.value)
+    self._length -= hit.length
+    self._itemCount --
+    delete self._cache[ hit.key ]
+    shiftLU(self, hit)
+  }
+}
+
+// classy, since V8 prefers predictable objects.
+function Entry (key, value, lu, length, now, maxAge) {
+  this.key = key
+  this.value = value
+  this.lu = lu
+  this.length = length
+  this.now = now
+  if (maxAge) this.maxAge = maxAge
+}
+
+})()
+
+},{}],48:[function(require,module,exports){
+
+
+
+/**
+ * UTM zones are grouped, and assigned to one of a group of 6
+ * sets.
+ *
+ * {int} @private
+ */
+var NUM_100K_SETS = 6;
+
+/**
+ * The column letters (for easting) of the lower left value, per
+ * set.
+ *
+ * {string} @private
+ */
+var SET_ORIGIN_COLUMN_LETTERS = 'AJSAJS';
+
+/**
+ * The row letters (for northing) of the lower left value, per
+ * set.
+ *
+ * {string} @private
+ */
+var SET_ORIGIN_ROW_LETTERS = 'AFAFAF';
+
+var A = 65; // A
+var I = 73; // I
+var O = 79; // O
+var V = 86; // V
+var Z = 90; // Z
+
+/**
+ * Conversion of lat/lon to MGRS.
+ *
+ * @param {object} ll Object literal with lat and lon properties on a
+ *     WGS84 ellipsoid.
+ * @param {int} accuracy Accuracy in digits (5 for 1 m, 4 for 10 m, 3 for
+ *      100 m, 2 for 1000 m or 1 for 10000 m). Optional, default is 5.
+ * @return {string} the MGRS string for the given location and accuracy.
+ */
+exports.forward = function(ll, accuracy) {
+  accuracy = accuracy || 5; // default accuracy 1m
+  return encode(LLtoUTM({
+    lat: ll[1],
+    lon: ll[0]
+  }), accuracy);
+};
+
+/**
+ * Conversion of MGRS to lat/lon.
+ *
+ * @param {string} mgrs MGRS string.
+ * @return {array} An array with left (longitude), bottom (latitude), right
+ *     (longitude) and top (latitude) values in WGS84, representing the
+ *     bounding box for the provided MGRS reference.
+ */
+exports.inverse = function(mgrs) {
+  var bbox = UTMtoLL(decode(mgrs.toUpperCase()));
+  if (bbox.lat && bbox.lon) {
+    return [bbox.lon, bbox.lat, bbox.lon, bbox.lat];
+  }
+  return [bbox.left, bbox.bottom, bbox.right, bbox.top];
+};
+
+exports.toPoint = function(mgrs) {
+  var bbox = UTMtoLL(decode(mgrs.toUpperCase()));
+  if (bbox.lat && bbox.lon) {
+    return [bbox.lon, bbox.lat];
+  }
+  return [(bbox.left + bbox.right) / 2, (bbox.top + bbox.bottom) / 2];
+};
+/**
+ * Conversion from degrees to radians.
+ *
+ * @private
+ * @param {number} deg the angle in degrees.
+ * @return {number} the angle in radians.
+ */
+function degToRad(deg) {
+  return (deg * (Math.PI / 180.0));
+}
+
+/**
+ * Conversion from radians to degrees.
+ *
+ * @private
+ * @param {number} rad the angle in radians.
+ * @return {number} the angle in degrees.
+ */
+function radToDeg(rad) {
+  return (180.0 * (rad / Math.PI));
+}
+
+/**
+ * Converts a set of Longitude and Latitude co-ordinates to UTM
+ * using the WGS84 ellipsoid.
+ *
+ * @private
+ * @param {object} ll Object literal with lat and lon properties
+ *     representing the WGS84 coordinate to be converted.
+ * @return {object} Object literal containing the UTM value with easting,
+ *     northing, zoneNumber and zoneLetter properties, and an optional
+ *     accuracy property in digits. Returns null if the conversion failed.
+ */
+function LLtoUTM(ll) {
+  var Lat = ll.lat;
+  var Long = ll.lon;
+  var a = 6378137.0; //ellip.radius;
+  var eccSquared = 0.00669438; //ellip.eccsq;
+  var k0 = 0.9996;
+  var LongOrigin;
+  var eccPrimeSquared;
+  var N, T, C, A, M;
+  var LatRad = degToRad(Lat);
+  var LongRad = degToRad(Long);
+  var LongOriginRad;
+  var ZoneNumber;
+  // (int)
+  ZoneNumber = Math.floor((Long + 180) / 6) + 1;
+
+  //Make sure the longitude 180.00 is in Zone 60
+  if (Long === 180) {
+    ZoneNumber = 60;
+  }
+
+  // Special zone for Norway
+  if (Lat >= 56.0 && Lat < 64.0 && Long >= 3.0 && Long < 12.0) {
+    ZoneNumber = 32;
+  }
+
+  // Special zones for Svalbard
+  if (Lat >= 72.0 && Lat < 84.0) {
+    if (Long >= 0.0 && Long < 9.0) {
+      ZoneNumber = 31;
+    }
+    else if (Long >= 9.0 && Long < 21.0) {
+      ZoneNumber = 33;
+    }
+    else if (Long >= 21.0 && Long < 33.0) {
+      ZoneNumber = 35;
+    }
+    else if (Long >= 33.0 && Long < 42.0) {
+      ZoneNumber = 37;
+    }
+  }
+
+  LongOrigin = (ZoneNumber - 1) * 6 - 180 + 3; //+3 puts origin
+  // in middle of
+  // zone
+  LongOriginRad = degToRad(LongOrigin);
+
+  eccPrimeSquared = (eccSquared) / (1 - eccSquared);
+
+  N = a / Math.sqrt(1 - eccSquared * Math.sin(LatRad) * Math.sin(LatRad));
+  T = Math.tan(LatRad) * Math.tan(LatRad);
+  C = eccPrimeSquared * Math.cos(LatRad) * Math.cos(LatRad);
+  A = Math.cos(LatRad) * (LongRad - LongOriginRad);
+
+  M = a * ((1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256) * LatRad - (3 * eccSquared / 8 + 3 * eccSquared * eccSquared / 32 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(2 * LatRad) + (15 * eccSquared * eccSquared / 256 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(4 * LatRad) - (35 * eccSquared * eccSquared * eccSquared / 3072) * Math.sin(6 * LatRad));
+
+  var UTMEasting = (k0 * N * (A + (1 - T + C) * A * A * A / 6.0 + (5 - 18 * T + T * T + 72 * C - 58 * eccPrimeSquared) * A * A * A * A * A / 120.0) + 500000.0);
+
+  var UTMNorthing = (k0 * (M + N * Math.tan(LatRad) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24.0 + (61 - 58 * T + T * T + 600 * C - 330 * eccPrimeSquared) * A * A * A * A * A * A / 720.0)));
+  if (Lat < 0.0) {
+    UTMNorthing += 10000000.0; //10000000 meter offset for
+    // southern hemisphere
+  }
+
+  return {
+    northing: Math.round(UTMNorthing),
+    easting: Math.round(UTMEasting),
+    zoneNumber: ZoneNumber,
+    zoneLetter: getLetterDesignator(Lat)
+  };
+}
+
+/**
+ * Converts UTM coords to lat/long, using the WGS84 ellipsoid. This is a convenience
+ * class where the Zone can be specified as a single string eg."60N" which
+ * is then broken down into the ZoneNumber and ZoneLetter.
+ *
+ * @private
+ * @param {object} utm An object literal with northing, easting, zoneNumber
+ *     and zoneLetter properties. If an optional accuracy property is
+ *     provided (in meters), a bounding box will be returned instead of
+ *     latitude and longitude.
+ * @return {object} An object literal containing either lat and lon values
+ *     (if no accuracy was provided), or top, right, bottom and left values
+ *     for the bounding box calculated according to the provided accuracy.
+ *     Returns null if the conversion failed.
+ */
+function UTMtoLL(utm) {
+
+  var UTMNorthing = utm.northing;
+  var UTMEasting = utm.easting;
+  var zoneLetter = utm.zoneLetter;
+  var zoneNumber = utm.zoneNumber;
+  // check the ZoneNummber is valid
+  if (zoneNumber < 0 || zoneNumber > 60) {
+    return null;
+  }
+
+  var k0 = 0.9996;
+  var a = 6378137.0; //ellip.radius;
+  var eccSquared = 0.00669438; //ellip.eccsq;
+  var eccPrimeSquared;
+  var e1 = (1 - Math.sqrt(1 - eccSquared)) / (1 + Math.sqrt(1 - eccSquared));
+  var N1, T1, C1, R1, D, M;
+  var LongOrigin;
+  var mu, phi1Rad;
+
+  // remove 500,000 meter offset for longitude
+  var x = UTMEasting - 500000.0;
+  var y = UTMNorthing;
+
+  // We must know somehow if we are in the Northern or Southern
+  // hemisphere, this is the only time we use the letter So even
+  // if the Zone letter isn't exactly correct it should indicate
+  // the hemisphere correctly
+  if (zoneLetter < 'N') {
+    y -= 10000000.0; // remove 10,000,000 meter offset used
+    // for southern hemisphere
+  }
+
+  // There are 60 zones with zone 1 being at West -180 to -174
+  LongOrigin = (zoneNumber - 1) * 6 - 180 + 3; // +3 puts origin
+  // in middle of
+  // zone
+
+  eccPrimeSquared = (eccSquared) / (1 - eccSquared);
+
+  M = y / k0;
+  mu = M / (a * (1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256));
+
+  phi1Rad = mu + (3 * e1 / 2 - 27 * e1 * e1 * e1 / 32) * Math.sin(2 * mu) + (21 * e1 * e1 / 16 - 55 * e1 * e1 * e1 * e1 / 32) * Math.sin(4 * mu) + (151 * e1 * e1 * e1 / 96) * Math.sin(6 * mu);
+  // double phi1 = ProjMath.radToDeg(phi1Rad);
+
+  N1 = a / Math.sqrt(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad));
+  T1 = Math.tan(phi1Rad) * Math.tan(phi1Rad);
+  C1 = eccPrimeSquared * Math.cos(phi1Rad) * Math.cos(phi1Rad);
+  R1 = a * (1 - eccSquared) / Math.pow(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad), 1.5);
+  D = x / (N1 * k0);
+
+  var lat = phi1Rad - (N1 * Math.tan(phi1Rad) / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * eccPrimeSquared) * D * D * D * D / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * eccPrimeSquared - 3 * C1 * C1) * D * D * D * D * D * D / 720);
+  lat = radToDeg(lat);
+
+  var lon = (D - (1 + 2 * T1 + C1) * D * D * D / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * eccPrimeSquared + 24 * T1 * T1) * D * D * D * D * D / 120) / Math.cos(phi1Rad);
+  lon = LongOrigin + radToDeg(lon);
+
+  var result;
+  if (utm.accuracy) {
+    var topRight = UTMtoLL({
+      northing: utm.northing + utm.accuracy,
+      easting: utm.easting + utm.accuracy,
+      zoneLetter: utm.zoneLetter,
+      zoneNumber: utm.zoneNumber
+    });
+    result = {
+      top: topRight.lat,
+      right: topRight.lon,
+      bottom: lat,
+      left: lon
+    };
+  }
+  else {
+    result = {
+      lat: lat,
+      lon: lon
+    };
+  }
+  return result;
+}
+
+/**
+ * Calculates the MGRS letter designator for the given latitude.
+ *
+ * @private
+ * @param {number} lat The latitude in WGS84 to get the letter designator
+ *     for.
+ * @return {char} The letter designator.
+ */
+function getLetterDesignator(lat) {
+  //This is here as an error flag to show that the Latitude is
+  //outside MGRS limits
+  var LetterDesignator = 'Z';
+
+  if ((84 >= lat) && (lat >= 72)) {
+    LetterDesignator = 'X';
+  }
+  else if ((72 > lat) && (lat >= 64)) {
+    LetterDesignator = 'W';
+  }
+  else if ((64 > lat) && (lat >= 56)) {
+    LetterDesignator = 'V';
+  }
+  else if ((56 > lat) && (lat >= 48)) {
+    LetterDesignator = 'U';
+  }
+  else if ((48 > lat) && (lat >= 40)) {
+    LetterDesignator = 'T';
+  }
+  else if ((40 > lat) && (lat >= 32)) {
+    LetterDesignator = 'S';
+  }
+  else if ((32 > lat) && (lat >= 24)) {
+    LetterDesignator = 'R';
+  }
+  else if ((24 > lat) && (lat >= 16)) {
+    LetterDesignator = 'Q';
+  }
+  else if ((16 > lat) && (lat >= 8)) {
+    LetterDesignator = 'P';
+  }
+  else if ((8 > lat) && (lat >= 0)) {
+    LetterDesignator = 'N';
+  }
+  else if ((0 > lat) && (lat >= -8)) {
+    LetterDesignator = 'M';
+  }
+  else if ((-8 > lat) && (lat >= -16)) {
+    LetterDesignator = 'L';
+  }
+  else if ((-16 > lat) && (lat >= -24)) {
+    LetterDesignator = 'K';
+  }
+  else if ((-24 > lat) && (lat >= -32)) {
+    LetterDesignator = 'J';
+  }
+  else if ((-32 > lat) && (lat >= -40)) {
+    LetterDesignator = 'H';
+  }
+  else if ((-40 > lat) && (lat >= -48)) {
+    LetterDesignator = 'G';
+  }
+  else if ((-48 > lat) && (lat >= -56)) {
+    LetterDesignator = 'F';
+  }
+  else if ((-56 > lat) && (lat >= -64)) {
+    LetterDesignator = 'E';
+  }
+  else if ((-64 > lat) && (lat >= -72)) {
+    LetterDesignator = 'D';
+  }
+  else if ((-72 > lat) && (lat >= -80)) {
+    LetterDesignator = 'C';
+  }
+  return LetterDesignator;
+}
+
+/**
+ * Encodes a UTM location as MGRS string.
+ *
+ * @private
+ * @param {object} utm An object literal with easting, northing,
+ *     zoneLetter, zoneNumber
+ * @param {number} accuracy Accuracy in digits (1-5).
+ * @return {string} MGRS string for the given UTM location.
+ */
+function encode(utm, accuracy) {
+  // prepend with leading zeroes
+  var seasting = "00000" + utm.easting,
+    snorthing = "00000" + utm.northing;
+
+  return utm.zoneNumber + utm.zoneLetter + get100kID(utm.easting, utm.northing, utm.zoneNumber) + seasting.substr(seasting.length - 5, accuracy) + snorthing.substr(snorthing.length - 5, accuracy);
+}
+
+/**
+ * Get the two letter 100k designator for a given UTM easting,
+ * northing and zone number value.
+ *
+ * @private
+ * @param {number} easting
+ * @param {number} northing
+ * @param {number} zoneNumber
+ * @return the two letter 100k designator for the given UTM location.
+ */
+function get100kID(easting, northing, zoneNumber) {
+  var setParm = get100kSetForZone(zoneNumber);
+  var setColumn = Math.floor(easting / 100000);
+  var setRow = Math.floor(northing / 100000) % 20;
+  return getLetter100kID(setColumn, setRow, setParm);
+}
+
+/**
+ * Given a UTM zone number, figure out the MGRS 100K set it is in.
+ *
+ * @private
+ * @param {number} i An UTM zone number.
+ * @return {number} the 100k set the UTM zone is in.
+ */
+function get100kSetForZone(i) {
+  var setParm = i % NUM_100K_SETS;
+  if (setParm === 0) {
+    setParm = NUM_100K_SETS;
+  }
+
+  return setParm;
+}
+
+/**
+ * Get the two-letter MGRS 100k designator given information
+ * translated from the UTM northing, easting and zone number.
+ *
+ * @private
+ * @param {number} column the column index as it relates to the MGRS
+ *        100k set spreadsheet, created from the UTM easting.
+ *        Values are 1-8.
+ * @param {number} row the row index as it relates to the MGRS 100k set
+ *        spreadsheet, created from the UTM northing value. Values
+ *        are from 0-19.
+ * @param {number} parm the set block, as it relates to the MGRS 100k set
+ *        spreadsheet, created from the UTM zone. Values are from
+ *        1-60.
+ * @return two letter MGRS 100k code.
+ */
+function getLetter100kID(column, row, parm) {
+  // colOrigin and rowOrigin are the letters at the origin of the set
+  var index = parm - 1;
+  var colOrigin = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(index);
+  var rowOrigin = SET_ORIGIN_ROW_LETTERS.charCodeAt(index);
+
+  // colInt and rowInt are the letters to build to return
+  var colInt = colOrigin + column - 1;
+  var rowInt = rowOrigin + row;
+  var rollover = false;
+
+  if (colInt > Z) {
+    colInt = colInt - Z + A - 1;
+    rollover = true;
+  }
+
+  if (colInt === I || (colOrigin < I && colInt > I) || ((colInt > I || colOrigin < I) && rollover)) {
+    colInt++;
+  }
+
+  if (colInt === O || (colOrigin < O && colInt > O) || ((colInt > O || colOrigin < O) && rollover)) {
+    colInt++;
+
+    if (colInt === I) {
+      colInt++;
+    }
+  }
+
+  if (colInt > Z) {
+    colInt = colInt - Z + A - 1;
+  }
+
+  if (rowInt > V) {
+    rowInt = rowInt - V + A - 1;
+    rollover = true;
+  }
+  else {
+    rollover = false;
+  }
+
+  if (((rowInt === I) || ((rowOrigin < I) && (rowInt > I))) || (((rowInt > I) || (rowOrigin < I)) && rollover)) {
+    rowInt++;
+  }
+
+  if (((rowInt === O) || ((rowOrigin < O) && (rowInt > O))) || (((rowInt > O) || (rowOrigin < O)) && rollover)) {
+    rowInt++;
+
+    if (rowInt === I) {
+      rowInt++;
+    }
+  }
+
+  if (rowInt > V) {
+    rowInt = rowInt - V + A - 1;
+  }
+
+  var twoLetter = String.fromCharCode(colInt) + String.fromCharCode(rowInt);
+  return twoLetter;
+}
+
+/**
+ * Decode the UTM parameters from a MGRS string.
+ *
+ * @private
+ * @param {string} mgrsString an UPPERCASE coordinate string is expected.
+ * @return {object} An object literal with easting, northing, zoneLetter,
+ *     zoneNumber and accuracy (in meters) properties.
+ */
+function decode(mgrsString) {
+
+  if (mgrsString && mgrsString.length === 0) {
+    throw ("MGRSPoint coverting from nothing");
+  }
+
+  var length = mgrsString.length;
+
+  var hunK = null;
+  var sb = "";
+  var testChar;
+  var i = 0;
+
+  // get Zone number
+  while (!(/[A-Z]/).test(testChar = mgrsString.charAt(i))) {
+    if (i >= 2) {
+      throw ("MGRSPoint bad conversion from: " + mgrsString);
+    }
+    sb += testChar;
+    i++;
+  }
+
+  var zoneNumber = parseInt(sb, 10);
+
+  if (i === 0 || i + 3 > length) {
+    // A good MGRS string has to be 4-5 digits long,
+    // ##AAA/#AAA at least.
+    throw ("MGRSPoint bad conversion from: " + mgrsString);
+  }
+
+  var zoneLetter = mgrsString.charAt(i++);
+
+  // Should we check the zone letter here? Why not.
+  if (zoneLetter <= 'A' || zoneLetter === 'B' || zoneLetter === 'Y' || zoneLetter >= 'Z' || zoneLetter === 'I' || zoneLetter === 'O') {
+    throw ("MGRSPoint zone letter " + zoneLetter + " not handled: " + mgrsString);
+  }
+
+  hunK = mgrsString.substring(i, i += 2);
+
+  var set = get100kSetForZone(zoneNumber);
+
+  var east100k = getEastingFromChar(hunK.charAt(0), set);
+  var north100k = getNorthingFromChar(hunK.charAt(1), set);
+
+  // We have a bug where the northing may be 2000000 too low.
+  // How
+  // do we know when to roll over?
+
+  while (north100k < getMinNorthing(zoneLetter)) {
+    north100k += 2000000;
+  }
+
+  // calculate the char index for easting/northing separator
+  var remainder = length - i;
+
+  if (remainder % 2 !== 0) {
+    throw ("MGRSPoint has to have an even number \nof digits after the zone letter and two 100km letters - front \nhalf for easting meters, second half for \nnorthing meters" + mgrsString);
+  }
+
+  var sep = remainder / 2;
+
+  var sepEasting = 0.0;
+  var sepNorthing = 0.0;
+  var accuracyBonus, sepEastingString, sepNorthingString, easting, northing;
+  if (sep > 0) {
+    accuracyBonus = 100000.0 / Math.pow(10, sep);
+    sepEastingString = mgrsString.substring(i, i + sep);
+    sepEasting = parseFloat(sepEastingString) * accuracyBonus;
+    sepNorthingString = mgrsString.substring(i + sep);
+    sepNorthing = parseFloat(sepNorthingString) * accuracyBonus;
+  }
+
+  easting = sepEasting + east100k;
+  northing = sepNorthing + north100k;
+
+  return {
+    easting: easting,
+    northing: northing,
+    zoneLetter: zoneLetter,
+    zoneNumber: zoneNumber,
+    accuracy: accuracyBonus
+  };
+}
+
+/**
+ * Given the first letter from a two-letter MGRS 100k zone, and given the
+ * MGRS table set for the zone number, figure out the easting value that
+ * should be added to the other, secondary easting value.
+ *
+ * @private
+ * @param {char} e The first letter from a two-letter MGRS 100´k zone.
+ * @param {number} set The MGRS table set for the zone number.
+ * @return {number} The easting value for the given letter and set.
+ */
+function getEastingFromChar(e, set) {
+  // colOrigin is the letter at the origin of the set for the
+  // column
+  var curCol = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(set - 1);
+  var eastingValue = 100000.0;
+  var rewindMarker = false;
+
+  while (curCol !== e.charCodeAt(0)) {
+    curCol++;
+    if (curCol === I) {
+      curCol++;
+    }
+    if (curCol === O) {
+      curCol++;
+    }
+    if (curCol > Z) {
+      if (rewindMarker) {
+        throw ("Bad character: " + e);
+      }
+      curCol = A;
+      rewindMarker = true;
+    }
+    eastingValue += 100000.0;
+  }
+
+  return eastingValue;
+}
+
+/**
+ * Given the second letter from a two-letter MGRS 100k zone, and given the
+ * MGRS table set for the zone number, figure out the northing value that
+ * should be added to the other, secondary northing value. You have to
+ * remember that Northings are determined from the equator, and the vertical
+ * cycle of letters mean a 2000000 additional northing meters. This happens
+ * approx. every 18 degrees of latitude. This method does *NOT* count any
+ * additional northings. You have to figure out how many 2000000 meters need
+ * to be added for the zone letter of the MGRS coordinate.
+ *
+ * @private
+ * @param {char} n Second letter of the MGRS 100k zone
+ * @param {number} set The MGRS table set number, which is dependent on the
+ *     UTM zone number.
+ * @return {number} The northing value for the given letter and set.
+ */
+function getNorthingFromChar(n, set) {
+
+  if (n > 'V') {
+    throw ("MGRSPoint given invalid Northing " + n);
+  }
+
+  // rowOrigin is the letter at the origin of the set for the
+  // column
+  var curRow = SET_ORIGIN_ROW_LETTERS.charCodeAt(set - 1);
+  var northingValue = 0.0;
+  var rewindMarker = false;
+
+  while (curRow !== n.charCodeAt(0)) {
+    curRow++;
+    if (curRow === I) {
+      curRow++;
+    }
+    if (curRow === O) {
+      curRow++;
+    }
+    // fixing a bug making whole application hang in this loop
+    // when 'n' is a wrong character
+    if (curRow > V) {
+      if (rewindMarker) { // making sure that this loop ends
+        throw ("Bad character: " + n);
+      }
+      curRow = A;
+      rewindMarker = true;
+    }
+    northingValue += 100000.0;
+  }
+
+  return northingValue;
+}
+
+/**
+ * The function getMinNorthing returns the minimum northing value of a MGRS
+ * zone.
+ *
+ * Ported from Geotrans' c Lattitude_Band_Value structure table.
+ *
+ * @private
+ * @param {char} zoneLetter The MGRS zone to get the min northing for.
+ * @return {number}
+ */
+function getMinNorthing(zoneLetter) {
+  var northing;
+  switch (zoneLetter) {
+  case 'C':
+    northing = 1100000.0;
+    break;
+  case 'D':
+    northing = 2000000.0;
+    break;
+  case 'E':
+    northing = 2800000.0;
+    break;
+  case 'F':
+    northing = 3700000.0;
+    break;
+  case 'G':
+    northing = 4600000.0;
+    break;
+  case 'H':
+    northing = 5500000.0;
+    break;
+  case 'J':
+    northing = 6400000.0;
+    break;
+  case 'K':
+    northing = 7300000.0;
+    break;
+  case 'L':
+    northing = 8200000.0;
+    break;
+  case 'M':
+    northing = 9100000.0;
+    break;
+  case 'N':
+    northing = 0.0;
+    break;
+  case 'P':
+    northing = 800000.0;
+    break;
+  case 'Q':
+    northing = 1700000.0;
+    break;
+  case 'R':
+    northing = 2600000.0;
+    break;
+  case 'S':
+    northing = 3500000.0;
+    break;
+  case 'T':
+    northing = 4400000.0;
+    break;
+  case 'U':
+    northing = 5300000.0;
+    break;
+  case 'V':
+    northing = 6200000.0;
+    break;
+  case 'W':
+    northing = 7000000.0;
+    break;
+  case 'X':
+    northing = 7900000.0;
+    break;
+  default:
+    northing = -1.0;
+  }
+  if (northing >= 0.0) {
+    return northing;
+  }
+  else {
+    throw ("Invalid zone letter: " + zoneLetter);
+  }
+
+}
+
+},{}],49:[function(require,module,exports){
 // Top level file is just a mixin of submodules & constants
 'use strict';
 
@@ -4804,7 +6404,7 @@ assign(pako, deflate, inflate, constants);
 
 module.exports = pako;
 
-},{"./lib/deflate":34,"./lib/inflate":35,"./lib/utils/common":36,"./lib/zlib/constants":39}],34:[function(require,module,exports){
+},{"./lib/deflate":50,"./lib/inflate":51,"./lib/utils/common":52,"./lib/zlib/constants":55}],50:[function(require,module,exports){
 'use strict';
 
 
@@ -5182,7 +6782,7 @@ exports.deflate = deflate;
 exports.deflateRaw = deflateRaw;
 exports.gzip = gzip;
 
-},{"./utils/common":36,"./utils/strings":37,"./zlib/deflate.js":41,"./zlib/messages":46,"./zlib/zstream":48}],35:[function(require,module,exports){
+},{"./utils/common":52,"./utils/strings":53,"./zlib/deflate.js":57,"./zlib/messages":62,"./zlib/zstream":64}],51:[function(require,module,exports){
 'use strict';
 
 
@@ -5363,6 +6963,10 @@ Inflate.prototype.push = function(data, mode) {
   var status, _mode;
   var next_out_utf8, tail, utf8str;
 
+  // Flag to properly process Z_BUF_ERROR on testing inflate call
+  // when we check that all output data was flushed.
+  var allowBufError = false;
+
   if (this.ended) { return false; }
   _mode = (mode === ~~mode) ? mode : ((mode === true) ? c.Z_FINISH : c.Z_NO_FLUSH);
 
@@ -5387,6 +6991,11 @@ Inflate.prototype.push = function(data, mode) {
     }
 
     status = zlib_inflate.inflate(strm, c.Z_NO_FLUSH);    /* no bad return value */
+
+    if (status === c.Z_BUF_ERROR && allowBufError === true) {
+      status = c.Z_OK;
+      allowBufError = false;
+    }
 
     if (status !== c.Z_STREAM_END && status !== c.Z_OK) {
       this.onEnd(status);
@@ -5416,7 +7025,19 @@ Inflate.prototype.push = function(data, mode) {
         }
       }
     }
-  } while ((strm.avail_in > 0) && status !== c.Z_STREAM_END);
+
+    // When no more input data, we should check that internal inflate buffers
+    // are flushed. The only way to do it when avail_out = 0 - run one more
+    // inflate pass. But if output data not exists, inflate return Z_BUF_ERROR.
+    // Here we set flag to process this error properly.
+    //
+    // NOTE. Deflate does not return error in this case and does not needs such
+    // logic.
+    if (strm.avail_in === 0 && strm.avail_out === 0) {
+      allowBufError = true;
+    }
+
+  } while ((strm.avail_in > 0 || strm.avail_out === 0) && status !== c.Z_STREAM_END);
 
   if (status === c.Z_STREAM_END) {
     _mode = c.Z_FINISH;
@@ -5563,7 +7184,7 @@ exports.inflate = inflate;
 exports.inflateRaw = inflateRaw;
 exports.ungzip  = inflate;
 
-},{"./utils/common":36,"./utils/strings":37,"./zlib/constants":39,"./zlib/gzheader":42,"./zlib/inflate.js":44,"./zlib/messages":46,"./zlib/zstream":48}],36:[function(require,module,exports){
+},{"./utils/common":52,"./utils/strings":53,"./zlib/constants":55,"./zlib/gzheader":58,"./zlib/inflate.js":60,"./zlib/messages":62,"./zlib/zstream":64}],52:[function(require,module,exports){
 'use strict';
 
 
@@ -5667,7 +7288,7 @@ exports.setTyped = function (on) {
 
 exports.setTyped(TYPED_OK);
 
-},{}],37:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 // String encode/decode helpers
 'use strict';
 
@@ -5854,7 +7475,7 @@ exports.utf8border = function(buf, max) {
   return (pos + _utf8len[buf[pos]] > max) ? pos : max;
 };
 
-},{"./common":36}],38:[function(require,module,exports){
+},{"./common":52}],54:[function(require,module,exports){
 'use strict';
 
 // Note: adler32 takes 12% for level 0 and 2% for level 6.
@@ -5888,7 +7509,7 @@ function adler32(adler, buf, len, pos) {
 
 module.exports = adler32;
 
-},{}],39:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 module.exports = {
 
   /* Allowed flush values; see deflate() and inflate() below for details */
@@ -5937,7 +7558,7 @@ module.exports = {
   //Z_NULL:                 null // Use -1 or null inline, depending on var type
 };
 
-},{}],40:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 'use strict';
 
 // Note: we can't get significant speed boost here.
@@ -5980,7 +7601,7 @@ function crc32(crc, buf, len, pos) {
 
 module.exports = crc32;
 
-},{}],41:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 'use strict';
 
 var utils   = require('../utils/common');
@@ -7747,7 +9368,7 @@ exports.deflatePrime = deflatePrime;
 exports.deflateTune = deflateTune;
 */
 
-},{"../utils/common":36,"./adler32":38,"./crc32":40,"./messages":46,"./trees":47}],42:[function(require,module,exports){
+},{"../utils/common":52,"./adler32":54,"./crc32":56,"./messages":62,"./trees":63}],58:[function(require,module,exports){
 'use strict';
 
 
@@ -7789,7 +9410,7 @@ function GZheader() {
 
 module.exports = GZheader;
 
-},{}],43:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
 'use strict';
 
 // See state defs from inflate.js
@@ -7844,7 +9465,8 @@ module.exports = function inflate_fast(strm, start) {
   var wsize;                  /* window size or zero if not using window */
   var whave;                  /* valid bytes in the window */
   var wnext;                  /* window write index */
-  var window;                 /* allocated sliding window, if wsize != 0 */
+  // Use `s_window` instead `window`, avoid conflict with instrumentation tools
+  var s_window;               /* allocated sliding window, if wsize != 0 */
   var hold;                   /* local strm.hold */
   var bits;                   /* local strm.bits */
   var lcode;                  /* local strm.lencode */
@@ -7878,7 +9500,7 @@ module.exports = function inflate_fast(strm, start) {
   wsize = state.wsize;
   whave = state.whave;
   wnext = state.wnext;
-  window = state.window;
+  s_window = state.window;
   hold = state.hold;
   bits = state.bits;
   lcode = state.lencode;
@@ -7996,13 +9618,13 @@ module.exports = function inflate_fast(strm, start) {
 //#endif
               }
               from = 0; // window index
-              from_source = window;
+              from_source = s_window;
               if (wnext === 0) {           /* very common case */
                 from += wsize - op;
                 if (op < len) {         /* some from window */
                   len -= op;
                   do {
-                    output[_out++] = window[from++];
+                    output[_out++] = s_window[from++];
                   } while (--op);
                   from = _out - dist;  /* rest from output */
                   from_source = output;
@@ -8014,14 +9636,14 @@ module.exports = function inflate_fast(strm, start) {
                 if (op < len) {         /* some from end of window */
                   len -= op;
                   do {
-                    output[_out++] = window[from++];
+                    output[_out++] = s_window[from++];
                   } while (--op);
                   from = 0;
                   if (wnext < len) {  /* some from start of window */
                     op = wnext;
                     len -= op;
                     do {
-                      output[_out++] = window[from++];
+                      output[_out++] = s_window[from++];
                     } while (--op);
                     from = _out - dist;      /* rest from output */
                     from_source = output;
@@ -8033,7 +9655,7 @@ module.exports = function inflate_fast(strm, start) {
                 if (op < len) {         /* some from window */
                   len -= op;
                   do {
-                    output[_out++] = window[from++];
+                    output[_out++] = s_window[from++];
                   } while (--op);
                   from = _out - dist;  /* rest from output */
                   from_source = output;
@@ -8116,7 +9738,7 @@ module.exports = function inflate_fast(strm, start) {
   return;
 };
 
-},{}],44:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 'use strict';
 
 
@@ -9621,7 +11243,7 @@ exports.inflateSyncPoint = inflateSyncPoint;
 exports.inflateUndermine = inflateUndermine;
 */
 
-},{"../utils/common":36,"./adler32":38,"./crc32":40,"./inffast":43,"./inftrees":45}],45:[function(require,module,exports){
+},{"../utils/common":52,"./adler32":54,"./crc32":56,"./inffast":59,"./inftrees":61}],61:[function(require,module,exports){
 'use strict';
 
 
@@ -9950,7 +11572,7 @@ module.exports = function inflate_table(type, lens, lens_index, codes, table, ta
   return 0;
 };
 
-},{"../utils/common":36}],46:[function(require,module,exports){
+},{"../utils/common":52}],62:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -9965,7 +11587,7 @@ module.exports = {
   '-6':   'incompatible version' /* Z_VERSION_ERROR (-6) */
 };
 
-},{}],47:[function(require,module,exports){
+},{}],63:[function(require,module,exports){
 'use strict';
 
 
@@ -11166,7 +12788,7 @@ exports._tr_flush_block  = _tr_flush_block;
 exports._tr_tally = _tr_tally;
 exports._tr_align = _tr_align;
 
-},{"../utils/common":36}],48:[function(require,module,exports){
+},{"../utils/common":52}],64:[function(require,module,exports){
 'use strict';
 
 
@@ -11197,754 +12819,7 @@ function ZStream() {
 
 module.exports = ZStream;
 
-},{}],49:[function(require,module,exports){
-'use strict';
-
-module.exports = INTERNAL;
-
-function INTERNAL() {}
-},{}],50:[function(require,module,exports){
-'use strict';
-var Promise = require('./promise');
-var reject = require('./reject');
-var resolve = require('./resolve');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = all;
-function all(iterable) {
-  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
-    return reject(new TypeError('must be an array'));
-  }
-
-  var len = iterable.length;
-  var called = false;
-  if (!len) {
-    return resolve([]);
-  }
-
-  var values = new Array(len);
-  var resolved = 0;
-  var i = -1;
-  var promise = new Promise(INTERNAL);
-  
-  while (++i < len) {
-    allResolver(iterable[i], i);
-  }
-  return promise;
-  function allResolver(value, i) {
-    resolve(value).then(resolveFromAll, function (error) {
-      if (!called) {
-        called = true;
-        handlers.reject(promise, error);
-      }
-    });
-    function resolveFromAll(outValue) {
-      values[i] = outValue;
-      if (++resolved === len & !called) {
-        called = true;
-        handlers.resolve(promise, values);
-      }
-    }
-  }
-}
-},{"./INTERNAL":49,"./handlers":51,"./promise":53,"./reject":56,"./resolve":57}],51:[function(require,module,exports){
-'use strict';
-var tryCatch = require('./tryCatch');
-var resolveThenable = require('./resolveThenable');
-var states = require('./states');
-
-exports.resolve = function (self, value) {
-  var result = tryCatch(getThen, value);
-  if (result.status === 'error') {
-    return exports.reject(self, result.value);
-  }
-  var thenable = result.value;
-
-  if (thenable) {
-    resolveThenable.safely(self, thenable);
-  } else {
-    self.state = states.FULFILLED;
-    self.outcome = value;
-    var i = -1;
-    var len = self.queue.length;
-    while (++i < len) {
-      self.queue[i].callFulfilled(value);
-    }
-  }
-  return self;
-};
-exports.reject = function (self, error) {
-  self.state = states.REJECTED;
-  self.outcome = error;
-  var i = -1;
-  var len = self.queue.length;
-  while (++i < len) {
-    self.queue[i].callRejected(error);
-  }
-  return self;
-};
-
-function getThen(obj) {
-  // Make sure we only access the accessor once as required by the spec
-  var then = obj && obj.then;
-  if (obj && typeof obj === 'object' && typeof then === 'function') {
-    return function appyThen() {
-      then.apply(obj, arguments);
-    };
-  }
-}
-
-},{"./resolveThenable":58,"./states":59,"./tryCatch":60}],52:[function(require,module,exports){
-module.exports = exports = require('./promise');
-
-exports.resolve = require('./resolve');
-exports.reject = require('./reject');
-exports.all = require('./all');
-exports.race = require('./race');
-
-},{"./all":50,"./promise":53,"./race":55,"./reject":56,"./resolve":57}],53:[function(require,module,exports){
-'use strict';
-
-var unwrap = require('./unwrap');
-var INTERNAL = require('./INTERNAL');
-var resolveThenable = require('./resolveThenable');
-var states = require('./states');
-var QueueItem = require('./queueItem');
-
-module.exports = Promise;
-function Promise(resolver) {
-  if (!(this instanceof Promise)) {
-    return new Promise(resolver);
-  }
-  if (typeof resolver !== 'function') {
-    throw new TypeError('resolver must be a function');
-  }
-  this.state = states.PENDING;
-  this.queue = [];
-  this.outcome = void 0;
-  if (resolver !== INTERNAL) {
-    resolveThenable.safely(this, resolver);
-  }
-}
-
-Promise.prototype['catch'] = function (onRejected) {
-  return this.then(null, onRejected);
-};
-Promise.prototype.then = function (onFulfilled, onRejected) {
-  if (typeof onFulfilled !== 'function' && this.state === states.FULFILLED ||
-    typeof onRejected !== 'function' && this.state === states.REJECTED) {
-    return this;
-  }
-  var promise = new Promise(INTERNAL);
-  if (this.state !== states.PENDING) {
-    var resolver = this.state === states.FULFILLED ? onFulfilled : onRejected;
-    unwrap(promise, resolver, this.outcome);
-  } else {
-    this.queue.push(new QueueItem(promise, onFulfilled, onRejected));
-  }
-
-  return promise;
-};
-
-},{"./INTERNAL":49,"./queueItem":54,"./resolveThenable":58,"./states":59,"./unwrap":61}],54:[function(require,module,exports){
-'use strict';
-var handlers = require('./handlers');
-var unwrap = require('./unwrap');
-
-module.exports = QueueItem;
-function QueueItem(promise, onFulfilled, onRejected) {
-  this.promise = promise;
-  if (typeof onFulfilled === 'function') {
-    this.onFulfilled = onFulfilled;
-    this.callFulfilled = this.otherCallFulfilled;
-  }
-  if (typeof onRejected === 'function') {
-    this.onRejected = onRejected;
-    this.callRejected = this.otherCallRejected;
-  }
-}
-QueueItem.prototype.callFulfilled = function (value) {
-  handlers.resolve(this.promise, value);
-};
-QueueItem.prototype.otherCallFulfilled = function (value) {
-  unwrap(this.promise, this.onFulfilled, value);
-};
-QueueItem.prototype.callRejected = function (value) {
-  handlers.reject(this.promise, value);
-};
-QueueItem.prototype.otherCallRejected = function (value) {
-  unwrap(this.promise, this.onRejected, value);
-};
-
-},{"./handlers":51,"./unwrap":61}],55:[function(require,module,exports){
-'use strict';
-var Promise = require('./promise');
-var reject = require('./reject');
-var resolve = require('./resolve');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = race;
-function race(iterable) {
-  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
-    return reject(new TypeError('must be an array'));
-  }
-
-  var len = iterable.length;
-  var called = false;
-  if (!len) {
-    return resolve([]);
-  }
-
-  var i = -1;
-  var promise = new Promise(INTERNAL);
-
-  while (++i < len) {
-    resolver(iterable[i]);
-  }
-  return promise;
-  function resolver(value) {
-    resolve(value).then(function (response) {
-      if (!called) {
-        called = true;
-        handlers.resolve(promise, response);
-      }
-    }, function (error) {
-      if (!called) {
-        called = true;
-        handlers.reject(promise, error);
-      }
-    });
-  }
-}
-
-},{"./INTERNAL":49,"./handlers":51,"./promise":53,"./reject":56,"./resolve":57}],56:[function(require,module,exports){
-'use strict';
-
-var Promise = require('./promise');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = reject;
-
-function reject(reason) {
-	var promise = new Promise(INTERNAL);
-	return handlers.reject(promise, reason);
-}
-},{"./INTERNAL":49,"./handlers":51,"./promise":53}],57:[function(require,module,exports){
-'use strict';
-
-var Promise = require('./promise');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = resolve;
-
-var FALSE = handlers.resolve(new Promise(INTERNAL), false);
-var NULL = handlers.resolve(new Promise(INTERNAL), null);
-var UNDEFINED = handlers.resolve(new Promise(INTERNAL), void 0);
-var ZERO = handlers.resolve(new Promise(INTERNAL), 0);
-var EMPTYSTRING = handlers.resolve(new Promise(INTERNAL), '');
-
-function resolve(value) {
-  if (value) {
-    if (value instanceof Promise) {
-      return value;
-    }
-    return handlers.resolve(new Promise(INTERNAL), value);
-  }
-  var valueType = typeof value;
-  switch (valueType) {
-    case 'boolean':
-      return FALSE;
-    case 'undefined':
-      return UNDEFINED;
-    case 'object':
-      return NULL;
-    case 'number':
-      return ZERO;
-    case 'string':
-      return EMPTYSTRING;
-  }
-}
-},{"./INTERNAL":49,"./handlers":51,"./promise":53}],58:[function(require,module,exports){
-'use strict';
-var handlers = require('./handlers');
-var tryCatch = require('./tryCatch');
-function safelyResolveThenable(self, thenable) {
-  // Either fulfill, reject or reject with error
-  var called = false;
-  function onError(value) {
-    if (called) {
-      return;
-    }
-    called = true;
-    handlers.reject(self, value);
-  }
-
-  function onSuccess(value) {
-    if (called) {
-      return;
-    }
-    called = true;
-    handlers.resolve(self, value);
-  }
-
-  function tryToUnwrap() {
-    thenable(onSuccess, onError);
-  }
-  
-  var result = tryCatch(tryToUnwrap);
-  if (result.status === 'error') {
-    onError(result.value);
-  }
-}
-exports.safely = safelyResolveThenable;
-},{"./handlers":51,"./tryCatch":60}],59:[function(require,module,exports){
-// Lazy man's symbols for states
-
-exports.REJECTED = ['REJECTED'];
-exports.FULFILLED = ['FULFILLED'];
-exports.PENDING = ['PENDING'];
-
-},{}],60:[function(require,module,exports){
-'use strict';
-
-module.exports = tryCatch;
-
-function tryCatch(func, value) {
-  var out = {};
-  try {
-    out.value = func(value);
-    out.status = 'success';
-  } catch (e) {
-    out.status = 'error';
-    out.value = e;
-  }
-  return out;
-}
-},{}],61:[function(require,module,exports){
-'use strict';
-
-var immediate = require('immediate');
-var handlers = require('./handlers');
-module.exports = unwrap;
-
-function unwrap(promise, func, value) {
-  immediate(function () {
-    var returnValue;
-    try {
-      returnValue = func(value);
-    } catch (e) {
-      return handlers.reject(promise, e);
-    }
-    if (returnValue === promise) {
-      handlers.reject(promise, new TypeError('Cannot resolve promise with itself'));
-    } else {
-      handlers.resolve(promise, returnValue);
-    }
-  });
-}
-},{"./handlers":51,"immediate":62}],62:[function(require,module,exports){
-'use strict';
-var types = [
-  require('./nextTick'),
-  require('./mutation.js'),
-  require('./messageChannel'),
-  require('./stateChange'),
-  require('./timeout')
-];
-var draining;
-var queue = [];
-//named nextTick for less confusing stack traces
-function nextTick() {
-  draining = true;
-  var i, oldQueue;
-  var len = queue.length;
-  while (len) {
-    oldQueue = queue;
-    queue = [];
-    i = -1;
-    while (++i < len) {
-      oldQueue[i]();
-    }
-    len = queue.length;
-  }
-  draining = false;
-}
-var scheduleDrain;
-var i = -1;
-var len = types.length;
-while (++ i < len) {
-  if (types[i] && types[i].test && types[i].test()) {
-    scheduleDrain = types[i].install(nextTick);
-    break;
-  }
-}
-module.exports = immediate;
-function immediate(task) {
-  if (queue.push(task) === 1 && !draining) {
-    scheduleDrain();
-  }
-}
-},{"./messageChannel":63,"./mutation.js":64,"./nextTick":5,"./stateChange":65,"./timeout":66}],63:[function(require,module,exports){
-(function (global){
-'use strict';
-
-exports.test = function () {
-  if (global.setImmediate) {
-    // we can only get here in IE10
-    // which doesn't handel postMessage well
-    return false;
-  }
-  return typeof global.MessageChannel !== 'undefined';
-};
-
-exports.install = function (func) {
-  var channel = new global.MessageChannel();
-  channel.port1.onmessage = func;
-  return function () {
-    channel.port2.postMessage(0);
-  };
-};
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],64:[function(require,module,exports){
-(function (global){
-'use strict';
-//based off rsvp https://github.com/tildeio/rsvp.js
-//license https://github.com/tildeio/rsvp.js/blob/master/LICENSE
-//https://github.com/tildeio/rsvp.js/blob/master/lib/rsvp/asap.js
-
-var Mutation = global.MutationObserver || global.WebKitMutationObserver;
-
-exports.test = function () {
-  return Mutation;
-};
-
-exports.install = function (handle) {
-  var called = 0;
-  var observer = new Mutation(handle);
-  var element = global.document.createTextNode('');
-  observer.observe(element, {
-    characterData: true
-  });
-  return function () {
-    element.data = (called = ++called % 2);
-  };
-};
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],65:[function(require,module,exports){
-(function (global){
-'use strict';
-
-exports.test = function () {
-  return 'document' in global && 'onreadystatechange' in global.document.createElement('script');
-};
-
-exports.install = function (handle) {
-  return function () {
-
-    // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
-    // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
-    var scriptEl = global.document.createElement('script');
-    scriptEl.onreadystatechange = function () {
-      handle();
-
-      scriptEl.onreadystatechange = null;
-      scriptEl.parentNode.removeChild(scriptEl);
-      scriptEl = null;
-    };
-    global.document.documentElement.appendChild(scriptEl);
-
-    return handle;
-  };
-};
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],66:[function(require,module,exports){
-'use strict';
-exports.test = function () {
-  return true;
-};
-
-exports.install = function (t) {
-  return function () {
-    setTimeout(t, 0);
-  };
-};
-},{}],67:[function(require,module,exports){
-;(function () { // closure for web browsers
-
-if (typeof module === 'object' && module.exports) {
-  module.exports = LRUCache
-} else {
-  // just set the global for non-node platforms.
-  this.LRUCache = LRUCache
-}
-
-function hOP (obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key)
-}
-
-function naiveLength () { return 1 }
-
-function LRUCache (options) {
-  if (!(this instanceof LRUCache))
-    return new LRUCache(options)
-
-  if (typeof options === 'number')
-    options = { max: options }
-
-  if (!options)
-    options = {}
-
-  this._max = options.max
-  // Kind of weird to have a default max of Infinity, but oh well.
-  if (!this._max || !(typeof this._max === "number") || this._max <= 0 )
-    this._max = Infinity
-
-  this._lengthCalculator = options.length || naiveLength
-  if (typeof this._lengthCalculator !== "function")
-    this._lengthCalculator = naiveLength
-
-  this._allowStale = options.stale || false
-  this._maxAge = options.maxAge || null
-  this._dispose = options.dispose
-  this.reset()
-}
-
-// resize the cache when the max changes.
-Object.defineProperty(LRUCache.prototype, "max",
-  { set : function (mL) {
-      if (!mL || !(typeof mL === "number") || mL <= 0 ) mL = Infinity
-      this._max = mL
-      if (this._length > this._max) trim(this)
-    }
-  , get : function () { return this._max }
-  , enumerable : true
-  })
-
-// resize the cache when the lengthCalculator changes.
-Object.defineProperty(LRUCache.prototype, "lengthCalculator",
-  { set : function (lC) {
-      if (typeof lC !== "function") {
-        this._lengthCalculator = naiveLength
-        this._length = this._itemCount
-        for (var key in this._cache) {
-          this._cache[key].length = 1
-        }
-      } else {
-        this._lengthCalculator = lC
-        this._length = 0
-        for (var key in this._cache) {
-          this._cache[key].length = this._lengthCalculator(this._cache[key].value)
-          this._length += this._cache[key].length
-        }
-      }
-
-      if (this._length > this._max) trim(this)
-    }
-  , get : function () { return this._lengthCalculator }
-  , enumerable : true
-  })
-
-Object.defineProperty(LRUCache.prototype, "length",
-  { get : function () { return this._length }
-  , enumerable : true
-  })
-
-
-Object.defineProperty(LRUCache.prototype, "itemCount",
-  { get : function () { return this._itemCount }
-  , enumerable : true
-  })
-
-LRUCache.prototype.forEach = function (fn, thisp) {
-  thisp = thisp || this
-  var i = 0
-  var itemCount = this._itemCount
-
-  for (var k = this._mru - 1; k >= 0 && i < itemCount; k--) if (this._lruList[k]) {
-    i++
-    var hit = this._lruList[k]
-    if (isStale(this, hit)) {
-      del(this, hit)
-      if (!this._allowStale) hit = undefined
-    }
-    if (hit) {
-      fn.call(thisp, hit.value, hit.key, this)
-    }
-  }
-}
-
-LRUCache.prototype.keys = function () {
-  var keys = new Array(this._itemCount)
-  var i = 0
-  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
-    var hit = this._lruList[k]
-    keys[i++] = hit.key
-  }
-  return keys
-}
-
-LRUCache.prototype.values = function () {
-  var values = new Array(this._itemCount)
-  var i = 0
-  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
-    var hit = this._lruList[k]
-    values[i++] = hit.value
-  }
-  return values
-}
-
-LRUCache.prototype.reset = function () {
-  if (this._dispose && this._cache) {
-    for (var k in this._cache) {
-      this._dispose(k, this._cache[k].value)
-    }
-  }
-
-  this._cache = Object.create(null) // hash of items by key
-  this._lruList = Object.create(null) // list of items in order of use recency
-  this._mru = 0 // most recently used
-  this._lru = 0 // least recently used
-  this._length = 0 // number of items in the list
-  this._itemCount = 0
-}
-
-// Provided for debugging/dev purposes only. No promises whatsoever that
-// this API stays stable.
-LRUCache.prototype.dump = function () {
-  return this._cache
-}
-
-LRUCache.prototype.dumpLru = function () {
-  return this._lruList
-}
-
-LRUCache.prototype.set = function (key, value, maxAge) {
-  maxAge = maxAge || this._maxAge
-  var now = maxAge ? Date.now() : 0
-
-  if (hOP(this._cache, key)) {
-    // dispose of the old one before overwriting
-    if (this._dispose)
-      this._dispose(key, this._cache[key].value)
-
-    this._cache[key].now = now
-    this._cache[key].maxAge = maxAge
-    this._cache[key].value = value
-    this.get(key)
-    return true
-  }
-
-  var len = this._lengthCalculator(value)
-  var hit = new Entry(key, value, this._mru++, len, now, maxAge)
-
-  // oversized objects fall out of cache automatically.
-  if (hit.length > this._max) {
-    if (this._dispose) this._dispose(key, value)
-    return false
-  }
-
-  this._length += hit.length
-  this._lruList[hit.lu] = this._cache[key] = hit
-  this._itemCount ++
-
-  if (this._length > this._max)
-    trim(this)
-
-  return true
-}
-
-LRUCache.prototype.has = function (key) {
-  if (!hOP(this._cache, key)) return false
-  var hit = this._cache[key]
-  if (isStale(this, hit)) {
-    return false
-  }
-  return true
-}
-
-LRUCache.prototype.get = function (key) {
-  return get(this, key, true)
-}
-
-LRUCache.prototype.peek = function (key) {
-  return get(this, key, false)
-}
-
-LRUCache.prototype.pop = function () {
-  var hit = this._lruList[this._lru]
-  del(this, hit)
-  return hit || null
-}
-
-LRUCache.prototype.del = function (key) {
-  del(this, this._cache[key])
-}
-
-function get (self, key, doUse) {
-  var hit = self._cache[key]
-  if (hit) {
-    if (isStale(self, hit)) {
-      del(self, hit)
-      if (!self._allowStale) hit = undefined
-    } else {
-      if (doUse) use(self, hit)
-    }
-    if (hit) hit = hit.value
-  }
-  return hit
-}
-
-function isStale(self, hit) {
-  if (!hit || (!hit.maxAge && !self._maxAge)) return false
-  var stale = false;
-  var diff = Date.now() - hit.now
-  if (hit.maxAge) {
-    stale = diff > hit.maxAge
-  } else {
-    stale = self._maxAge && (diff > self._maxAge)
-  }
-  return stale;
-}
-
-function use (self, hit) {
-  shiftLU(self, hit)
-  hit.lu = self._mru ++
-  self._lruList[hit.lu] = hit
-}
-
-function trim (self) {
-  while (self._lru < self._mru && self._length > self._max)
-    del(self, self._lruList[self._lru])
-}
-
-function shiftLU (self, hit) {
-  delete self._lruList[ hit.lu ]
-  while (self._lru < self._mru && !self._lruList[self._lru]) self._lru ++
-}
-
-function del (self, hit) {
-  if (hit) {
-    if (self._dispose) self._dispose(hit.key, hit.value)
-    self._length -= hit.length
-    self._itemCount --
-    delete self._cache[ hit.key ]
-    shiftLU(self, hit)
-  }
-}
-
-// classy, since V8 prefers predictable objects.
-function Entry (key, value, lu, length, now, maxAge) {
-  this.key = key
-  this.value = value
-  this.lu = lu
-  this.length = length
-  this.now = now
-  if (maxAge) this.maxAge = maxAge
-}
-
-})()
-
-},{}],68:[function(require,module,exports){
 function dbfHeader(buffer){
 	var data = new DataView(buffer);
 	var out = {};
@@ -12022,7 +12897,7 @@ module.exports = function(buffer){
 	return out;
 };
 
-},{}],69:[function(require,module,exports){
+},{}],66:[function(require,module,exports){
 var mgrs = require('mgrs');
 
 function Point(x, y, z) {
@@ -12058,7 +12933,7 @@ Point.prototype.toMGRS = function(accuracy) {
   return mgrs.forward([this.x, this.y], accuracy);
 };
 module.exports = Point;
-},{"mgrs":135}],70:[function(require,module,exports){
+},{"mgrs":48}],67:[function(require,module,exports){
 var parseCode = require("./parseCode");
 var extend = require('./extend');
 var projections = require('./projections');
@@ -12093,7 +12968,7 @@ Projection.projections = projections;
 Projection.projections.start();
 module.exports = Projection;
 
-},{"./deriveConstants":100,"./extend":101,"./parseCode":105,"./projections":107}],71:[function(require,module,exports){
+},{"./deriveConstants":98,"./extend":99,"./parseCode":103,"./projections":105}],68:[function(require,module,exports){
 module.exports = function(crs, denorm, point) {
   var xin = point.x,
     yin = point.y,
@@ -12146,49 +13021,54 @@ module.exports = function(crs, denorm, point) {
   return point;
 };
 
-},{}],72:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var sign = require('./sign');
 
 module.exports = function(x) {
   return (Math.abs(x) < HALF_PI) ? x : (x - (sign(x) * Math.PI));
 };
-},{"./sign":89}],73:[function(require,module,exports){
+},{"./sign":86}],70:[function(require,module,exports){
 var TWO_PI = Math.PI * 2;
+// SPI is slightly greater than Math.PI, so values that exceed the -180..180
+// degree range by a tiny amount don't get wrapped. This prevents points that
+// have drifted from their original location along the 180th meridian (due to
+// floating point error) from changing their sign.
+var SPI = 3.14159265359;
 var sign = require('./sign');
 
 module.exports = function(x) {
-  return (Math.abs(x) < Math.PI) ? x : (x - (sign(x) * TWO_PI));
+  return (Math.abs(x) <= SPI) ? x : (x - (sign(x) * TWO_PI));
 };
-},{"./sign":89}],74:[function(require,module,exports){
+},{"./sign":86}],71:[function(require,module,exports){
 module.exports = function(x) {
   if (Math.abs(x) > 1) {
     x = (x > 1) ? 1 : -1;
   }
   return Math.asin(x);
 };
-},{}],75:[function(require,module,exports){
+},{}],72:[function(require,module,exports){
 module.exports = function(x) {
   return (1 - 0.25 * x * (1 + x / 16 * (3 + 1.25 * x)));
 };
-},{}],76:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 module.exports = function(x) {
   return (0.375 * x * (1 + 0.25 * x * (1 + 0.46875 * x)));
 };
-},{}],77:[function(require,module,exports){
+},{}],74:[function(require,module,exports){
 module.exports = function(x) {
   return (0.05859375 * x * x * (1 + 0.75 * x));
 };
-},{}],78:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 module.exports = function(x) {
   return (x * x * x * (35 / 3072));
 };
-},{}],79:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 module.exports = function(a, e, sinphi) {
   var temp = e * sinphi;
   return a / Math.sqrt(1 - temp * temp);
 };
-},{}],80:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 module.exports = function(ml, e0, e1, e2, e3) {
   var phi;
   var dphi;
@@ -12205,7 +13085,7 @@ module.exports = function(ml, e0, e1, e2, e3) {
   //..reportError("IMLFN-CONV:Latitude failed to converge after 15 iterations");
   return NaN;
 };
-},{}],81:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 
 module.exports = function(eccent, q) {
@@ -12238,16 +13118,16 @@ module.exports = function(eccent, q) {
   //console.log("IQSFN-CONV:Latitude failed to converge after 30 iterations");
   return NaN;
 };
-},{}],82:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 module.exports = function(e0, e1, e2, e3, phi) {
   return (e0 * phi - e1 * Math.sin(2 * phi) + e2 * Math.sin(4 * phi) - e3 * Math.sin(6 * phi));
 };
-},{}],83:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 module.exports = function(eccent, sinphi, cosphi) {
   var con = eccent * sinphi;
   return cosphi / (Math.sqrt(1 - con * con));
 };
-},{}],84:[function(require,module,exports){
+},{}],81:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 module.exports = function(eccent, ts) {
   var eccnth = 0.5 * eccent;
@@ -12264,7 +13144,7 @@ module.exports = function(eccent, ts) {
   //console.log("phi2z has NoConvergence");
   return -9999;
 };
-},{}],85:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 var C00 = 1;
 var C02 = 0.25;
 var C04 = 0.046875;
@@ -12289,7 +13169,7 @@ module.exports = function(es) {
   en[4] = t * es * C88;
   return en;
 };
-},{}],86:[function(require,module,exports){
+},{}],83:[function(require,module,exports){
 var pj_mlfn = require("./pj_mlfn");
 var EPSLN = 1.0e-10;
 var MAX_ITER = 20;
@@ -12310,13 +13190,13 @@ module.exports = function(arg, es, en) {
   //..reportError("cass:pj_inv_mlfn: Convergence error");
   return phi;
 };
-},{"./pj_mlfn":87}],87:[function(require,module,exports){
+},{"./pj_mlfn":84}],84:[function(require,module,exports){
 module.exports = function(phi, sphi, cphi, en) {
   cphi *= sphi;
   sphi *= sphi;
   return (en[0] * phi - cphi * (en[1] + sphi * (en[2] + sphi * (en[3] + sphi * en[4]))));
 };
-},{}],88:[function(require,module,exports){
+},{}],85:[function(require,module,exports){
 module.exports = function(eccent, sinphi) {
   var con;
   if (eccent > 1.0e-7) {
@@ -12327,15 +13207,15 @@ module.exports = function(eccent, sinphi) {
     return (2 * sinphi);
   }
 };
-},{}],89:[function(require,module,exports){
+},{}],86:[function(require,module,exports){
 module.exports = function(x) {
   return x<0 ? -1 : 1;
 };
-},{}],90:[function(require,module,exports){
+},{}],87:[function(require,module,exports){
 module.exports = function(esinp, exp) {
   return (Math.pow((1 - esinp) / (1 + esinp), exp));
 };
-},{}],91:[function(require,module,exports){
+},{}],88:[function(require,module,exports){
 module.exports = function (array){
   var out = {
     x: array[0],
@@ -12349,7 +13229,7 @@ module.exports = function (array){
   }
   return out;
 };
-},{}],92:[function(require,module,exports){
+},{}],89:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 
 module.exports = function(eccent, phi, sinphi) {
@@ -12358,7 +13238,7 @@ module.exports = function(eccent, phi, sinphi) {
   con = Math.pow(((1 - con) / (1 + con)), com);
   return (Math.tan(0.5 * (HALF_PI - phi)) / con);
 };
-},{}],93:[function(require,module,exports){
+},{}],90:[function(require,module,exports){
 exports.wgs84 = {
   towgs84: "0,0,0",
   ellipse: "WGS84",
@@ -12439,7 +13319,7 @@ exports.rnb72 = {
   ellipse: "intl",
   datumName: "Reseau National Belge 1972"
 };
-},{}],94:[function(require,module,exports){
+},{}],91:[function(require,module,exports){
 exports.MERIT = {
   a: 6378137.0,
   rf: 298.257,
@@ -12655,7 +13535,7 @@ exports.sphere = {
   b: 6370997.0,
   ellipseName: "Normal Sphere (r=6370997)"
 };
-},{}],95:[function(require,module,exports){
+},{}],92:[function(require,module,exports){
 exports.greenwich = 0.0; //"0dE",
 exports.lisbon = -9.131906111111; //"9d07'54.862\"W",
 exports.paris = 2.337229166667; //"2d20'14.025\"E",
@@ -12669,7 +13549,11 @@ exports.brussels = 4.367975; //"4d22'4.71\"E",
 exports.stockholm = 18.058277777778; //"18d3'29.8\"E",
 exports.athens = 23.7163375; //"23d42'58.815\"E",
 exports.oslo = 10.722916666667; //"10d43'22.5\"E"
-},{}],96:[function(require,module,exports){
+},{}],93:[function(require,module,exports){
+exports.ft = {to_meter: 0.3048};
+exports['us-ft'] = {to_meter: 1200 / 3937};
+
+},{}],94:[function(require,module,exports){
 var proj = require('./Proj');
 var transform = require('./transform');
 var wgs84 = proj('WGS84');
@@ -12734,7 +13618,7 @@ function proj4(fromProj, toProj, coord) {
   }
 }
 module.exports = proj4;
-},{"./Proj":70,"./transform":133}],97:[function(require,module,exports){
+},{"./Proj":67,"./transform":131}],95:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var PJD_3PARAM = 1;
 var PJD_7PARAM = 2;
@@ -12755,23 +13639,23 @@ var datum = function(proj) {
   if (proj.datumCode && proj.datumCode === 'none') {
     this.datum_type = PJD_NODATUM;
   }
+
   if (proj.datum_params) {
-    for (var i = 0; i < proj.datum_params.length; i++) {
-      proj.datum_params[i] = parseFloat(proj.datum_params[i]);
-    }
-    if (proj.datum_params[0] !== 0 || proj.datum_params[1] !== 0 || proj.datum_params[2] !== 0) {
+    this.datum_params = proj.datum_params.map(parseFloat);
+    if (this.datum_params[0] !== 0 || this.datum_params[1] !== 0 || this.datum_params[2] !== 0) {
       this.datum_type = PJD_3PARAM;
     }
-    if (proj.datum_params.length > 3) {
-      if (proj.datum_params[3] !== 0 || proj.datum_params[4] !== 0 || proj.datum_params[5] !== 0 || proj.datum_params[6] !== 0) {
+    if (this.datum_params.length > 3) {
+      if (this.datum_params[3] !== 0 || this.datum_params[4] !== 0 || this.datum_params[5] !== 0 || this.datum_params[6] !== 0) {
         this.datum_type = PJD_7PARAM;
-        proj.datum_params[3] *= SEC_TO_RAD;
-        proj.datum_params[4] *= SEC_TO_RAD;
-        proj.datum_params[5] *= SEC_TO_RAD;
-        proj.datum_params[6] = (proj.datum_params[6] / 1000000.0) + 1.0;
+        this.datum_params[3] *= SEC_TO_RAD;
+        this.datum_params[4] *= SEC_TO_RAD;
+        this.datum_params[5] *= SEC_TO_RAD;
+        this.datum_params[6] = (this.datum_params[6] / 1000000.0) + 1.0;
       }
     }
   }
+
   // DGR 2011-03-21 : nadgrids support
   this.datum_type = proj.grids ? PJD_GRIDSHIFT : this.datum_type;
 
@@ -12779,7 +13663,6 @@ var datum = function(proj) {
   this.b = proj.b;
   this.es = proj.es;
   this.ep2 = proj.ep2;
-  this.datum_params = proj.datum_params;
   if (this.datum_type === PJD_GRIDSHIFT) {
     this.grids = proj.grids;
   }
@@ -13140,7 +14023,7 @@ datum.prototype = {
 */
 module.exports = datum;
 
-},{}],98:[function(require,module,exports){
+},{}],96:[function(require,module,exports){
 var PJD_3PARAM = 1;
 var PJD_7PARAM = 2;
 var PJD_GRIDSHIFT = 3;
@@ -13241,7 +14124,7 @@ module.exports = function(source, dest, point) {
 };
 
 
-},{}],99:[function(require,module,exports){
+},{}],97:[function(require,module,exports){
 var globals = require('./global');
 var parseProj = require('./projString');
 var wkt = require('./wkt');
@@ -13250,11 +14133,16 @@ function defs(name) {
   /*global console*/
   var that = this;
   if (arguments.length === 2) {
-    if (arguments[1][0] === '+') {
-      defs[name] = parseProj(arguments[1]);
-    }
-    else {
-      defs[name] = wkt(arguments[1]);
+    var def = arguments[1];
+    if (typeof def === 'string') {
+      if (def.charAt(0) === '+') {
+        defs[name] = parseProj(arguments[1]);
+      }
+      else {
+        defs[name] = wkt(arguments[1]);
+      }
+    } else {
+      defs[name] = def;
     }
   }
   else if (arguments.length === 1) {
@@ -13269,7 +14157,9 @@ function defs(name) {
       });
     }
     else if (typeof name === 'string') {
-
+      if (name in defs) {
+        return defs[name];
+      }
     }
     else if ('EPSG' in name) {
       defs['EPSG:' + name.EPSG] = name;
@@ -13291,7 +14181,7 @@ function defs(name) {
 globals(defs);
 module.exports = defs;
 
-},{"./global":102,"./projString":106,"./wkt":134}],100:[function(require,module,exports){
+},{"./global":100,"./projString":104,"./wkt":132}],98:[function(require,module,exports){
 var Datum = require('./constants/Datum');
 var Ellipsoid = require('./constants/Ellipsoid');
 var extend = require('./extend');
@@ -13343,10 +14233,13 @@ module.exports = function(json) {
     json.axis = "enu";
   }
 
-  json.datum = datum(json);
+  if (!json.datum) {
+    json.datum = datum(json);
+  }
   return json;
 };
-},{"./constants/Datum":93,"./constants/Ellipsoid":94,"./datum":97,"./extend":101}],101:[function(require,module,exports){
+
+},{"./constants/Datum":90,"./constants/Ellipsoid":91,"./datum":95,"./extend":99}],99:[function(require,module,exports){
 module.exports = function(destination, source) {
   destination = destination || {};
   var value, property;
@@ -13362,20 +14255,20 @@ module.exports = function(destination, source) {
   return destination;
 };
 
-},{}],102:[function(require,module,exports){
+},{}],100:[function(require,module,exports){
 module.exports = function(defs) {
-  defs('WGS84', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
   defs('EPSG:4326', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
   defs('EPSG:4269', "+title=NAD83 (long/lat) +proj=longlat +a=6378137.0 +b=6356752.31414036 +ellps=GRS80 +datum=NAD83 +units=degrees");
   defs('EPSG:3857', "+title=WGS 84 / Pseudo-Mercator +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +no_defs");
 
+  defs.WGS84 = defs['EPSG:4326'];
   defs['EPSG:3785'] = defs['EPSG:3857']; // maintain backward compat, official code is 3857
   defs.GOOGLE = defs['EPSG:3857'];
   defs['EPSG:900913'] = defs['EPSG:3857'];
   defs['EPSG:102113'] = defs['EPSG:3857'];
 };
 
-},{}],103:[function(require,module,exports){
+},{}],101:[function(require,module,exports){
 var projs = [
   require('./projections/tmerc'),
   require('./projections/utm'),
@@ -13405,7 +14298,7 @@ module.exports = function(proj4){
     proj4.Proj.projections.add(proj);
   });
 };
-},{"./projections/aea":108,"./projections/aeqd":109,"./projections/cass":110,"./projections/cea":111,"./projections/eqc":112,"./projections/eqdc":113,"./projections/gnom":115,"./projections/krovak":116,"./projections/laea":117,"./projections/lcc":118,"./projections/mill":121,"./projections/moll":122,"./projections/nzmg":123,"./projections/omerc":124,"./projections/poly":125,"./projections/sinu":126,"./projections/somerc":127,"./projections/stere":128,"./projections/sterea":129,"./projections/tmerc":130,"./projections/utm":131,"./projections/vandg":132}],104:[function(require,module,exports){
+},{"./projections/aea":106,"./projections/aeqd":107,"./projections/cass":108,"./projections/cea":109,"./projections/eqc":110,"./projections/eqdc":111,"./projections/gnom":113,"./projections/krovak":114,"./projections/laea":115,"./projections/lcc":116,"./projections/mill":119,"./projections/moll":120,"./projections/nzmg":121,"./projections/omerc":122,"./projections/poly":123,"./projections/sinu":124,"./projections/somerc":125,"./projections/stere":126,"./projections/sterea":127,"./projections/tmerc":128,"./projections/utm":129,"./projections/vandg":130}],102:[function(require,module,exports){
 var proj4 = require('./core');
 proj4.defaultDatum = 'WGS84'; //default datum
 proj4.Proj = require('./Proj');
@@ -13418,7 +14311,7 @@ proj4.mgrs = require('mgrs');
 proj4.version = require('../package.json').version;
 require('./includedProjections')(proj4);
 module.exports = proj4;
-},{"../package.json":136,"./Point":69,"./Proj":70,"./common/toPoint":91,"./core":96,"./defs":99,"./includedProjections":103,"./transform":133,"mgrs":135}],105:[function(require,module,exports){
+},{"../package.json":133,"./Point":66,"./Proj":67,"./common/toPoint":88,"./core":94,"./defs":97,"./includedProjections":101,"./transform":131,"mgrs":48}],103:[function(require,module,exports){
 var defs = require('./defs');
 var wkt = require('./wkt');
 var projStr = require('./projString');
@@ -13455,12 +14348,13 @@ function parse(code){
 }
 
 module.exports = parse;
-},{"./defs":99,"./projString":106,"./wkt":134}],106:[function(require,module,exports){
+},{"./defs":97,"./projString":104,"./wkt":132}],104:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var PrimeMeridian = require('./constants/PrimeMeridian');
+var units = require('./constants/units');
+
 module.exports = function(defData) {
   var self = {};
-
   var paramObj = {};
   defData.split("+").map(function(v) {
     return v.trim();
@@ -13476,7 +14370,7 @@ module.exports = function(defData) {
     proj: 'projName',
     datum: 'datumCode',
     rf: function(v) {
-      self.rf = parseFloat(v, 10);
+      self.rf = parseFloat(v);
     },
     lat_0: function(v) {
       self.lat0 = v * D2R;
@@ -13506,16 +14400,22 @@ module.exports = function(defData) {
       self.longc = v * D2R;
     },
     x_0: function(v) {
-      self.x0 = parseFloat(v, 10);
+      self.x0 = parseFloat(v);
     },
     y_0: function(v) {
-      self.y0 = parseFloat(v, 10);
+      self.y0 = parseFloat(v);
     },
     k_0: function(v) {
-      self.k0 = parseFloat(v, 10);
+      self.k0 = parseFloat(v);
     },
     k: function(v) {
-      self.k0 = parseFloat(v, 10);
+      self.k0 = parseFloat(v);
+    },
+    a: function(v) {
+      self.a = parseFloat(v);
+    },
+    b: function(v) {
+      self.b = parseFloat(v);
     },
     r_a: function() {
       self.R_A = true;
@@ -13528,17 +14428,23 @@ module.exports = function(defData) {
     },
     towgs84: function(v) {
       self.datum_params = v.split(",").map(function(a) {
-        return parseFloat(a, 10);
+        return parseFloat(a);
       });
     },
     to_meter: function(v) {
-      self.to_meter = parseFloat(v, 10);
+      self.to_meter = parseFloat(v);
+    },
+    units: function(v) {
+      self.units = v;
+      if (units[v]) {
+        self.to_meter = units[v].to_meter;
+      }
     },
     from_greenwich: function(v) {
       self.from_greenwich = v * D2R;
     },
     pm: function(v) {
-      self.from_greenwich = (PrimeMeridian[v] ? PrimeMeridian[v] : parseFloat(v, 10)) * D2R;
+      self.from_greenwich = (PrimeMeridian[v] ? PrimeMeridian[v] : parseFloat(v)) * D2R;
     },
     nadgrids: function(v) {
       if (v === '@null') {
@@ -13576,7 +14482,7 @@ module.exports = function(defData) {
   return self;
 };
 
-},{"./constants/PrimeMeridian":95}],107:[function(require,module,exports){
+},{"./constants/PrimeMeridian":92,"./constants/units":93}],105:[function(require,module,exports){
 var projs = [
   require('./projections/merc'),
   require('./projections/longlat')
@@ -13612,7 +14518,7 @@ exports.start = function() {
   projs.forEach(add);
 };
 
-},{"./projections/longlat":119,"./projections/merc":120}],108:[function(require,module,exports){
+},{"./projections/longlat":117,"./projections/merc":118}],106:[function(require,module,exports){
 var EPSLN = 1.0e-10;
 var msfnz = require('../common/msfnz');
 var qsfnz = require('../common/qsfnz');
@@ -13735,7 +14641,7 @@ exports.phi1z = function(eccent, qs) {
 };
 exports.names = ["Albers_Conic_Equal_Area", "Albers", "aea"];
 
-},{"../common/adjust_lon":73,"../common/asinz":74,"../common/msfnz":83,"../common/qsfnz":88}],109:[function(require,module,exports){
+},{"../common/adjust_lon":70,"../common/asinz":71,"../common/msfnz":80,"../common/qsfnz":85}],107:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
@@ -13934,7 +14840,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Azimuthal_Equidistant", "aeqd"];
 
-},{"../common/adjust_lon":73,"../common/asinz":74,"../common/e0fn":75,"../common/e1fn":76,"../common/e2fn":77,"../common/e3fn":78,"../common/gN":79,"../common/imlfn":80,"../common/mlfn":82}],110:[function(require,module,exports){
+},{"../common/adjust_lon":70,"../common/asinz":71,"../common/e0fn":72,"../common/e1fn":73,"../common/e2fn":74,"../common/e3fn":75,"../common/gN":76,"../common/imlfn":77,"../common/mlfn":79}],108:[function(require,module,exports){
 var mlfn = require('../common/mlfn');
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
@@ -14038,7 +14944,7 @@ exports.inverse = function(p) {
 
 };
 exports.names = ["Cassini", "Cassini_Soldner", "cass"];
-},{"../common/adjust_lat":72,"../common/adjust_lon":73,"../common/e0fn":75,"../common/e1fn":76,"../common/e2fn":77,"../common/e3fn":78,"../common/gN":79,"../common/imlfn":80,"../common/mlfn":82}],111:[function(require,module,exports){
+},{"../common/adjust_lat":69,"../common/adjust_lon":70,"../common/e0fn":72,"../common/e1fn":73,"../common/e2fn":74,"../common/e3fn":75,"../common/gN":76,"../common/imlfn":77,"../common/mlfn":79}],109:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var qsfnz = require('../common/qsfnz');
 var msfnz = require('../common/msfnz');
@@ -14103,7 +15009,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["cea"];
 
-},{"../common/adjust_lon":73,"../common/iqsfnz":81,"../common/msfnz":83,"../common/qsfnz":88}],112:[function(require,module,exports){
+},{"../common/adjust_lon":70,"../common/iqsfnz":78,"../common/msfnz":80,"../common/qsfnz":85}],110:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var adjust_lat = require('../common/adjust_lat');
 exports.init = function() {
@@ -14146,7 +15052,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Equirectangular", "Equidistant_Cylindrical", "eqc"];
 
-},{"../common/adjust_lat":72,"../common/adjust_lon":73}],113:[function(require,module,exports){
+},{"../common/adjust_lat":69,"../common/adjust_lon":70}],111:[function(require,module,exports){
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
 var e2fn = require('../common/e2fn');
@@ -14258,7 +15164,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Equidistant_Conic", "eqdc"];
 
-},{"../common/adjust_lat":72,"../common/adjust_lon":73,"../common/e0fn":75,"../common/e1fn":76,"../common/e2fn":77,"../common/e3fn":78,"../common/imlfn":80,"../common/mlfn":82,"../common/msfnz":83}],114:[function(require,module,exports){
+},{"../common/adjust_lat":69,"../common/adjust_lon":70,"../common/e0fn":72,"../common/e1fn":73,"../common/e2fn":74,"../common/e3fn":75,"../common/imlfn":77,"../common/mlfn":79,"../common/msfnz":80}],112:[function(require,module,exports){
 var FORTPI = Math.PI/4;
 var srat = require('../common/srat');
 var HALF_PI = Math.PI/2;
@@ -14305,7 +15211,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["gauss"];
 
-},{"../common/srat":90}],115:[function(require,module,exports){
+},{"../common/srat":87}],113:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var EPSLN = 1.0e-10;
 var asinz = require('../common/asinz');
@@ -14406,7 +15312,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["gnom"];
 
-},{"../common/adjust_lon":73,"../common/asinz":74}],116:[function(require,module,exports){
+},{"../common/adjust_lon":70,"../common/asinz":71}],114:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 exports.init = function() {
   this.a = 6377397.155;
@@ -14506,7 +15412,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Krovak", "krovak"];
 
-},{"../common/adjust_lon":73}],117:[function(require,module,exports){
+},{"../common/adjust_lon":70}],115:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var FORTPI = Math.PI/4;
 var EPSLN = 1.0e-10;
@@ -14796,7 +15702,7 @@ exports.authlat = function(beta, APA) {
 };
 exports.names = ["Lambert Azimuthal Equal Area", "Lambert_Azimuthal_Equal_Area", "laea"];
 
-},{"../common/adjust_lon":73,"../common/qsfnz":88}],118:[function(require,module,exports){
+},{"../common/adjust_lon":70,"../common/qsfnz":85}],116:[function(require,module,exports){
 var EPSLN = 1.0e-10;
 var msfnz = require('../common/msfnz');
 var tsfnz = require('../common/tsfnz');
@@ -14933,7 +15839,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Lambert Tangential Conformal Conic Projection", "Lambert_Conformal_Conic", "Lambert_Conformal_Conic_2SP", "lcc"];
 
-},{"../common/adjust_lon":73,"../common/msfnz":83,"../common/phi2z":84,"../common/sign":89,"../common/tsfnz":92}],119:[function(require,module,exports){
+},{"../common/adjust_lon":70,"../common/msfnz":80,"../common/phi2z":81,"../common/sign":86,"../common/tsfnz":89}],117:[function(require,module,exports){
 exports.init = function() {
   //no-op for longlat
 };
@@ -14945,7 +15851,7 @@ exports.forward = identity;
 exports.inverse = identity;
 exports.names = ["longlat", "identity"];
 
-},{}],120:[function(require,module,exports){
+},{}],118:[function(require,module,exports){
 var msfnz = require('../common/msfnz');
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
@@ -15044,7 +15950,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Mercator", "Popular Visualisation Pseudo Mercator", "Mercator_1SP", "Mercator_Auxiliary_Sphere", "merc"];
 
-},{"../common/adjust_lon":73,"../common/msfnz":83,"../common/phi2z":84,"../common/tsfnz":92}],121:[function(require,module,exports){
+},{"../common/adjust_lon":70,"../common/msfnz":80,"../common/phi2z":81,"../common/tsfnz":89}],119:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 /*
   reference
@@ -15091,7 +15997,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Miller_Cylindrical", "mill"];
 
-},{"../common/adjust_lon":73}],122:[function(require,module,exports){
+},{"../common/adjust_lon":70}],120:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var EPSLN = 1.0e-10;
 exports.init = function() {};
@@ -15170,7 +16076,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Mollweide", "moll"];
 
-},{"../common/adjust_lon":73}],123:[function(require,module,exports){
+},{"../common/adjust_lon":70}],121:[function(require,module,exports){
 var SEC_TO_RAD = 4.84813681109535993589914102357e-6;
 /*
   reference
@@ -15390,7 +16296,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["New_Zealand_Map_Grid", "nzmg"];
-},{}],124:[function(require,module,exports){
+},{}],122:[function(require,module,exports){
 var tsfnz = require('../common/tsfnz');
 var adjust_lon = require('../common/adjust_lon');
 var phi2z = require('../common/phi2z');
@@ -15559,7 +16465,7 @@ exports.inverse = function(p) {
 };
 
 exports.names = ["Hotine_Oblique_Mercator", "Hotine Oblique Mercator", "Hotine_Oblique_Mercator_Azimuth_Natural_Origin", "Hotine_Oblique_Mercator_Azimuth_Center", "omerc"];
-},{"../common/adjust_lon":73,"../common/phi2z":84,"../common/tsfnz":92}],125:[function(require,module,exports){
+},{"../common/adjust_lon":70,"../common/phi2z":81,"../common/tsfnz":89}],123:[function(require,module,exports){
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
 var e2fn = require('../common/e2fn');
@@ -15688,7 +16594,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Polyconic", "poly"];
-},{"../common/adjust_lat":72,"../common/adjust_lon":73,"../common/e0fn":75,"../common/e1fn":76,"../common/e2fn":77,"../common/e3fn":78,"../common/gN":79,"../common/mlfn":82}],126:[function(require,module,exports){
+},{"../common/adjust_lat":69,"../common/adjust_lon":70,"../common/e0fn":72,"../common/e1fn":73,"../common/e2fn":74,"../common/e3fn":75,"../common/gN":76,"../common/mlfn":79}],124:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var adjust_lat = require('../common/adjust_lat');
 var pj_enfn = require('../common/pj_enfn');
@@ -15795,7 +16701,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Sinusoidal", "sinu"];
-},{"../common/adjust_lat":72,"../common/adjust_lon":73,"../common/asinz":74,"../common/pj_enfn":85,"../common/pj_inv_mlfn":86,"../common/pj_mlfn":87}],127:[function(require,module,exports){
+},{"../common/adjust_lat":69,"../common/adjust_lon":70,"../common/asinz":71,"../common/pj_enfn":82,"../common/pj_inv_mlfn":83,"../common/pj_mlfn":84}],125:[function(require,module,exports){
 /*
   references:
     Formules et constantes pour le Calcul pour la
@@ -15877,7 +16783,7 @@ exports.inverse = function(p) {
 
 exports.names = ["somerc"];
 
-},{}],128:[function(require,module,exports){
+},{}],126:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
 var sign = require('../common/sign');
@@ -16043,8 +16949,9 @@ exports.inverse = function(p) {
   return p;
 
 };
-exports.names = ["stere"];
-},{"../common/adjust_lon":73,"../common/msfnz":83,"../common/phi2z":84,"../common/sign":89,"../common/tsfnz":92}],129:[function(require,module,exports){
+exports.names = ["stere", "Stereographic_South_Pole", "Polar Stereographic (variant B)"];
+
+},{"../common/adjust_lon":70,"../common/msfnz":80,"../common/phi2z":81,"../common/sign":86,"../common/tsfnz":89}],127:[function(require,module,exports){
 var gauss = require('./gauss');
 var adjust_lon = require('../common/adjust_lon');
 exports.init = function() {
@@ -16103,7 +17010,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Stereographic_North_Pole", "Oblique_Stereographic", "Polar_Stereographic", "sterea","Oblique Stereographic Alternative"];
 
-},{"../common/adjust_lon":73,"./gauss":114}],130:[function(require,module,exports){
+},{"../common/adjust_lon":70,"./gauss":112}],128:[function(require,module,exports){
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
 var e2fn = require('../common/e2fn');
@@ -16240,7 +17147,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Transverse_Mercator", "Transverse Mercator", "tmerc"];
 
-},{"../common/adjust_lon":73,"../common/asinz":74,"../common/e0fn":75,"../common/e1fn":76,"../common/e2fn":77,"../common/e3fn":78,"../common/mlfn":82,"../common/sign":89}],131:[function(require,module,exports){
+},{"../common/adjust_lon":70,"../common/asinz":71,"../common/e0fn":72,"../common/e1fn":73,"../common/e2fn":74,"../common/e3fn":75,"../common/mlfn":79,"../common/sign":86}],129:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var tmerc = require('./tmerc');
 exports.dependsOn = 'tmerc';
@@ -16260,7 +17167,7 @@ exports.init = function() {
 };
 exports.names = ["Universal Transverse Mercator System", "utm"];
 
-},{"./tmerc":130}],132:[function(require,module,exports){
+},{"./tmerc":128}],130:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
@@ -16381,7 +17288,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Van_der_Grinten_I", "VanDerGrinten", "vandg"];
-},{"../common/adjust_lon":73,"../common/asinz":74}],133:[function(require,module,exports){
+},{"../common/adjust_lon":70,"../common/asinz":71}],131:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var R2D = 57.29577951308232088;
 var PJD_3PARAM = 1;
@@ -16454,7 +17361,7 @@ module.exports = function transform(source, dest, point) {
 
   return point;
 };
-},{"./Proj":70,"./adjust_axis":71,"./common/toPoint":91,"./datum_transform":98}],134:[function(require,module,exports){
+},{"./Proj":67,"./adjust_axis":68,"./common/toPoint":88,"./datum_transform":96}],132:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var extend = require('./extend');
 
@@ -16568,7 +17475,13 @@ function cleanWKT(wkt) {
       wkt.units = 'meter';
     }
     if (wkt.UNIT.convert) {
-      wkt.to_meter = parseFloat(wkt.UNIT.convert, 10);
+      if (wkt.type === 'GEOGCS') {
+        if (wkt.DATUM && wkt.DATUM.SPHEROID) {
+          wkt.to_meter = parseFloat(wkt.UNIT.convert, 10)*wkt.DATUM.SPHEROID.a;
+        }
+      } else {
+        wkt.to_meter = parseFloat(wkt.UNIT.convert, 10);
+      }
     }
   }
 
@@ -16612,6 +17525,9 @@ function cleanWKT(wkt) {
       wkt.a = wkt.GEOGCS.DATUM.SPHEROID.a;
       wkt.rf = parseFloat(wkt.GEOGCS.DATUM.SPHEROID.rf, 10);
     }
+    if (~wkt.datumCode.indexOf('osgb_1936')) {
+      wkt.datumCode = "osgb36";
+    }
   }
   if (wkt.b && !isFinite(wkt.b)) {
     wkt.b = wkt.a;
@@ -16631,6 +17547,7 @@ function cleanWKT(wkt) {
     ['false_northing', 'False_Northing'],
     ['central_meridian', 'Central_Meridian'],
     ['latitude_of_origin', 'Latitude_Of_Origin'],
+    ['latitude_of_origin', 'Central_Parallel'],
     ['scale_factor', 'Scale_Factor'],
     ['k0', 'scale_factor'],
     ['latitude_of_center', 'Latitude_of_center'],
@@ -16648,12 +17565,16 @@ function cleanWKT(wkt) {
     ['srsCode', 'name']
   ];
   list.forEach(renamer);
-  if (!wkt.long0 && wkt.longc && (wkt.PROJECTION === 'Albers_Conic_Equal_Area' || wkt.PROJECTION === "Lambert_Azimuthal_Equal_Area")) {
+  if (!wkt.long0 && wkt.longc && (wkt.projName === 'Albers_Conic_Equal_Area' || wkt.projName === "Lambert_Azimuthal_Equal_Area")) {
     wkt.long0 = wkt.longc;
+  }
+  if (!wkt.lat_ts && wkt.lat1 && (wkt.projName === 'Stereographic_South_Pole' || wkt.projName === 'Polar Stereographic (variant B)')) {
+    wkt.lat0 = d2r(wkt.lat1 > 0 ? 90 : -90);
+    wkt.lat_ts = wkt.lat1;
   }
 }
 module.exports = function(wkt, self) {
-  var lisp = JSON.parse(("," + wkt).replace(/\s*\,\s*([A-Z_0-9]+?)(\[)/g, ',["$1",').slice(1).replace(/\s*\,\s*([A-Z_0-9]+?)\]/g, ',"$1"]'));
+  var lisp = JSON.parse(("," + wkt).replace(/\s*\,\s*([A-Z_0-9]+?)(\[)/g, ',["$1",').slice(1).replace(/\s*\,\s*([A-Z_0-9]+?)\]/g, ',"$1"]').replace(/,\["VERTCS".+/,''));
   var type = lisp.shift();
   var name = lisp.shift();
   lisp.unshift(['name', name]);
@@ -16665,788 +17586,45 @@ module.exports = function(wkt, self) {
   return extend(self, obj.output);
 };
 
-},{"./extend":101}],135:[function(require,module,exports){
-
-
-
-/**
- * UTM zones are grouped, and assigned to one of a group of 6
- * sets.
- *
- * {int} @private
- */
-var NUM_100K_SETS = 6;
-
-/**
- * The column letters (for easting) of the lower left value, per
- * set.
- *
- * {string} @private
- */
-var SET_ORIGIN_COLUMN_LETTERS = 'AJSAJS';
-
-/**
- * The row letters (for northing) of the lower left value, per
- * set.
- *
- * {string} @private
- */
-var SET_ORIGIN_ROW_LETTERS = 'AFAFAF';
-
-var A = 65; // A
-var I = 73; // I
-var O = 79; // O
-var V = 86; // V
-var Z = 90; // Z
-
-/**
- * Conversion of lat/lon to MGRS.
- *
- * @param {object} ll Object literal with lat and lon properties on a
- *     WGS84 ellipsoid.
- * @param {int} accuracy Accuracy in digits (5 for 1 m, 4 for 10 m, 3 for
- *      100 m, 4 for 1000 m or 5 for 10000 m). Optional, default is 5.
- * @return {string} the MGRS string for the given location and accuracy.
- */
-exports.forward = function(ll, accuracy) {
-  accuracy = accuracy || 5; // default accuracy 1m
-  return encode(LLtoUTM({
-    lat: ll[1],
-    lon: ll[0]
-  }), accuracy);
-};
-
-/**
- * Conversion of MGRS to lat/lon.
- *
- * @param {string} mgrs MGRS string.
- * @return {array} An array with left (longitude), bottom (latitude), right
- *     (longitude) and top (latitude) values in WGS84, representing the
- *     bounding box for the provided MGRS reference.
- */
-exports.inverse = function(mgrs) {
-  var bbox = UTMtoLL(decode(mgrs.toUpperCase()));
-  return [bbox.left, bbox.bottom, bbox.right, bbox.top];
-};
-
-exports.toPoint = function(mgrsStr) {
-  var llbbox = exports.inverse(mgrsStr);
-  return [(llbbox[2] + llbbox[0]) / 2, (llbbox[3] + llbbox[1]) / 2];
-};
-/**
- * Conversion from degrees to radians.
- *
- * @private
- * @param {number} deg the angle in degrees.
- * @return {number} the angle in radians.
- */
-function degToRad(deg) {
-  return (deg * (Math.PI / 180.0));
-}
-
-/**
- * Conversion from radians to degrees.
- *
- * @private
- * @param {number} rad the angle in radians.
- * @return {number} the angle in degrees.
- */
-function radToDeg(rad) {
-  return (180.0 * (rad / Math.PI));
-}
-
-/**
- * Converts a set of Longitude and Latitude co-ordinates to UTM
- * using the WGS84 ellipsoid.
- *
- * @private
- * @param {object} ll Object literal with lat and lon properties
- *     representing the WGS84 coordinate to be converted.
- * @return {object} Object literal containing the UTM value with easting,
- *     northing, zoneNumber and zoneLetter properties, and an optional
- *     accuracy property in digits. Returns null if the conversion failed.
- */
-function LLtoUTM(ll) {
-  var Lat = ll.lat;
-  var Long = ll.lon;
-  var a = 6378137.0; //ellip.radius;
-  var eccSquared = 0.00669438; //ellip.eccsq;
-  var k0 = 0.9996;
-  var LongOrigin;
-  var eccPrimeSquared;
-  var N, T, C, A, M;
-  var LatRad = degToRad(Lat);
-  var LongRad = degToRad(Long);
-  var LongOriginRad;
-  var ZoneNumber;
-  // (int)
-  ZoneNumber = Math.floor((Long + 180) / 6) + 1;
-
-  //Make sure the longitude 180.00 is in Zone 60
-  if (Long === 180) {
-    ZoneNumber = 60;
-  }
-
-  // Special zone for Norway
-  if (Lat >= 56.0 && Lat < 64.0 && Long >= 3.0 && Long < 12.0) {
-    ZoneNumber = 32;
-  }
-
-  // Special zones for Svalbard
-  if (Lat >= 72.0 && Lat < 84.0) {
-    if (Long >= 0.0 && Long < 9.0) {
-      ZoneNumber = 31;
-    }
-    else if (Long >= 9.0 && Long < 21.0) {
-      ZoneNumber = 33;
-    }
-    else if (Long >= 21.0 && Long < 33.0) {
-      ZoneNumber = 35;
-    }
-    else if (Long >= 33.0 && Long < 42.0) {
-      ZoneNumber = 37;
-    }
-  }
-
-  LongOrigin = (ZoneNumber - 1) * 6 - 180 + 3; //+3 puts origin
-  // in middle of
-  // zone
-  LongOriginRad = degToRad(LongOrigin);
-
-  eccPrimeSquared = (eccSquared) / (1 - eccSquared);
-
-  N = a / Math.sqrt(1 - eccSquared * Math.sin(LatRad) * Math.sin(LatRad));
-  T = Math.tan(LatRad) * Math.tan(LatRad);
-  C = eccPrimeSquared * Math.cos(LatRad) * Math.cos(LatRad);
-  A = Math.cos(LatRad) * (LongRad - LongOriginRad);
-
-  M = a * ((1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256) * LatRad - (3 * eccSquared / 8 + 3 * eccSquared * eccSquared / 32 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(2 * LatRad) + (15 * eccSquared * eccSquared / 256 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(4 * LatRad) - (35 * eccSquared * eccSquared * eccSquared / 3072) * Math.sin(6 * LatRad));
-
-  var UTMEasting = (k0 * N * (A + (1 - T + C) * A * A * A / 6.0 + (5 - 18 * T + T * T + 72 * C - 58 * eccPrimeSquared) * A * A * A * A * A / 120.0) + 500000.0);
-
-  var UTMNorthing = (k0 * (M + N * Math.tan(LatRad) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24.0 + (61 - 58 * T + T * T + 600 * C - 330 * eccPrimeSquared) * A * A * A * A * A * A / 720.0)));
-  if (Lat < 0.0) {
-    UTMNorthing += 10000000.0; //10000000 meter offset for
-    // southern hemisphere
-  }
-
-  return {
-    northing: Math.round(UTMNorthing),
-    easting: Math.round(UTMEasting),
-    zoneNumber: ZoneNumber,
-    zoneLetter: getLetterDesignator(Lat)
-  };
-}
-
-/**
- * Converts UTM coords to lat/long, using the WGS84 ellipsoid. This is a convenience
- * class where the Zone can be specified as a single string eg."60N" which
- * is then broken down into the ZoneNumber and ZoneLetter.
- *
- * @private
- * @param {object} utm An object literal with northing, easting, zoneNumber
- *     and zoneLetter properties. If an optional accuracy property is
- *     provided (in meters), a bounding box will be returned instead of
- *     latitude and longitude.
- * @return {object} An object literal containing either lat and lon values
- *     (if no accuracy was provided), or top, right, bottom and left values
- *     for the bounding box calculated according to the provided accuracy.
- *     Returns null if the conversion failed.
- */
-function UTMtoLL(utm) {
-
-  var UTMNorthing = utm.northing;
-  var UTMEasting = utm.easting;
-  var zoneLetter = utm.zoneLetter;
-  var zoneNumber = utm.zoneNumber;
-  // check the ZoneNummber is valid
-  if (zoneNumber < 0 || zoneNumber > 60) {
-    return null;
-  }
-
-  var k0 = 0.9996;
-  var a = 6378137.0; //ellip.radius;
-  var eccSquared = 0.00669438; //ellip.eccsq;
-  var eccPrimeSquared;
-  var e1 = (1 - Math.sqrt(1 - eccSquared)) / (1 + Math.sqrt(1 - eccSquared));
-  var N1, T1, C1, R1, D, M;
-  var LongOrigin;
-  var mu, phi1Rad;
-
-  // remove 500,000 meter offset for longitude
-  var x = UTMEasting - 500000.0;
-  var y = UTMNorthing;
-
-  // We must know somehow if we are in the Northern or Southern
-  // hemisphere, this is the only time we use the letter So even
-  // if the Zone letter isn't exactly correct it should indicate
-  // the hemisphere correctly
-  if (zoneLetter < 'N') {
-    y -= 10000000.0; // remove 10,000,000 meter offset used
-    // for southern hemisphere
-  }
-
-  // There are 60 zones with zone 1 being at West -180 to -174
-  LongOrigin = (zoneNumber - 1) * 6 - 180 + 3; // +3 puts origin
-  // in middle of
-  // zone
-
-  eccPrimeSquared = (eccSquared) / (1 - eccSquared);
-
-  M = y / k0;
-  mu = M / (a * (1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256));
-
-  phi1Rad = mu + (3 * e1 / 2 - 27 * e1 * e1 * e1 / 32) * Math.sin(2 * mu) + (21 * e1 * e1 / 16 - 55 * e1 * e1 * e1 * e1 / 32) * Math.sin(4 * mu) + (151 * e1 * e1 * e1 / 96) * Math.sin(6 * mu);
-  // double phi1 = ProjMath.radToDeg(phi1Rad);
-
-  N1 = a / Math.sqrt(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad));
-  T1 = Math.tan(phi1Rad) * Math.tan(phi1Rad);
-  C1 = eccPrimeSquared * Math.cos(phi1Rad) * Math.cos(phi1Rad);
-  R1 = a * (1 - eccSquared) / Math.pow(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad), 1.5);
-  D = x / (N1 * k0);
-
-  var lat = phi1Rad - (N1 * Math.tan(phi1Rad) / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * eccPrimeSquared) * D * D * D * D / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * eccPrimeSquared - 3 * C1 * C1) * D * D * D * D * D * D / 720);
-  lat = radToDeg(lat);
-
-  var lon = (D - (1 + 2 * T1 + C1) * D * D * D / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * eccPrimeSquared + 24 * T1 * T1) * D * D * D * D * D / 120) / Math.cos(phi1Rad);
-  lon = LongOrigin + radToDeg(lon);
-
-  var result;
-  if (utm.accuracy) {
-    var topRight = UTMtoLL({
-      northing: utm.northing + utm.accuracy,
-      easting: utm.easting + utm.accuracy,
-      zoneLetter: utm.zoneLetter,
-      zoneNumber: utm.zoneNumber
-    });
-    result = {
-      top: topRight.lat,
-      right: topRight.lon,
-      bottom: lat,
-      left: lon
-    };
-  }
-  else {
-    result = {
-      lat: lat,
-      lon: lon
-    };
-  }
-  return result;
-}
-
-/**
- * Calculates the MGRS letter designator for the given latitude.
- *
- * @private
- * @param {number} lat The latitude in WGS84 to get the letter designator
- *     for.
- * @return {char} The letter designator.
- */
-function getLetterDesignator(lat) {
-  //This is here as an error flag to show that the Latitude is
-  //outside MGRS limits
-  var LetterDesignator = 'Z';
-
-  if ((84 >= lat) && (lat >= 72)) {
-    LetterDesignator = 'X';
-  }
-  else if ((72 > lat) && (lat >= 64)) {
-    LetterDesignator = 'W';
-  }
-  else if ((64 > lat) && (lat >= 56)) {
-    LetterDesignator = 'V';
-  }
-  else if ((56 > lat) && (lat >= 48)) {
-    LetterDesignator = 'U';
-  }
-  else if ((48 > lat) && (lat >= 40)) {
-    LetterDesignator = 'T';
-  }
-  else if ((40 > lat) && (lat >= 32)) {
-    LetterDesignator = 'S';
-  }
-  else if ((32 > lat) && (lat >= 24)) {
-    LetterDesignator = 'R';
-  }
-  else if ((24 > lat) && (lat >= 16)) {
-    LetterDesignator = 'Q';
-  }
-  else if ((16 > lat) && (lat >= 8)) {
-    LetterDesignator = 'P';
-  }
-  else if ((8 > lat) && (lat >= 0)) {
-    LetterDesignator = 'N';
-  }
-  else if ((0 > lat) && (lat >= -8)) {
-    LetterDesignator = 'M';
-  }
-  else if ((-8 > lat) && (lat >= -16)) {
-    LetterDesignator = 'L';
-  }
-  else if ((-16 > lat) && (lat >= -24)) {
-    LetterDesignator = 'K';
-  }
-  else if ((-24 > lat) && (lat >= -32)) {
-    LetterDesignator = 'J';
-  }
-  else if ((-32 > lat) && (lat >= -40)) {
-    LetterDesignator = 'H';
-  }
-  else if ((-40 > lat) && (lat >= -48)) {
-    LetterDesignator = 'G';
-  }
-  else if ((-48 > lat) && (lat >= -56)) {
-    LetterDesignator = 'F';
-  }
-  else if ((-56 > lat) && (lat >= -64)) {
-    LetterDesignator = 'E';
-  }
-  else if ((-64 > lat) && (lat >= -72)) {
-    LetterDesignator = 'D';
-  }
-  else if ((-72 > lat) && (lat >= -80)) {
-    LetterDesignator = 'C';
-  }
-  return LetterDesignator;
-}
-
-/**
- * Encodes a UTM location as MGRS string.
- *
- * @private
- * @param {object} utm An object literal with easting, northing,
- *     zoneLetter, zoneNumber
- * @param {number} accuracy Accuracy in digits (1-5).
- * @return {string} MGRS string for the given UTM location.
- */
-function encode(utm, accuracy) {
-  var seasting = "" + utm.easting,
-    snorthing = "" + utm.northing;
-
-  return utm.zoneNumber + utm.zoneLetter + get100kID(utm.easting, utm.northing, utm.zoneNumber) + seasting.substr(seasting.length - 5, accuracy) + snorthing.substr(snorthing.length - 5, accuracy);
-}
-
-/**
- * Get the two letter 100k designator for a given UTM easting,
- * northing and zone number value.
- *
- * @private
- * @param {number} easting
- * @param {number} northing
- * @param {number} zoneNumber
- * @return the two letter 100k designator for the given UTM location.
- */
-function get100kID(easting, northing, zoneNumber) {
-  var setParm = get100kSetForZone(zoneNumber);
-  var setColumn = Math.floor(easting / 100000);
-  var setRow = Math.floor(northing / 100000) % 20;
-  return getLetter100kID(setColumn, setRow, setParm);
-}
-
-/**
- * Given a UTM zone number, figure out the MGRS 100K set it is in.
- *
- * @private
- * @param {number} i An UTM zone number.
- * @return {number} the 100k set the UTM zone is in.
- */
-function get100kSetForZone(i) {
-  var setParm = i % NUM_100K_SETS;
-  if (setParm === 0) {
-    setParm = NUM_100K_SETS;
-  }
-
-  return setParm;
-}
-
-/**
- * Get the two-letter MGRS 100k designator given information
- * translated from the UTM northing, easting and zone number.
- *
- * @private
- * @param {number} column the column index as it relates to the MGRS
- *        100k set spreadsheet, created from the UTM easting.
- *        Values are 1-8.
- * @param {number} row the row index as it relates to the MGRS 100k set
- *        spreadsheet, created from the UTM northing value. Values
- *        are from 0-19.
- * @param {number} parm the set block, as it relates to the MGRS 100k set
- *        spreadsheet, created from the UTM zone. Values are from
- *        1-60.
- * @return two letter MGRS 100k code.
- */
-function getLetter100kID(column, row, parm) {
-  // colOrigin and rowOrigin are the letters at the origin of the set
-  var index = parm - 1;
-  var colOrigin = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(index);
-  var rowOrigin = SET_ORIGIN_ROW_LETTERS.charCodeAt(index);
-
-  // colInt and rowInt are the letters to build to return
-  var colInt = colOrigin + column - 1;
-  var rowInt = rowOrigin + row;
-  var rollover = false;
-
-  if (colInt > Z) {
-    colInt = colInt - Z + A - 1;
-    rollover = true;
-  }
-
-  if (colInt === I || (colOrigin < I && colInt > I) || ((colInt > I || colOrigin < I) && rollover)) {
-    colInt++;
-  }
-
-  if (colInt === O || (colOrigin < O && colInt > O) || ((colInt > O || colOrigin < O) && rollover)) {
-    colInt++;
-
-    if (colInt === I) {
-      colInt++;
-    }
-  }
-
-  if (colInt > Z) {
-    colInt = colInt - Z + A - 1;
-  }
-
-  if (rowInt > V) {
-    rowInt = rowInt - V + A - 1;
-    rollover = true;
-  }
-  else {
-    rollover = false;
-  }
-
-  if (((rowInt === I) || ((rowOrigin < I) && (rowInt > I))) || (((rowInt > I) || (rowOrigin < I)) && rollover)) {
-    rowInt++;
-  }
-
-  if (((rowInt === O) || ((rowOrigin < O) && (rowInt > O))) || (((rowInt > O) || (rowOrigin < O)) && rollover)) {
-    rowInt++;
-
-    if (rowInt === I) {
-      rowInt++;
-    }
-  }
-
-  if (rowInt > V) {
-    rowInt = rowInt - V + A - 1;
-  }
-
-  var twoLetter = String.fromCharCode(colInt) + String.fromCharCode(rowInt);
-  return twoLetter;
-}
-
-/**
- * Decode the UTM parameters from a MGRS string.
- *
- * @private
- * @param {string} mgrsString an UPPERCASE coordinate string is expected.
- * @return {object} An object literal with easting, northing, zoneLetter,
- *     zoneNumber and accuracy (in meters) properties.
- */
-function decode(mgrsString) {
-
-  if (mgrsString && mgrsString.length === 0) {
-    throw ("MGRSPoint coverting from nothing");
-  }
-
-  var length = mgrsString.length;
-
-  var hunK = null;
-  var sb = "";
-  var testChar;
-  var i = 0;
-
-  // get Zone number
-  while (!(/[A-Z]/).test(testChar = mgrsString.charAt(i))) {
-    if (i >= 2) {
-      throw ("MGRSPoint bad conversion from: " + mgrsString);
-    }
-    sb += testChar;
-    i++;
-  }
-
-  var zoneNumber = parseInt(sb, 10);
-
-  if (i === 0 || i + 3 > length) {
-    // A good MGRS string has to be 4-5 digits long,
-    // ##AAA/#AAA at least.
-    throw ("MGRSPoint bad conversion from: " + mgrsString);
-  }
-
-  var zoneLetter = mgrsString.charAt(i++);
-
-  // Should we check the zone letter here? Why not.
-  if (zoneLetter <= 'A' || zoneLetter === 'B' || zoneLetter === 'Y' || zoneLetter >= 'Z' || zoneLetter === 'I' || zoneLetter === 'O') {
-    throw ("MGRSPoint zone letter " + zoneLetter + " not handled: " + mgrsString);
-  }
-
-  hunK = mgrsString.substring(i, i += 2);
-
-  var set = get100kSetForZone(zoneNumber);
-
-  var east100k = getEastingFromChar(hunK.charAt(0), set);
-  var north100k = getNorthingFromChar(hunK.charAt(1), set);
-
-  // We have a bug where the northing may be 2000000 too low.
-  // How
-  // do we know when to roll over?
-
-  while (north100k < getMinNorthing(zoneLetter)) {
-    north100k += 2000000;
-  }
-
-  // calculate the char index for easting/northing separator
-  var remainder = length - i;
-
-  if (remainder % 2 !== 0) {
-    throw ("MGRSPoint has to have an even number \nof digits after the zone letter and two 100km letters - front \nhalf for easting meters, second half for \nnorthing meters" + mgrsString);
-  }
-
-  var sep = remainder / 2;
-
-  var sepEasting = 0.0;
-  var sepNorthing = 0.0;
-  var accuracyBonus, sepEastingString, sepNorthingString, easting, northing;
-  if (sep > 0) {
-    accuracyBonus = 100000.0 / Math.pow(10, sep);
-    sepEastingString = mgrsString.substring(i, i + sep);
-    sepEasting = parseFloat(sepEastingString) * accuracyBonus;
-    sepNorthingString = mgrsString.substring(i + sep);
-    sepNorthing = parseFloat(sepNorthingString) * accuracyBonus;
-  }
-
-  easting = sepEasting + east100k;
-  northing = sepNorthing + north100k;
-
-  return {
-    easting: easting,
-    northing: northing,
-    zoneLetter: zoneLetter,
-    zoneNumber: zoneNumber,
-    accuracy: accuracyBonus
-  };
-}
-
-/**
- * Given the first letter from a two-letter MGRS 100k zone, and given the
- * MGRS table set for the zone number, figure out the easting value that
- * should be added to the other, secondary easting value.
- *
- * @private
- * @param {char} e The first letter from a two-letter MGRS 100´k zone.
- * @param {number} set The MGRS table set for the zone number.
- * @return {number} The easting value for the given letter and set.
- */
-function getEastingFromChar(e, set) {
-  // colOrigin is the letter at the origin of the set for the
-  // column
-  var curCol = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(set - 1);
-  var eastingValue = 100000.0;
-  var rewindMarker = false;
-
-  while (curCol !== e.charCodeAt(0)) {
-    curCol++;
-    if (curCol === I) {
-      curCol++;
-    }
-    if (curCol === O) {
-      curCol++;
-    }
-    if (curCol > Z) {
-      if (rewindMarker) {
-        throw ("Bad character: " + e);
-      }
-      curCol = A;
-      rewindMarker = true;
-    }
-    eastingValue += 100000.0;
-  }
-
-  return eastingValue;
-}
-
-/**
- * Given the second letter from a two-letter MGRS 100k zone, and given the
- * MGRS table set for the zone number, figure out the northing value that
- * should be added to the other, secondary northing value. You have to
- * remember that Northings are determined from the equator, and the vertical
- * cycle of letters mean a 2000000 additional northing meters. This happens
- * approx. every 18 degrees of latitude. This method does *NOT* count any
- * additional northings. You have to figure out how many 2000000 meters need
- * to be added for the zone letter of the MGRS coordinate.
- *
- * @private
- * @param {char} n Second letter of the MGRS 100k zone
- * @param {number} set The MGRS table set number, which is dependent on the
- *     UTM zone number.
- * @return {number} The northing value for the given letter and set.
- */
-function getNorthingFromChar(n, set) {
-
-  if (n > 'V') {
-    throw ("MGRSPoint given invalid Northing " + n);
-  }
-
-  // rowOrigin is the letter at the origin of the set for the
-  // column
-  var curRow = SET_ORIGIN_ROW_LETTERS.charCodeAt(set - 1);
-  var northingValue = 0.0;
-  var rewindMarker = false;
-
-  while (curRow !== n.charCodeAt(0)) {
-    curRow++;
-    if (curRow === I) {
-      curRow++;
-    }
-    if (curRow === O) {
-      curRow++;
-    }
-    // fixing a bug making whole application hang in this loop
-    // when 'n' is a wrong character
-    if (curRow > V) {
-      if (rewindMarker) { // making sure that this loop ends
-        throw ("Bad character: " + n);
-      }
-      curRow = A;
-      rewindMarker = true;
-    }
-    northingValue += 100000.0;
-  }
-
-  return northingValue;
-}
-
-/**
- * The function getMinNorthing returns the minimum northing value of a MGRS
- * zone.
- *
- * Ported from Geotrans' c Lattitude_Band_Value structure table.
- *
- * @private
- * @param {char} zoneLetter The MGRS zone to get the min northing for.
- * @return {number}
- */
-function getMinNorthing(zoneLetter) {
-  var northing;
-  switch (zoneLetter) {
-  case 'C':
-    northing = 1100000.0;
-    break;
-  case 'D':
-    northing = 2000000.0;
-    break;
-  case 'E':
-    northing = 2800000.0;
-    break;
-  case 'F':
-    northing = 3700000.0;
-    break;
-  case 'G':
-    northing = 4600000.0;
-    break;
-  case 'H':
-    northing = 5500000.0;
-    break;
-  case 'J':
-    northing = 6400000.0;
-    break;
-  case 'K':
-    northing = 7300000.0;
-    break;
-  case 'L':
-    northing = 8200000.0;
-    break;
-  case 'M':
-    northing = 9100000.0;
-    break;
-  case 'N':
-    northing = 0.0;
-    break;
-  case 'P':
-    northing = 800000.0;
-    break;
-  case 'Q':
-    northing = 1700000.0;
-    break;
-  case 'R':
-    northing = 2600000.0;
-    break;
-  case 'S':
-    northing = 3500000.0;
-    break;
-  case 'T':
-    northing = 4400000.0;
-    break;
-  case 'U':
-    northing = 5300000.0;
-    break;
-  case 'V':
-    northing = 6200000.0;
-    break;
-  case 'W':
-    northing = 7000000.0;
-    break;
-  case 'X':
-    northing = 7900000.0;
-    break;
-  default:
-    northing = -1.0;
-  }
-  if (northing >= 0.0) {
-    return northing;
-  }
-  else {
-    throw ("Invalid zone letter: " + zoneLetter);
-  }
-
-}
-
-},{}],136:[function(require,module,exports){
+},{"./extend":99}],133:[function(require,module,exports){
 module.exports={
-  "name": "proj4",
-  "version": "2.1.4",
-  "description": "Proj4js is a JavaScript library to transform point coordinates from one coordinate system to another, including datum transformations.",
-  "main": "lib/index.js",
-  "directories": {
-    "test": "test",
-    "doc": "docs"
-  },
-  "scripts": {
-    "test": "./node_modules/istanbul/lib/cli.js test ./node_modules/mocha/bin/_mocha test/test.js"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/proj4js/proj4js.git"
-  },
-  "author": "",
-  "license": "MIT",
-  "jam": {
-    "main": "dist/proj4.js",
-    "include": [
-      "dist/proj4.js",
-      "README.md",
-      "AUTHORS",
-      "LICENSE.md"
+  "_args": [
+    [
+      "proj4@^2.1.0",
+      "/Users/cmetcalf/projects/shapefile-js"
     ]
+  ],
+  "_from": "proj4@>=2.1.0 <3.0.0",
+  "_id": "proj4@2.3.12",
+  "_inCache": true,
+  "_installable": true,
+  "_location": "/proj4",
+  "_nodeVersion": "0.12.7",
+  "_npmUser": {
+    "email": "andreas.hocevar@gmail.com",
+    "name": "ahocevar"
   },
-  "devDependencies": {
-    "grunt-cli": "~0.1.13",
-    "grunt": "~0.4.2",
-    "grunt-contrib-connect": "~0.6.0",
-    "grunt-contrib-jshint": "~0.8.0",
-    "chai": "~1.8.1",
-    "mocha": "~1.17.1",
-    "grunt-mocha-phantomjs": "~0.4.0",
-    "browserify": "~3.24.5",
-    "grunt-browserify": "~1.3.0",
-    "grunt-contrib-uglify": "~0.3.2",
-    "curl": "git://github.com/cujojs/curl.git",
-    "istanbul": "~0.2.4",
-    "tin": "~0.4.0"
+  "_npmVersion": "2.11.3",
+  "_phantomChildren": {},
+  "_requested": {
+    "name": "proj4",
+    "raw": "proj4@^2.1.0",
+    "rawSpec": "^2.1.0",
+    "scope": null,
+    "spec": ">=2.1.0 <3.0.0",
+    "type": "range"
   },
-  "dependencies": {
-    "mgrs": "0.0.0"
+  "_requiredBy": [
+    "/"
+  ],
+  "_resolved": "https://registry.npmjs.org/proj4/-/proj4-2.3.12.tgz",
+  "_shasum": "96b9ed2a810dad6e62f1e32b4dad37c276b427a2",
+  "_shrinkwrap": null,
+  "_spec": "proj4@^2.1.0",
+  "_where": "/Users/cmetcalf/projects/shapefile-js",
+  "author": "",
+  "bugs": {
+    "url": "https://github.com/proj4js/proj4js/issues"
   },
   "contributors": [
     {
@@ -17475,21 +17653,46 @@ module.exports={
       "name": "S. Nelson"
     }
   ],
-  "bugs": {
-    "url": "https://github.com/proj4js/proj4js/issues"
+  "dependencies": {
+    "mgrs": "~0.0.2"
   },
-  "homepage": "https://github.com/proj4js/proj4js",
-  "_id": "proj4@2.1.4",
+  "description": "Proj4js is a JavaScript library to transform point coordinates from one coordinate system to another, including datum transformations.",
+  "devDependencies": {
+    "browserify": "~3.24.5",
+    "chai": "~1.8.1",
+    "curl": "git://github.com/cujojs/curl.git",
+    "grunt": "~0.4.2",
+    "grunt-browserify": "~1.3.0",
+    "grunt-cli": "~0.1.13",
+    "grunt-contrib-connect": "~0.6.0",
+    "grunt-contrib-jshint": "~0.8.0",
+    "grunt-contrib-uglify": "~0.3.2",
+    "grunt-mocha-phantomjs": "~0.4.0",
+    "istanbul": "~0.2.4",
+    "mocha": "~1.17.1",
+    "tin": "~0.4.0"
+  },
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
   "dist": {
-    "shasum": "d57b39ae1ed47b207d0fc7b0010498dc35fd6d09",
-    "tarball": "http://registry.npmjs.org/proj4/-/proj4-2.1.4.tgz"
+    "shasum": "96b9ed2a810dad6e62f1e32b4dad37c276b427a2",
+    "tarball": "http://registry.npmjs.org/proj4/-/proj4-2.3.12.tgz"
   },
-  "_from": "proj4@>=2.1.0 <2.2.0",
-  "_npmVersion": "1.4.3",
-  "_npmUser": {
-    "name": "cwmma",
-    "email": "calvin.metcalf@gmail.com"
+  "gitHead": "cd07cad5c6a5b6ed82b59a21356848979eafe22c",
+  "homepage": "https://github.com/proj4js/proj4js#readme",
+  "jam": {
+    "include": [
+      "AUTHORS",
+      "LICENSE.md",
+      "README.md",
+      "dist/proj4.js"
+    ],
+    "main": "dist/proj4.js"
   },
+  "license": "MIT",
+  "main": "lib/index.js",
   "maintainers": [
     {
       "name": "cwmma",
@@ -17500,12 +17703,20 @@ module.exports={
       "email": "andreas.hocevar@gmail.com"
     }
   ],
-  "_shasum": "d57b39ae1ed47b207d0fc7b0010498dc35fd6d09",
-  "_resolved": "https://registry.npmjs.org/proj4/-/proj4-2.1.4.tgz",
-  "readme": "ERROR: No README data found!"
+  "name": "proj4",
+  "optionalDependencies": {},
+  "readme": "ERROR: No README data found!",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/proj4js/proj4js.git"
+  },
+  "scripts": {
+    "test": "./node_modules/istanbul/lib/cli.js test ./node_modules/mocha/bin/_mocha test/test.js"
+  },
+  "version": "2.3.12"
 }
 
-},{}],137:[function(require,module,exports){
+},{}],134:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 var proj4 = require('proj4');
@@ -17557,6 +17768,7 @@ shp.parseZip = function(buffer, whiteList) {
 		}
 		if (key.slice(-3).toLowerCase() === 'shp') {
 			names.push(key.slice(0, - 4));
+			zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = zip[key];
 		}
 		else if (key.slice(-3).toLowerCase() === 'dbf') {
 			zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = parseDbf(zip[key]);
@@ -17573,11 +17785,12 @@ shp.parseZip = function(buffer, whiteList) {
 	}
 	var geojson = names.map(function(name) {
 		var parsed;
-		if (name.slice(-4).toLowerCase() === 'json') {
+		var lastDotIdx = name.lastIndexOf('.');
+		if (lastDotIdx > -1 && name.slice(lastDotIdx).indexOf('json') > -1) {
 			parsed = JSON.parse(zip[name]);
-			parsed.fileName = name.slice(0, name.lastIndexOf('.'));
+			parsed.fileName = name.slice(0, lastDotIdx);
 		}
-		else if (whiteList.indexOf(name.slice(name.lastIndexOf('.') + 1)) > -1) {
+		else if (whiteList.indexOf(name.slice(lastDotIdx + 1)) > -1) {
 			parsed = zip[name];
 			parsed.fileName = name;
 		}
@@ -17645,6 +17858,6 @@ shp.parseDbf = function (dbf) {
 };
 module.exports = shp;
 
-}).call(this,require("buffer").Buffer)
-},{"./binaryajax":1,"./parseShp":2,"./toArrayBuffer":3,"./unzip":4,"buffer":6,"lie":52,"lru-cache":67,"parsedbf":68,"proj4":104}]},{},[137])(137)
+}).call(this,{"isBuffer":require("../node_modules/is-buffer/index.js")})
+},{"../node_modules/is-buffer/index.js":10,"./binaryajax":1,"./parseShp":2,"./toArrayBuffer":3,"./unzip":4,"lie":37,"lru-cache":47,"parsedbf":65,"proj4":102}]},{},[134])(134)
 });
