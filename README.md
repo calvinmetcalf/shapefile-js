@@ -33,7 +33,7 @@ or you can call it on a .zip file which contains the shapefile
 	});
 ```
 
-or if you got the zip some other way (like the file api) then with the arrayBuffer you can call
+or if you got the zip some other way (like the [File API](https://developer.mozilla.org/en-US/docs/Web/API/File)) then with the arrayBuffer you can call
 
 ```javascript
 shp(buffer).then(function(geojson){});
