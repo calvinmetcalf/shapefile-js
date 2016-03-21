@@ -102,6 +102,18 @@ describe('Shp', function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(361);
     });
   });
+  describe('empty attributes table', function(){
+      var pandr =  shp('http://localhost:3000/files/empty-shp.zip');
+    it('should have the right keys', function(){
+      return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type',function(){
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features',function(){
+      return pandr.then(function(a){return a.features}).should.eventually.have.length(2);
+    });
+  });
   describe('errors', function(){
     it('bad file should be rejected', function(){
       return shp('http://localhost:3000/test/data/bad').should.be.rejected;
@@ -120,5 +132,4 @@ describe('Shp', function(){
       return shp('http://localhost:3000/test/data/noshp.zip').should.be.rejected;
     });
   });
-
 });
