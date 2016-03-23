@@ -23,7 +23,7 @@ function binaryAjax(url){
 		ajax.send();
 	});
 }
-},{"lie":37}],2:[function(require,module,exports){
+},{"lie":34}],2:[function(require,module,exports){
 'use strict';
 function isClockWise(array){
 	var sum = 0;
@@ -325,130 +325,120 @@ module.exports = function(buffer) {
 };
 
 },{"jszip":19}],5:[function(require,module,exports){
-var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+'use strict'
 
-;(function (exports) {
-	'use strict';
+exports.toByteArray = toByteArray
+exports.fromByteArray = fromByteArray
 
-  var Arr = (typeof Uint8Array !== 'undefined')
-    ? Uint8Array
-    : Array
+var lookup = []
+var revLookup = []
+var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
 
-	var PLUS   = '+'.charCodeAt(0)
-	var SLASH  = '/'.charCodeAt(0)
-	var NUMBER = '0'.charCodeAt(0)
-	var LOWER  = 'a'.charCodeAt(0)
-	var UPPER  = 'A'.charCodeAt(0)
-	var PLUS_URL_SAFE = '-'.charCodeAt(0)
-	var SLASH_URL_SAFE = '_'.charCodeAt(0)
+function init () {
+  var i
+  var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  var len = code.length
 
-	function decode (elt) {
-		var code = elt.charCodeAt(0)
-		if (code === PLUS ||
-		    code === PLUS_URL_SAFE)
-			return 62 // '+'
-		if (code === SLASH ||
-		    code === SLASH_URL_SAFE)
-			return 63 // '/'
-		if (code < NUMBER)
-			return -1 //no match
-		if (code < NUMBER + 10)
-			return code - NUMBER + 26 + 26
-		if (code < UPPER + 26)
-			return code - UPPER
-		if (code < LOWER + 26)
-			return code - LOWER + 26
-	}
+  for (i = 0; i < len; i++) {
+    lookup[i] = code[i]
+  }
 
-	function b64ToByteArray (b64) {
-		var i, j, l, tmp, placeHolders, arr
+  for (i = 0; i < len; ++i) {
+    revLookup[code.charCodeAt(i)] = i
+  }
+  revLookup['-'.charCodeAt(0)] = 62
+  revLookup['_'.charCodeAt(0)] = 63
+}
 
-		if (b64.length % 4 > 0) {
-			throw new Error('Invalid string. Length must be a multiple of 4')
-		}
+init()
 
-		// the number of equal signs (place holders)
-		// if there are two placeholders, than the two characters before it
-		// represent one byte
-		// if there is only one, then the three characters before it represent 2 bytes
-		// this is just a cheap hack to not do indexOf twice
-		var len = b64.length
-		placeHolders = '=' === b64.charAt(len - 2) ? 2 : '=' === b64.charAt(len - 1) ? 1 : 0
+function toByteArray (b64) {
+  var i, j, l, tmp, placeHolders, arr
+  var len = b64.length
 
-		// base64 is 4/3 + up to two characters of the original data
-		arr = new Arr(b64.length * 3 / 4 - placeHolders)
+  if (len % 4 > 0) {
+    throw new Error('Invalid string. Length must be a multiple of 4')
+  }
 
-		// if there are placeholders, only get up to the last complete 4 chars
-		l = placeHolders > 0 ? b64.length - 4 : b64.length
+  // the number of equal signs (place holders)
+  // if there are two placeholders, than the two characters before it
+  // represent one byte
+  // if there is only one, then the three characters before it represent 2 bytes
+  // this is just a cheap hack to not do indexOf twice
+  placeHolders = b64[len - 2] === '=' ? 2 : b64[len - 1] === '=' ? 1 : 0
 
-		var L = 0
+  // base64 is 4/3 + up to two characters of the original data
+  arr = new Arr(len * 3 / 4 - placeHolders)
 
-		function push (v) {
-			arr[L++] = v
-		}
+  // if there are placeholders, only get up to the last complete 4 chars
+  l = placeHolders > 0 ? len - 4 : len
 
-		for (i = 0, j = 0; i < l; i += 4, j += 3) {
-			tmp = (decode(b64.charAt(i)) << 18) | (decode(b64.charAt(i + 1)) << 12) | (decode(b64.charAt(i + 2)) << 6) | decode(b64.charAt(i + 3))
-			push((tmp & 0xFF0000) >> 16)
-			push((tmp & 0xFF00) >> 8)
-			push(tmp & 0xFF)
-		}
+  var L = 0
 
-		if (placeHolders === 2) {
-			tmp = (decode(b64.charAt(i)) << 2) | (decode(b64.charAt(i + 1)) >> 4)
-			push(tmp & 0xFF)
-		} else if (placeHolders === 1) {
-			tmp = (decode(b64.charAt(i)) << 10) | (decode(b64.charAt(i + 1)) << 4) | (decode(b64.charAt(i + 2)) >> 2)
-			push((tmp >> 8) & 0xFF)
-			push(tmp & 0xFF)
-		}
+  for (i = 0, j = 0; i < l; i += 4, j += 3) {
+    tmp = (revLookup[b64.charCodeAt(i)] << 18) | (revLookup[b64.charCodeAt(i + 1)] << 12) | (revLookup[b64.charCodeAt(i + 2)] << 6) | revLookup[b64.charCodeAt(i + 3)]
+    arr[L++] = (tmp & 0xFF0000) >> 16
+    arr[L++] = (tmp & 0xFF00) >> 8
+    arr[L++] = tmp & 0xFF
+  }
 
-		return arr
-	}
+  if (placeHolders === 2) {
+    tmp = (revLookup[b64.charCodeAt(i)] << 2) | (revLookup[b64.charCodeAt(i + 1)] >> 4)
+    arr[L++] = tmp & 0xFF
+  } else if (placeHolders === 1) {
+    tmp = (revLookup[b64.charCodeAt(i)] << 10) | (revLookup[b64.charCodeAt(i + 1)] << 4) | (revLookup[b64.charCodeAt(i + 2)] >> 2)
+    arr[L++] = (tmp >> 8) & 0xFF
+    arr[L++] = tmp & 0xFF
+  }
 
-	function uint8ToBase64 (uint8) {
-		var i,
-			extraBytes = uint8.length % 3, // if we have 1 byte left, pad 2 bytes
-			output = "",
-			temp, length
+  return arr
+}
 
-		function encode (num) {
-			return lookup.charAt(num)
-		}
+function tripletToBase64 (num) {
+  return lookup[num >> 18 & 0x3F] + lookup[num >> 12 & 0x3F] + lookup[num >> 6 & 0x3F] + lookup[num & 0x3F]
+}
 
-		function tripletToBase64 (num) {
-			return encode(num >> 18 & 0x3F) + encode(num >> 12 & 0x3F) + encode(num >> 6 & 0x3F) + encode(num & 0x3F)
-		}
+function encodeChunk (uint8, start, end) {
+  var tmp
+  var output = []
+  for (var i = start; i < end; i += 3) {
+    tmp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
+    output.push(tripletToBase64(tmp))
+  }
+  return output.join('')
+}
 
-		// go through the array every three bytes, we'll deal with trailing stuff later
-		for (i = 0, length = uint8.length - extraBytes; i < length; i += 3) {
-			temp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
-			output += tripletToBase64(temp)
-		}
+function fromByteArray (uint8) {
+  var tmp
+  var len = uint8.length
+  var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
+  var output = ''
+  var parts = []
+  var maxChunkLength = 16383 // must be multiple of 3
 
-		// pad the end with zeros, but make sure to not forget the extra bytes
-		switch (extraBytes) {
-			case 1:
-				temp = uint8[uint8.length - 1]
-				output += encode(temp >> 2)
-				output += encode((temp << 4) & 0x3F)
-				output += '=='
-				break
-			case 2:
-				temp = (uint8[uint8.length - 2] << 8) + (uint8[uint8.length - 1])
-				output += encode(temp >> 10)
-				output += encode((temp >> 4) & 0x3F)
-				output += encode((temp << 2) & 0x3F)
-				output += '='
-				break
-		}
+  // go through the array every three bytes, we'll deal with trailing stuff later
+  for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
+    parts.push(encodeChunk(uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)))
+  }
 
-		return output
-	}
+  // pad the end with zeros, but make sure to not forget the extra bytes
+  if (extraBytes === 1) {
+    tmp = uint8[len - 1]
+    output += lookup[tmp >> 2]
+    output += lookup[(tmp << 4) & 0x3F]
+    output += '=='
+  } else if (extraBytes === 2) {
+    tmp = (uint8[len - 2] << 8) + (uint8[len - 1])
+    output += lookup[tmp >> 10]
+    output += lookup[(tmp >> 4) & 0x3F]
+    output += lookup[(tmp << 2) & 0x3F]
+    output += '='
+  }
 
-	exports.toByteArray = b64ToByteArray
-	exports.fromByteArray = uint8ToBase64
-}(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
+  parts.push(output)
+
+  return parts.join('')
+}
 
 },{}],6:[function(require,module,exports){
 (function (global){
@@ -489,9 +479,6 @@ var rootParent = {}
  *   - Firefox 4-29 lacks support for adding new properties to `Uint8Array` instances,
  *     See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
  *
- *   - Safari 5-7 lacks support for changing the `Object.prototype.constructor` property
- *     on objects.
- *
  *   - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
  *
  *   - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
@@ -505,13 +492,10 @@ Buffer.TYPED_ARRAY_SUPPORT = global.TYPED_ARRAY_SUPPORT !== undefined
   : typedArraySupport()
 
 function typedArraySupport () {
-  function Bar () {}
   try {
     var arr = new Uint8Array(1)
     arr.foo = function () { return 42 }
-    arr.constructor = Bar
     return arr.foo() === 42 && // typed array instances can be augmented
-        arr.constructor === Bar && // constructor can be set
         typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
         arr.subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
   } catch (e) {
@@ -526,16 +510,13 @@ function kMaxLength () {
 }
 
 /**
- * Class: Buffer
- * =============
+ * The Buffer constructor returns instances of `Uint8Array` that have their
+ * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
+ * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
+ * and the `Uint8Array` methods. Square bracket notation works as expected -- it
+ * returns a single octet.
  *
- * The Buffer constructor returns instances of `Uint8Array` that are augmented
- * with function properties for all the node `Buffer` API functions. We use
- * `Uint8Array` so that square bracket notation works as expected -- it returns
- * a single octet.
- *
- * By augmenting the instances, we can avoid modifying the `Uint8Array`
- * prototype.
+ * The `Uint8Array` prototype remains unmodified.
  */
 function Buffer (arg) {
   if (!(this instanceof Buffer)) {
@@ -561,6 +542,12 @@ function Buffer (arg) {
 
   // Unusual.
   return fromObject(this, arg)
+}
+
+// TODO: Legacy, not needed anymore. Remove in next major version.
+Buffer._augment = function (arr) {
+  arr.__proto__ = Buffer.prototype
+  return arr
 }
 
 function fromNumber (that, length) {
@@ -637,10 +624,12 @@ function fromTypedArray (that, array) {
 }
 
 function fromArrayBuffer (that, array) {
+  array.byteLength // this throws if `array` is not a valid ArrayBuffer
+
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     // Return an augmented `Uint8Array` instance, for best performance
-    array.byteLength
-    that = Buffer._augment(new Uint8Array(array))
+    that = new Uint8Array(array)
+    that.__proto__ = Buffer.prototype
   } else {
     // Fallback: Return an object instance of the Buffer class
     that = fromTypedArray(that, new Uint8Array(array))
@@ -678,6 +667,14 @@ function fromJsonObject (that, object) {
 if (Buffer.TYPED_ARRAY_SUPPORT) {
   Buffer.prototype.__proto__ = Uint8Array.prototype
   Buffer.__proto__ = Uint8Array
+  if (typeof Symbol !== 'undefined' && Symbol.species &&
+      Buffer[Symbol.species] === Buffer) {
+    // Fix subarray() in ES2016. See: https://github.com/feross/buffer/pull/97
+    Object.defineProperty(Buffer, Symbol.species, {
+      value: null,
+      configurable: true
+    })
+  }
 } else {
   // pre-set for values that may exist in the future
   Buffer.prototype.length = undefined
@@ -687,12 +684,11 @@ if (Buffer.TYPED_ARRAY_SUPPORT) {
 function allocate (that, length) {
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     // Return an augmented `Uint8Array` instance, for best performance
-    that = Buffer._augment(new Uint8Array(length))
+    that = new Uint8Array(length)
     that.__proto__ = Buffer.prototype
   } else {
     // Fallback: Return an object instance of the Buffer class
     that.length = length
-    that._isBuffer = true
   }
 
   var fromPool = length !== 0 && length <= Buffer.poolSize >>> 1
@@ -875,6 +871,10 @@ function slowToString (encoding, start, end) {
   }
 }
 
+// The property is used by `Buffer.isBuffer` and `is-buffer` (in Safari 5-7) to detect
+// Buffer instances.
+Buffer.prototype._isBuffer = true
+
 Buffer.prototype.toString = function toString () {
   var length = this.length | 0
   if (length === 0) return ''
@@ -943,18 +943,6 @@ Buffer.prototype.indexOf = function indexOf (val, byteOffset) {
   }
 
   throw new TypeError('val must be string, number or Buffer')
-}
-
-// `get` is deprecated
-Buffer.prototype.get = function get (offset) {
-  console.log('.get() is deprecated. Access using array indexes instead.')
-  return this.readUInt8(offset)
-}
-
-// `set` is deprecated
-Buffer.prototype.set = function set (v, offset) {
-  console.log('.set() is deprecated. Access using array indexes instead.')
-  return this.writeUInt8(v, offset)
 }
 
 function hexWrite (buf, string, offset, length) {
@@ -1252,7 +1240,8 @@ Buffer.prototype.slice = function slice (start, end) {
 
   var newBuf
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    newBuf = Buffer._augment(this.subarray(start, end))
+    newBuf = this.subarray(start, end)
+    newBuf.__proto__ = Buffer.prototype
   } else {
     var sliceLen = end - start
     newBuf = new Buffer(sliceLen, undefined)
@@ -1656,7 +1645,6 @@ Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) 
 }
 
 function checkIEEE754 (buf, value, offset, ext, max, min) {
-  if (value > max || value < min) throw new RangeError('value is out of bounds')
   if (offset + ext > buf.length) throw new RangeError('index out of range')
   if (offset < 0) throw new RangeError('index out of range')
 }
@@ -1732,7 +1720,11 @@ Buffer.prototype.copy = function copy (target, targetStart, start, end) {
       target[i + targetStart] = this[i + start]
     }
   } else {
-    target._set(this.subarray(start, start + len), targetStart)
+    Uint8Array.prototype.set.call(
+      target,
+      this.subarray(start, start + len),
+      targetStart
+    )
   }
 
   return len
@@ -1769,96 +1761,8 @@ Buffer.prototype.fill = function fill (value, start, end) {
   return this
 }
 
-/**
- * Creates a new `ArrayBuffer` with the *copied* memory of the buffer instance.
- * Added in Node 0.12. Only available in browsers that support ArrayBuffer.
- */
-Buffer.prototype.toArrayBuffer = function toArrayBuffer () {
-  if (typeof Uint8Array !== 'undefined') {
-    if (Buffer.TYPED_ARRAY_SUPPORT) {
-      return (new Buffer(this)).buffer
-    } else {
-      var buf = new Uint8Array(this.length)
-      for (var i = 0, len = buf.length; i < len; i += 1) {
-        buf[i] = this[i]
-      }
-      return buf.buffer
-    }
-  } else {
-    throw new TypeError('Buffer.toArrayBuffer not supported in this browser')
-  }
-}
-
 // HELPER FUNCTIONS
 // ================
-
-var BP = Buffer.prototype
-
-/**
- * Augment a Uint8Array *instance* (not the Uint8Array class!) with Buffer methods
- */
-Buffer._augment = function _augment (arr) {
-  arr.constructor = Buffer
-  arr._isBuffer = true
-
-  // save reference to original Uint8Array set method before overwriting
-  arr._set = arr.set
-
-  // deprecated
-  arr.get = BP.get
-  arr.set = BP.set
-
-  arr.write = BP.write
-  arr.toString = BP.toString
-  arr.toLocaleString = BP.toString
-  arr.toJSON = BP.toJSON
-  arr.equals = BP.equals
-  arr.compare = BP.compare
-  arr.indexOf = BP.indexOf
-  arr.copy = BP.copy
-  arr.slice = BP.slice
-  arr.readUIntLE = BP.readUIntLE
-  arr.readUIntBE = BP.readUIntBE
-  arr.readUInt8 = BP.readUInt8
-  arr.readUInt16LE = BP.readUInt16LE
-  arr.readUInt16BE = BP.readUInt16BE
-  arr.readUInt32LE = BP.readUInt32LE
-  arr.readUInt32BE = BP.readUInt32BE
-  arr.readIntLE = BP.readIntLE
-  arr.readIntBE = BP.readIntBE
-  arr.readInt8 = BP.readInt8
-  arr.readInt16LE = BP.readInt16LE
-  arr.readInt16BE = BP.readInt16BE
-  arr.readInt32LE = BP.readInt32LE
-  arr.readInt32BE = BP.readInt32BE
-  arr.readFloatLE = BP.readFloatLE
-  arr.readFloatBE = BP.readFloatBE
-  arr.readDoubleLE = BP.readDoubleLE
-  arr.readDoubleBE = BP.readDoubleBE
-  arr.writeUInt8 = BP.writeUInt8
-  arr.writeUIntLE = BP.writeUIntLE
-  arr.writeUIntBE = BP.writeUIntBE
-  arr.writeUInt16LE = BP.writeUInt16LE
-  arr.writeUInt16BE = BP.writeUInt16BE
-  arr.writeUInt32LE = BP.writeUInt32LE
-  arr.writeUInt32BE = BP.writeUInt32BE
-  arr.writeIntLE = BP.writeIntLE
-  arr.writeIntBE = BP.writeIntBE
-  arr.writeInt8 = BP.writeInt8
-  arr.writeInt16LE = BP.writeInt16LE
-  arr.writeInt16BE = BP.writeInt16BE
-  arr.writeInt32LE = BP.writeInt32LE
-  arr.writeInt32BE = BP.writeInt32BE
-  arr.writeFloatLE = BP.writeFloatLE
-  arr.writeFloatBE = BP.writeFloatBE
-  arr.writeDoubleLE = BP.writeDoubleLE
-  arr.writeDoubleBE = BP.writeDoubleBE
-  arr.fill = BP.fill
-  arr.inspect = BP.inspect
-  arr.toArrayBuffer = BP.toArrayBuffer
-
-  return arr
-}
 
 var INVALID_BASE64_RE = /[^+\/0-9A-Za-z-_]/g
 
@@ -2655,7 +2559,7 @@ exports.uncompress =  function(input) {
     return pako.inflateRaw(input);
 };
 
-},{"pako":49}],19:[function(require,module,exports){
+},{"pako":37}],19:[function(require,module,exports){
 'use strict';
 
 var base64 = require('./base64');
@@ -4965,145 +4869,42 @@ module.exports = ZipEntry;
 
 },{"./compressedObject":12,"./object":23,"./stringReader":25,"./utils":31}],34:[function(require,module,exports){
 'use strict';
+var immediate = require('immediate');
 
-module.exports = INTERNAL;
-
+/* istanbul ignore next */
 function INTERNAL() {}
-},{}],35:[function(require,module,exports){
-'use strict';
-var Promise = require('./promise');
-var reject = require('./reject');
-var resolve = require('./resolve');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = all;
-function all(iterable) {
-  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
-    return reject(new TypeError('must be an array'));
-  }
 
-  var len = iterable.length;
-  var called = false;
-  if (!len) {
-    return resolve([]);
-  }
+var handlers = {};
 
-  var values = new Array(len);
-  var resolved = 0;
-  var i = -1;
-  var promise = new Promise(INTERNAL);
-  
-  while (++i < len) {
-    allResolver(iterable[i], i);
-  }
-  return promise;
-  function allResolver(value, i) {
-    resolve(value).then(resolveFromAll, function (error) {
-      if (!called) {
-        called = true;
-        handlers.reject(promise, error);
-      }
-    });
-    function resolveFromAll(outValue) {
-      values[i] = outValue;
-      if (++resolved === len & !called) {
-        called = true;
-        handlers.resolve(promise, values);
-      }
-    }
-  }
-}
-},{"./INTERNAL":34,"./handlers":36,"./promise":38,"./reject":41,"./resolve":42}],36:[function(require,module,exports){
-'use strict';
-var tryCatch = require('./tryCatch');
-var resolveThenable = require('./resolveThenable');
-var states = require('./states');
+var REJECTED = ['REJECTED'];
+var FULFILLED = ['FULFILLED'];
+var PENDING = ['PENDING'];
 
-exports.resolve = function (self, value) {
-  var result = tryCatch(getThen, value);
-  if (result.status === 'error') {
-    return exports.reject(self, result.value);
-  }
-  var thenable = result.value;
+module.exports = exports = Promise;
 
-  if (thenable) {
-    resolveThenable.safely(self, thenable);
-  } else {
-    self.state = states.FULFILLED;
-    self.outcome = value;
-    var i = -1;
-    var len = self.queue.length;
-    while (++i < len) {
-      self.queue[i].callFulfilled(value);
-    }
-  }
-  return self;
-};
-exports.reject = function (self, error) {
-  self.state = states.REJECTED;
-  self.outcome = error;
-  var i = -1;
-  var len = self.queue.length;
-  while (++i < len) {
-    self.queue[i].callRejected(error);
-  }
-  return self;
-};
-
-function getThen(obj) {
-  // Make sure we only access the accessor once as required by the spec
-  var then = obj && obj.then;
-  if (obj && typeof obj === 'object' && typeof then === 'function') {
-    return function appyThen() {
-      then.apply(obj, arguments);
-    };
-  }
-}
-
-},{"./resolveThenable":43,"./states":44,"./tryCatch":45}],37:[function(require,module,exports){
-module.exports = exports = require('./promise');
-
-exports.resolve = require('./resolve');
-exports.reject = require('./reject');
-exports.all = require('./all');
-exports.race = require('./race');
-
-},{"./all":35,"./promise":38,"./race":40,"./reject":41,"./resolve":42}],38:[function(require,module,exports){
-'use strict';
-
-var unwrap = require('./unwrap');
-var INTERNAL = require('./INTERNAL');
-var resolveThenable = require('./resolveThenable');
-var states = require('./states');
-var QueueItem = require('./queueItem');
-
-module.exports = Promise;
 function Promise(resolver) {
-  if (!(this instanceof Promise)) {
-    return new Promise(resolver);
-  }
   if (typeof resolver !== 'function') {
     throw new TypeError('resolver must be a function');
   }
-  this.state = states.PENDING;
+  this.state = PENDING;
   this.queue = [];
   this.outcome = void 0;
   if (resolver !== INTERNAL) {
-    resolveThenable.safely(this, resolver);
+    safelyResolveThenable(this, resolver);
   }
 }
 
-Promise.prototype['catch'] = function (onRejected) {
+Promise.prototype["catch"] = function (onRejected) {
   return this.then(null, onRejected);
 };
 Promise.prototype.then = function (onFulfilled, onRejected) {
-  if (typeof onFulfilled !== 'function' && this.state === states.FULFILLED ||
-    typeof onRejected !== 'function' && this.state === states.REJECTED) {
+  if (typeof onFulfilled !== 'function' && this.state === FULFILLED ||
+    typeof onRejected !== 'function' && this.state === REJECTED) {
     return this;
   }
-  var promise = new Promise(INTERNAL);
-  if (this.state !== states.PENDING) {
-    var resolver = this.state === states.FULFILLED ? onFulfilled : onRejected;
+  var promise = new this.constructor(INTERNAL);
+  if (this.state !== PENDING) {
+    var resolver = this.state === FULFILLED ? onFulfilled : onRejected;
     unwrap(promise, resolver, this.outcome);
   } else {
     this.queue.push(new QueueItem(promise, onFulfilled, onRejected));
@@ -5111,13 +4912,6 @@ Promise.prototype.then = function (onFulfilled, onRejected) {
 
   return promise;
 };
-
-},{"./INTERNAL":34,"./queueItem":39,"./resolveThenable":43,"./states":44,"./unwrap":46}],39:[function(require,module,exports){
-'use strict';
-var handlers = require('./handlers');
-var unwrap = require('./unwrap');
-
-module.exports = QueueItem;
 function QueueItem(promise, onFulfilled, onRejected) {
   this.promise = promise;
   if (typeof onFulfilled === 'function') {
@@ -5142,98 +4936,63 @@ QueueItem.prototype.otherCallRejected = function (value) {
   unwrap(this.promise, this.onRejected, value);
 };
 
-},{"./handlers":36,"./unwrap":46}],40:[function(require,module,exports){
-'use strict';
-var Promise = require('./promise');
-var reject = require('./reject');
-var resolve = require('./resolve');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = race;
-function race(iterable) {
-  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
-    return reject(new TypeError('must be an array'));
-  }
-
-  var len = iterable.length;
-  var called = false;
-  if (!len) {
-    return resolve([]);
-  }
-
-  var i = -1;
-  var promise = new Promise(INTERNAL);
-
-  while (++i < len) {
-    resolver(iterable[i]);
-  }
-  return promise;
-  function resolver(value) {
-    resolve(value).then(function (response) {
-      if (!called) {
-        called = true;
-        handlers.resolve(promise, response);
-      }
-    }, function (error) {
-      if (!called) {
-        called = true;
-        handlers.reject(promise, error);
-      }
-    });
-  }
-}
-
-},{"./INTERNAL":34,"./handlers":36,"./promise":38,"./reject":41,"./resolve":42}],41:[function(require,module,exports){
-'use strict';
-
-var Promise = require('./promise');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = reject;
-
-function reject(reason) {
-	var promise = new Promise(INTERNAL);
-	return handlers.reject(promise, reason);
-}
-},{"./INTERNAL":34,"./handlers":36,"./promise":38}],42:[function(require,module,exports){
-'use strict';
-
-var Promise = require('./promise');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = resolve;
-
-var FALSE = handlers.resolve(new Promise(INTERNAL), false);
-var NULL = handlers.resolve(new Promise(INTERNAL), null);
-var UNDEFINED = handlers.resolve(new Promise(INTERNAL), void 0);
-var ZERO = handlers.resolve(new Promise(INTERNAL), 0);
-var EMPTYSTRING = handlers.resolve(new Promise(INTERNAL), '');
-
-function resolve(value) {
-  if (value) {
-    if (value instanceof Promise) {
-      return value;
+function unwrap(promise, func, value) {
+  immediate(function () {
+    var returnValue;
+    try {
+      returnValue = func(value);
+    } catch (e) {
+      return handlers.reject(promise, e);
     }
-    return handlers.resolve(new Promise(INTERNAL), value);
+    if (returnValue === promise) {
+      handlers.reject(promise, new TypeError('Cannot resolve promise with itself'));
+    } else {
+      handlers.resolve(promise, returnValue);
+    }
+  });
+}
+
+handlers.resolve = function (self, value) {
+  var result = tryCatch(getThen, value);
+  if (result.status === 'error') {
+    return handlers.reject(self, result.value);
   }
-  var valueType = typeof value;
-  switch (valueType) {
-    case 'boolean':
-      return FALSE;
-    case 'undefined':
-      return UNDEFINED;
-    case 'object':
-      return NULL;
-    case 'number':
-      return ZERO;
-    case 'string':
-      return EMPTYSTRING;
+  var thenable = result.value;
+
+  if (thenable) {
+    safelyResolveThenable(self, thenable);
+  } else {
+    self.state = FULFILLED;
+    self.outcome = value;
+    var i = -1;
+    var len = self.queue.length;
+    while (++i < len) {
+      self.queue[i].callFulfilled(value);
+    }
+  }
+  return self;
+};
+handlers.reject = function (self, error) {
+  self.state = REJECTED;
+  self.outcome = error;
+  var i = -1;
+  var len = self.queue.length;
+  while (++i < len) {
+    self.queue[i].callRejected(error);
+  }
+  return self;
+};
+
+function getThen(obj) {
+  // Make sure we only access the accessor once as required by the spec
+  var then = obj && obj.then;
+  if (obj && typeof obj === 'object' && typeof then === 'function') {
+    return function appyThen() {
+      then.apply(obj, arguments);
+    };
   }
 }
-},{"./INTERNAL":34,"./handlers":36,"./promise":38}],43:[function(require,module,exports){
-'use strict';
-var handlers = require('./handlers');
-var tryCatch = require('./tryCatch');
+
 function safelyResolveThenable(self, thenable) {
   // Either fulfill, reject or reject with error
   var called = false;
@@ -5256,24 +5015,12 @@ function safelyResolveThenable(self, thenable) {
   function tryToUnwrap() {
     thenable(onSuccess, onError);
   }
-  
+
   var result = tryCatch(tryToUnwrap);
   if (result.status === 'error') {
     onError(result.value);
   }
 }
-exports.safely = safelyResolveThenable;
-},{"./handlers":36,"./tryCatch":45}],44:[function(require,module,exports){
-// Lazy man's symbols for states
-
-exports.REJECTED = ['REJECTED'];
-exports.FULFILLED = ['FULFILLED'];
-exports.PENDING = ['PENDING'];
-
-},{}],45:[function(require,module,exports){
-'use strict';
-
-module.exports = tryCatch;
 
 function tryCatch(func, value) {
   var out = {};
@@ -5286,29 +5033,96 @@ function tryCatch(func, value) {
   }
   return out;
 }
-},{}],46:[function(require,module,exports){
-'use strict';
 
-var immediate = require('immediate');
-var handlers = require('./handlers');
-module.exports = unwrap;
-
-function unwrap(promise, func, value) {
-  immediate(function () {
-    var returnValue;
-    try {
-      returnValue = func(value);
-    } catch (e) {
-      return handlers.reject(promise, e);
-    }
-    if (returnValue === promise) {
-      handlers.reject(promise, new TypeError('Cannot resolve promise with itself'));
-    } else {
-      handlers.resolve(promise, returnValue);
-    }
-  });
+exports.resolve = resolve;
+function resolve(value) {
+  if (value instanceof this) {
+    return value;
+  }
+  return handlers.resolve(new this(INTERNAL), value);
 }
-},{"./handlers":36,"immediate":9}],47:[function(require,module,exports){
+
+exports.reject = reject;
+function reject(reason) {
+  var promise = new this(INTERNAL);
+  return handlers.reject(promise, reason);
+}
+
+exports.all = all;
+function all(iterable) {
+  var self = this;
+  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
+    return this.reject(new TypeError('must be an array'));
+  }
+
+  var len = iterable.length;
+  var called = false;
+  if (!len) {
+    return this.resolve([]);
+  }
+
+  var values = new Array(len);
+  var resolved = 0;
+  var i = -1;
+  var promise = new this(INTERNAL);
+
+  while (++i < len) {
+    allResolver(iterable[i], i);
+  }
+  return promise;
+  function allResolver(value, i) {
+    self.resolve(value).then(resolveFromAll, function (error) {
+      if (!called) {
+        called = true;
+        handlers.reject(promise, error);
+      }
+    });
+    function resolveFromAll(outValue) {
+      values[i] = outValue;
+      if (++resolved === len && !called) {
+        called = true;
+        handlers.resolve(promise, values);
+      }
+    }
+  }
+}
+
+exports.race = race;
+function race(iterable) {
+  var self = this;
+  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
+    return this.reject(new TypeError('must be an array'));
+  }
+
+  var len = iterable.length;
+  var called = false;
+  if (!len) {
+    return this.resolve([]);
+  }
+
+  var i = -1;
+  var promise = new this(INTERNAL);
+
+  while (++i < len) {
+    resolver(iterable[i]);
+  }
+  return promise;
+  function resolver(value) {
+    self.resolve(value).then(function (response) {
+      if (!called) {
+        called = true;
+        handlers.resolve(promise, response);
+      }
+    }, function (error) {
+      if (!called) {
+        called = true;
+        handlers.reject(promise, error);
+      }
+    });
+  }
+}
+
+},{"immediate":9}],35:[function(require,module,exports){
 ;(function () { // closure for web browsers
 
 if (typeof module === 'object' && module.exports) {
@@ -5644,7 +5458,7 @@ function Entry (key, value, lu, length, now, maxAge) {
 
 })()
 
-},{}],48:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 
 
 
@@ -6388,7 +6202,7 @@ function getMinNorthing(zoneLetter) {
 
 }
 
-},{}],49:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 // Top level file is just a mixin of submodules & constants
 'use strict';
 
@@ -6404,7 +6218,7 @@ assign(pako, deflate, inflate, constants);
 
 module.exports = pako;
 
-},{"./lib/deflate":50,"./lib/inflate":51,"./lib/utils/common":52,"./lib/zlib/constants":55}],50:[function(require,module,exports){
+},{"./lib/deflate":38,"./lib/inflate":39,"./lib/utils/common":40,"./lib/zlib/constants":43}],38:[function(require,module,exports){
 'use strict';
 
 
@@ -6782,7 +6596,7 @@ exports.deflate = deflate;
 exports.deflateRaw = deflateRaw;
 exports.gzip = gzip;
 
-},{"./utils/common":52,"./utils/strings":53,"./zlib/deflate.js":57,"./zlib/messages":62,"./zlib/zstream":64}],51:[function(require,module,exports){
+},{"./utils/common":40,"./utils/strings":41,"./zlib/deflate.js":45,"./zlib/messages":50,"./zlib/zstream":52}],39:[function(require,module,exports){
 'use strict';
 
 
@@ -7184,7 +6998,7 @@ exports.inflate = inflate;
 exports.inflateRaw = inflateRaw;
 exports.ungzip  = inflate;
 
-},{"./utils/common":52,"./utils/strings":53,"./zlib/constants":55,"./zlib/gzheader":58,"./zlib/inflate.js":60,"./zlib/messages":62,"./zlib/zstream":64}],52:[function(require,module,exports){
+},{"./utils/common":40,"./utils/strings":41,"./zlib/constants":43,"./zlib/gzheader":46,"./zlib/inflate.js":48,"./zlib/messages":50,"./zlib/zstream":52}],40:[function(require,module,exports){
 'use strict';
 
 
@@ -7288,7 +7102,7 @@ exports.setTyped = function (on) {
 
 exports.setTyped(TYPED_OK);
 
-},{}],53:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 // String encode/decode helpers
 'use strict';
 
@@ -7475,7 +7289,7 @@ exports.utf8border = function(buf, max) {
   return (pos + _utf8len[buf[pos]] > max) ? pos : max;
 };
 
-},{"./common":52}],54:[function(require,module,exports){
+},{"./common":40}],42:[function(require,module,exports){
 'use strict';
 
 // Note: adler32 takes 12% for level 0 and 2% for level 6.
@@ -7509,7 +7323,7 @@ function adler32(adler, buf, len, pos) {
 
 module.exports = adler32;
 
-},{}],55:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 module.exports = {
 
   /* Allowed flush values; see deflate() and inflate() below for details */
@@ -7558,7 +7372,7 @@ module.exports = {
   //Z_NULL:                 null // Use -1 or null inline, depending on var type
 };
 
-},{}],56:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 'use strict';
 
 // Note: we can't get significant speed boost here.
@@ -7601,7 +7415,7 @@ function crc32(crc, buf, len, pos) {
 
 module.exports = crc32;
 
-},{}],57:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 'use strict';
 
 var utils   = require('../utils/common');
@@ -9368,7 +9182,7 @@ exports.deflatePrime = deflatePrime;
 exports.deflateTune = deflateTune;
 */
 
-},{"../utils/common":52,"./adler32":54,"./crc32":56,"./messages":62,"./trees":63}],58:[function(require,module,exports){
+},{"../utils/common":40,"./adler32":42,"./crc32":44,"./messages":50,"./trees":51}],46:[function(require,module,exports){
 'use strict';
 
 
@@ -9410,7 +9224,7 @@ function GZheader() {
 
 module.exports = GZheader;
 
-},{}],59:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 'use strict';
 
 // See state defs from inflate.js
@@ -9738,7 +9552,7 @@ module.exports = function inflate_fast(strm, start) {
   return;
 };
 
-},{}],60:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 'use strict';
 
 
@@ -11243,7 +11057,7 @@ exports.inflateSyncPoint = inflateSyncPoint;
 exports.inflateUndermine = inflateUndermine;
 */
 
-},{"../utils/common":52,"./adler32":54,"./crc32":56,"./inffast":59,"./inftrees":61}],61:[function(require,module,exports){
+},{"../utils/common":40,"./adler32":42,"./crc32":44,"./inffast":47,"./inftrees":49}],49:[function(require,module,exports){
 'use strict';
 
 
@@ -11572,7 +11386,7 @@ module.exports = function inflate_table(type, lens, lens_index, codes, table, ta
   return 0;
 };
 
-},{"../utils/common":52}],62:[function(require,module,exports){
+},{"../utils/common":40}],50:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -11587,7 +11401,7 @@ module.exports = {
   '-6':   'incompatible version' /* Z_VERSION_ERROR (-6) */
 };
 
-},{}],63:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
 'use strict';
 
 
@@ -12788,7 +12602,7 @@ exports._tr_flush_block  = _tr_flush_block;
 exports._tr_tally = _tr_tally;
 exports._tr_align = _tr_align;
 
-},{"../utils/common":52}],64:[function(require,module,exports){
+},{"../utils/common":40}],52:[function(require,module,exports){
 'use strict';
 
 
@@ -12819,85 +12633,88 @@ function ZStream() {
 
 module.exports = ZStream;
 
-},{}],65:[function(require,module,exports){
-function dbfHeader(buffer){
-	var data = new DataView(buffer);
-	var out = {};
-	out.lastUpdated = new Date(data.getUint8(1,true)+1900,data.getUint8(2,true),data.getUint8(3,true));
-	out.records = data.getUint32(4,true);
-	out.headerLen = data.getUint16(8,true);
-	out.recLen = data.getUint16(10,true);
-	return out;
+},{}],53:[function(require,module,exports){
+function dbfHeader(buffer) {
+  var data = new DataView(buffer);
+  var out = {};
+  out.lastUpdated = new Date(data.getUint8(1, true) + 1900, data.getUint8(2, true), data.getUint8(3, true));
+  out.records = data.getUint32(4, true);
+  out.headerLen = data.getUint16(8, true);
+  out.recLen = data.getUint16(10, true);
+  return out;
 }
 
-function dbfRowHeader(buffer){
-	var data = new DataView(buffer);
-	var out = [];
-	var offset = 32;
-	while(true){
-		out.push({
-			name : String.fromCharCode.apply(this,(new Uint8Array(buffer,offset,10))).replace(/\0|\s+$/g,''),
-			dataType : String.fromCharCode(data.getUint8(offset+11)),
-			len : data.getUint8(offset+16),
-			decimal : data.getUint8(offset+17)
-		});
-		if(data.getUint8(offset+32)===13){
-			break;
-		}else{
-			offset+=32;
-		}
-	}
-	return out;
+function dbfRowHeader(buffer, headerLen) {
+  var data = new DataView(buffer);
+  var out = [];
+  var offset = 32;
+  while (offset < headerLen) {
+    out.push({
+      name: String.fromCharCode.apply(this, (new Uint8Array(buffer, offset, 11))).replace(/\0|\s+$/g, ''),
+      dataType: String.fromCharCode(data.getUint8(offset + 11)),
+      len: data.getUint8(offset + 16),
+      decimal: data.getUint8(offset + 17)
+    });
+    if (data.getUint8(offset + 32) === 13) {
+      break;
+    } else {
+      offset += 32;
+    }
+  }
+  return out;
 }
-function rowFuncs(buffer,offset,len,type){
-	var data = (new Uint8Array(buffer,offset,len));
-	var textData = String.fromCharCode.apply(this,data).replace(/\0|\s+$/g,'');
-	switch(type){
-		case 'N':
-		case 'F':
-		case 'O':
-			return parseFloat(textData,10);
-		case 'D':
-			return new Date(textData.slice(0,4), parseInt(textData.slice(4,6),10)-1, textData.slice(6,8));
-		case 'L':
-			return textData.toLowerCase() === 'y' || textData.toLowerCase() === 't';
-		default:
-			return textData;
-	}
+
+function rowFuncs(buffer, offset, len, type) {
+  var data = (new Uint8Array(buffer, offset, len));
+  var textData = String.fromCharCode.apply(this, data).replace(/\0|\s+$/g, '');
+  switch (type) {
+  case 'N':
+  case 'F':
+  case 'O':
+    return parseFloat(textData, 10);
+  case 'D':
+    return new Date(textData.slice(0, 4), parseInt(textData.slice(4, 6), 10) - 1, textData.slice(6, 8));
+  case 'L':
+    return textData.toLowerCase() === 'y' || textData.toLowerCase() === 't';
+  default:
+    return textData;
+  }
 }
-function parseRow(buffer,offset,rowHeaders){
-	var out={};
-	var i = 0;
-	var len = rowHeaders.length;
-	var field;
-	var header;
-	while(i<len){
-		header = rowHeaders[i];
-		field = rowFuncs(buffer,offset,header.len,header.dataType);
-		offset += header.len;
-		if(typeof field !== 'undefined'){
-			out[header.name]=field;
-		}
-		i++;
-	}
-	return out;
+
+function parseRow(buffer, offset, rowHeaders) {
+  var out = {};
+  var i = 0;
+  var len = rowHeaders.length;
+  var field;
+  var header;
+  while (i < len) {
+    header = rowHeaders[i];
+    field = rowFuncs(buffer, offset, header.len, header.dataType);
+    offset += header.len;
+    if (typeof field !== 'undefined') {
+      out[header.name] = field;
+    }
+    i++;
+  }
+  return out;
 }
-module.exports = function(buffer){
-	var rowHeaders = dbfRowHeader(buffer);
-	var header = dbfHeader(buffer);
-	var offset = ((rowHeaders.length+1)<<5)+2;
-	var recLen = header.recLen;
-	var records = header.records;
-	var out = [];
-	while(records){
-		out.push(parseRow(buffer,offset,rowHeaders));
-		offset += recLen;
-		records--;
-	}
-	return out;
+module.exports = function(buffer) {
+  var header = dbfHeader(buffer);
+  var rowHeaders = dbfRowHeader(buffer, header.headerLen - 1);
+
+  var offset = ((rowHeaders.length + 1) << 5) + 2;
+  var recLen = header.recLen;
+  var records = header.records;
+  var out = [];
+  while (records) {
+    out.push(parseRow(buffer, offset, rowHeaders));
+    offset += recLen;
+    records--;
+  }
+  return out;
 };
 
-},{}],66:[function(require,module,exports){
+},{}],54:[function(require,module,exports){
 var mgrs = require('mgrs');
 
 function Point(x, y, z) {
@@ -12908,7 +12725,7 @@ function Point(x, y, z) {
     this.x = x[0];
     this.y = x[1];
     this.z = x[2] || 0.0;
-  }else if(typeof x === 'object'){
+  } else if(typeof x === 'object') {
     this.x = x.x;
     this.y = x.y;
     this.z = x.z || 0.0;
@@ -12917,8 +12734,7 @@ function Point(x, y, z) {
     this.x = parseFloat(coords[0], 10);
     this.y = parseFloat(coords[1], 10);
     this.z = parseFloat(coords[2], 10) || 0.0;
-  }
-  else {
+  } else {
     this.x = x;
     this.y = y;
     this.z = z || 0.0;
@@ -12933,7 +12749,8 @@ Point.prototype.toMGRS = function(accuracy) {
   return mgrs.forward([this.x, this.y], accuracy);
 };
 module.exports = Point;
-},{"mgrs":48}],67:[function(require,module,exports){
+
+},{"mgrs":36}],55:[function(require,module,exports){
 var parseCode = require("./parseCode");
 var extend = require('./extend');
 var projections = require('./projections');
@@ -12968,7 +12785,7 @@ Projection.projections = projections;
 Projection.projections.start();
 module.exports = Projection;
 
-},{"./deriveConstants":98,"./extend":99,"./parseCode":103,"./projections":105}],68:[function(require,module,exports){
+},{"./deriveConstants":86,"./extend":87,"./parseCode":91,"./projections":93}],56:[function(require,module,exports){
 module.exports = function(crs, denorm, point) {
   var xin = point.x,
     yin = point.y,
@@ -13021,14 +12838,14 @@ module.exports = function(crs, denorm, point) {
   return point;
 };
 
-},{}],69:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var sign = require('./sign');
 
 module.exports = function(x) {
   return (Math.abs(x) < HALF_PI) ? x : (x - (sign(x) * Math.PI));
 };
-},{"./sign":86}],70:[function(require,module,exports){
+},{"./sign":74}],58:[function(require,module,exports){
 var TWO_PI = Math.PI * 2;
 // SPI is slightly greater than Math.PI, so values that exceed the -180..180
 // degree range by a tiny amount don't get wrapped. This prevents points that
@@ -13040,35 +12857,35 @@ var sign = require('./sign');
 module.exports = function(x) {
   return (Math.abs(x) <= SPI) ? x : (x - (sign(x) * TWO_PI));
 };
-},{"./sign":86}],71:[function(require,module,exports){
+},{"./sign":74}],59:[function(require,module,exports){
 module.exports = function(x) {
   if (Math.abs(x) > 1) {
     x = (x > 1) ? 1 : -1;
   }
   return Math.asin(x);
 };
-},{}],72:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 module.exports = function(x) {
   return (1 - 0.25 * x * (1 + x / 16 * (3 + 1.25 * x)));
 };
-},{}],73:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 module.exports = function(x) {
   return (0.375 * x * (1 + 0.25 * x * (1 + 0.46875 * x)));
 };
-},{}],74:[function(require,module,exports){
+},{}],62:[function(require,module,exports){
 module.exports = function(x) {
   return (0.05859375 * x * x * (1 + 0.75 * x));
 };
-},{}],75:[function(require,module,exports){
+},{}],63:[function(require,module,exports){
 module.exports = function(x) {
   return (x * x * x * (35 / 3072));
 };
-},{}],76:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 module.exports = function(a, e, sinphi) {
   var temp = e * sinphi;
   return a / Math.sqrt(1 - temp * temp);
 };
-},{}],77:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
 module.exports = function(ml, e0, e1, e2, e3) {
   var phi;
   var dphi;
@@ -13085,7 +12902,7 @@ module.exports = function(ml, e0, e1, e2, e3) {
   //..reportError("IMLFN-CONV:Latitude failed to converge after 15 iterations");
   return NaN;
 };
-},{}],78:[function(require,module,exports){
+},{}],66:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 
 module.exports = function(eccent, q) {
@@ -13118,16 +12935,16 @@ module.exports = function(eccent, q) {
   //console.log("IQSFN-CONV:Latitude failed to converge after 30 iterations");
   return NaN;
 };
-},{}],79:[function(require,module,exports){
+},{}],67:[function(require,module,exports){
 module.exports = function(e0, e1, e2, e3, phi) {
   return (e0 * phi - e1 * Math.sin(2 * phi) + e2 * Math.sin(4 * phi) - e3 * Math.sin(6 * phi));
 };
-},{}],80:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 module.exports = function(eccent, sinphi, cosphi) {
   var con = eccent * sinphi;
   return cosphi / (Math.sqrt(1 - con * con));
 };
-},{}],81:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 module.exports = function(eccent, ts) {
   var eccnth = 0.5 * eccent;
@@ -13144,7 +12961,7 @@ module.exports = function(eccent, ts) {
   //console.log("phi2z has NoConvergence");
   return -9999;
 };
-},{}],82:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 var C00 = 1;
 var C02 = 0.25;
 var C04 = 0.046875;
@@ -13169,7 +12986,7 @@ module.exports = function(es) {
   en[4] = t * es * C88;
   return en;
 };
-},{}],83:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
 var pj_mlfn = require("./pj_mlfn");
 var EPSLN = 1.0e-10;
 var MAX_ITER = 20;
@@ -13190,13 +13007,13 @@ module.exports = function(arg, es, en) {
   //..reportError("cass:pj_inv_mlfn: Convergence error");
   return phi;
 };
-},{"./pj_mlfn":84}],84:[function(require,module,exports){
+},{"./pj_mlfn":72}],72:[function(require,module,exports){
 module.exports = function(phi, sphi, cphi, en) {
   cphi *= sphi;
   sphi *= sphi;
   return (en[0] * phi - cphi * (en[1] + sphi * (en[2] + sphi * (en[3] + sphi * en[4]))));
 };
-},{}],85:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 module.exports = function(eccent, sinphi) {
   var con;
   if (eccent > 1.0e-7) {
@@ -13207,15 +13024,15 @@ module.exports = function(eccent, sinphi) {
     return (2 * sinphi);
   }
 };
-},{}],86:[function(require,module,exports){
+},{}],74:[function(require,module,exports){
 module.exports = function(x) {
   return x<0 ? -1 : 1;
 };
-},{}],87:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 module.exports = function(esinp, exp) {
   return (Math.pow((1 - esinp) / (1 + esinp), exp));
 };
-},{}],88:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 module.exports = function (array){
   var out = {
     x: array[0],
@@ -13229,7 +13046,7 @@ module.exports = function (array){
   }
   return out;
 };
-},{}],89:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 
 module.exports = function(eccent, phi, sinphi) {
@@ -13238,7 +13055,7 @@ module.exports = function(eccent, phi, sinphi) {
   con = Math.pow(((1 - con) / (1 + con)), com);
   return (Math.tan(0.5 * (HALF_PI - phi)) / con);
 };
-},{}],90:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 exports.wgs84 = {
   towgs84: "0,0,0",
   ellipse: "WGS84",
@@ -13319,7 +13136,7 @@ exports.rnb72 = {
   ellipse: "intl",
   datumName: "Reseau National Belge 1972"
 };
-},{}],91:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 exports.MERIT = {
   a: 6378137.0,
   rf: 298.257,
@@ -13535,7 +13352,7 @@ exports.sphere = {
   b: 6370997.0,
   ellipseName: "Normal Sphere (r=6370997)"
 };
-},{}],92:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 exports.greenwich = 0.0; //"0dE",
 exports.lisbon = -9.131906111111; //"9d07'54.862\"W",
 exports.paris = 2.337229166667; //"2d20'14.025\"E",
@@ -13549,11 +13366,11 @@ exports.brussels = 4.367975; //"4d22'4.71\"E",
 exports.stockholm = 18.058277777778; //"18d3'29.8\"E",
 exports.athens = 23.7163375; //"23d42'58.815\"E",
 exports.oslo = 10.722916666667; //"10d43'22.5\"E"
-},{}],93:[function(require,module,exports){
+},{}],81:[function(require,module,exports){
 exports.ft = {to_meter: 0.3048};
 exports['us-ft'] = {to_meter: 1200 / 3937};
 
-},{}],94:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 var proj = require('./Proj');
 var transform = require('./transform');
 var wgs84 = proj('WGS84');
@@ -13618,7 +13435,7 @@ function proj4(fromProj, toProj, coord) {
   }
 }
 module.exports = proj4;
-},{"./Proj":67,"./transform":131}],95:[function(require,module,exports){
+},{"./Proj":55,"./transform":119}],83:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var PJD_3PARAM = 1;
 var PJD_7PARAM = 2;
@@ -14023,7 +13840,7 @@ datum.prototype = {
 */
 module.exports = datum;
 
-},{}],96:[function(require,module,exports){
+},{}],84:[function(require,module,exports){
 var PJD_3PARAM = 1;
 var PJD_7PARAM = 2;
 var PJD_GRIDSHIFT = 3;
@@ -14124,7 +13941,7 @@ module.exports = function(source, dest, point) {
 };
 
 
-},{}],97:[function(require,module,exports){
+},{}],85:[function(require,module,exports){
 var globals = require('./global');
 var parseProj = require('./projString');
 var wkt = require('./wkt');
@@ -14181,7 +13998,7 @@ function defs(name) {
 globals(defs);
 module.exports = defs;
 
-},{"./global":100,"./projString":104,"./wkt":132}],98:[function(require,module,exports){
+},{"./global":88,"./projString":92,"./wkt":120}],86:[function(require,module,exports){
 var Datum = require('./constants/Datum');
 var Ellipsoid = require('./constants/Ellipsoid');
 var extend = require('./extend');
@@ -14239,7 +14056,7 @@ module.exports = function(json) {
   return json;
 };
 
-},{"./constants/Datum":90,"./constants/Ellipsoid":91,"./datum":95,"./extend":99}],99:[function(require,module,exports){
+},{"./constants/Datum":78,"./constants/Ellipsoid":79,"./datum":83,"./extend":87}],87:[function(require,module,exports){
 module.exports = function(destination, source) {
   destination = destination || {};
   var value, property;
@@ -14255,7 +14072,7 @@ module.exports = function(destination, source) {
   return destination;
 };
 
-},{}],100:[function(require,module,exports){
+},{}],88:[function(require,module,exports){
 module.exports = function(defs) {
   defs('EPSG:4326', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
   defs('EPSG:4269', "+title=NAD83 (long/lat) +proj=longlat +a=6378137.0 +b=6356752.31414036 +ellps=GRS80 +datum=NAD83 +units=degrees");
@@ -14268,7 +14085,7 @@ module.exports = function(defs) {
   defs['EPSG:102113'] = defs['EPSG:3857'];
 };
 
-},{}],101:[function(require,module,exports){
+},{}],89:[function(require,module,exports){
 var projs = [
   require('./projections/tmerc'),
   require('./projections/utm'),
@@ -14298,7 +14115,7 @@ module.exports = function(proj4){
     proj4.Proj.projections.add(proj);
   });
 };
-},{"./projections/aea":106,"./projections/aeqd":107,"./projections/cass":108,"./projections/cea":109,"./projections/eqc":110,"./projections/eqdc":111,"./projections/gnom":113,"./projections/krovak":114,"./projections/laea":115,"./projections/lcc":116,"./projections/mill":119,"./projections/moll":120,"./projections/nzmg":121,"./projections/omerc":122,"./projections/poly":123,"./projections/sinu":124,"./projections/somerc":125,"./projections/stere":126,"./projections/sterea":127,"./projections/tmerc":128,"./projections/utm":129,"./projections/vandg":130}],102:[function(require,module,exports){
+},{"./projections/aea":94,"./projections/aeqd":95,"./projections/cass":96,"./projections/cea":97,"./projections/eqc":98,"./projections/eqdc":99,"./projections/gnom":101,"./projections/krovak":102,"./projections/laea":103,"./projections/lcc":104,"./projections/mill":107,"./projections/moll":108,"./projections/nzmg":109,"./projections/omerc":110,"./projections/poly":111,"./projections/sinu":112,"./projections/somerc":113,"./projections/stere":114,"./projections/sterea":115,"./projections/tmerc":116,"./projections/utm":117,"./projections/vandg":118}],90:[function(require,module,exports){
 var proj4 = require('./core');
 proj4.defaultDatum = 'WGS84'; //default datum
 proj4.Proj = require('./Proj');
@@ -14311,7 +14128,7 @@ proj4.mgrs = require('mgrs');
 proj4.version = require('../package.json').version;
 require('./includedProjections')(proj4);
 module.exports = proj4;
-},{"../package.json":133,"./Point":66,"./Proj":67,"./common/toPoint":88,"./core":94,"./defs":97,"./includedProjections":101,"./transform":131,"mgrs":48}],103:[function(require,module,exports){
+},{"../package.json":121,"./Point":54,"./Proj":55,"./common/toPoint":76,"./core":82,"./defs":85,"./includedProjections":89,"./transform":119,"mgrs":36}],91:[function(require,module,exports){
 var defs = require('./defs');
 var wkt = require('./wkt');
 var projStr = require('./projString');
@@ -14348,7 +14165,7 @@ function parse(code){
 }
 
 module.exports = parse;
-},{"./defs":97,"./projString":104,"./wkt":132}],104:[function(require,module,exports){
+},{"./defs":85,"./projString":92,"./wkt":120}],92:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var PrimeMeridian = require('./constants/PrimeMeridian');
 var units = require('./constants/units');
@@ -14482,7 +14299,7 @@ module.exports = function(defData) {
   return self;
 };
 
-},{"./constants/PrimeMeridian":92,"./constants/units":93}],105:[function(require,module,exports){
+},{"./constants/PrimeMeridian":80,"./constants/units":81}],93:[function(require,module,exports){
 var projs = [
   require('./projections/merc'),
   require('./projections/longlat')
@@ -14518,7 +14335,7 @@ exports.start = function() {
   projs.forEach(add);
 };
 
-},{"./projections/longlat":117,"./projections/merc":118}],106:[function(require,module,exports){
+},{"./projections/longlat":105,"./projections/merc":106}],94:[function(require,module,exports){
 var EPSLN = 1.0e-10;
 var msfnz = require('../common/msfnz');
 var qsfnz = require('../common/qsfnz');
@@ -14641,7 +14458,7 @@ exports.phi1z = function(eccent, qs) {
 };
 exports.names = ["Albers_Conic_Equal_Area", "Albers", "aea"];
 
-},{"../common/adjust_lon":70,"../common/asinz":71,"../common/msfnz":80,"../common/qsfnz":85}],107:[function(require,module,exports){
+},{"../common/adjust_lon":58,"../common/asinz":59,"../common/msfnz":68,"../common/qsfnz":73}],95:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
@@ -14840,7 +14657,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Azimuthal_Equidistant", "aeqd"];
 
-},{"../common/adjust_lon":70,"../common/asinz":71,"../common/e0fn":72,"../common/e1fn":73,"../common/e2fn":74,"../common/e3fn":75,"../common/gN":76,"../common/imlfn":77,"../common/mlfn":79}],108:[function(require,module,exports){
+},{"../common/adjust_lon":58,"../common/asinz":59,"../common/e0fn":60,"../common/e1fn":61,"../common/e2fn":62,"../common/e3fn":63,"../common/gN":64,"../common/imlfn":65,"../common/mlfn":67}],96:[function(require,module,exports){
 var mlfn = require('../common/mlfn');
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
@@ -14944,7 +14761,7 @@ exports.inverse = function(p) {
 
 };
 exports.names = ["Cassini", "Cassini_Soldner", "cass"];
-},{"../common/adjust_lat":69,"../common/adjust_lon":70,"../common/e0fn":72,"../common/e1fn":73,"../common/e2fn":74,"../common/e3fn":75,"../common/gN":76,"../common/imlfn":77,"../common/mlfn":79}],109:[function(require,module,exports){
+},{"../common/adjust_lat":57,"../common/adjust_lon":58,"../common/e0fn":60,"../common/e1fn":61,"../common/e2fn":62,"../common/e3fn":63,"../common/gN":64,"../common/imlfn":65,"../common/mlfn":67}],97:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var qsfnz = require('../common/qsfnz');
 var msfnz = require('../common/msfnz');
@@ -15009,7 +14826,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["cea"];
 
-},{"../common/adjust_lon":70,"../common/iqsfnz":78,"../common/msfnz":80,"../common/qsfnz":85}],110:[function(require,module,exports){
+},{"../common/adjust_lon":58,"../common/iqsfnz":66,"../common/msfnz":68,"../common/qsfnz":73}],98:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var adjust_lat = require('../common/adjust_lat');
 exports.init = function() {
@@ -15052,7 +14869,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Equirectangular", "Equidistant_Cylindrical", "eqc"];
 
-},{"../common/adjust_lat":69,"../common/adjust_lon":70}],111:[function(require,module,exports){
+},{"../common/adjust_lat":57,"../common/adjust_lon":58}],99:[function(require,module,exports){
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
 var e2fn = require('../common/e2fn');
@@ -15164,7 +14981,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Equidistant_Conic", "eqdc"];
 
-},{"../common/adjust_lat":69,"../common/adjust_lon":70,"../common/e0fn":72,"../common/e1fn":73,"../common/e2fn":74,"../common/e3fn":75,"../common/imlfn":77,"../common/mlfn":79,"../common/msfnz":80}],112:[function(require,module,exports){
+},{"../common/adjust_lat":57,"../common/adjust_lon":58,"../common/e0fn":60,"../common/e1fn":61,"../common/e2fn":62,"../common/e3fn":63,"../common/imlfn":65,"../common/mlfn":67,"../common/msfnz":68}],100:[function(require,module,exports){
 var FORTPI = Math.PI/4;
 var srat = require('../common/srat');
 var HALF_PI = Math.PI/2;
@@ -15211,7 +15028,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["gauss"];
 
-},{"../common/srat":87}],113:[function(require,module,exports){
+},{"../common/srat":75}],101:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var EPSLN = 1.0e-10;
 var asinz = require('../common/asinz');
@@ -15312,7 +15129,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["gnom"];
 
-},{"../common/adjust_lon":70,"../common/asinz":71}],114:[function(require,module,exports){
+},{"../common/adjust_lon":58,"../common/asinz":59}],102:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 exports.init = function() {
   this.a = 6377397.155;
@@ -15412,7 +15229,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Krovak", "krovak"];
 
-},{"../common/adjust_lon":70}],115:[function(require,module,exports){
+},{"../common/adjust_lon":58}],103:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var FORTPI = Math.PI/4;
 var EPSLN = 1.0e-10;
@@ -15702,7 +15519,7 @@ exports.authlat = function(beta, APA) {
 };
 exports.names = ["Lambert Azimuthal Equal Area", "Lambert_Azimuthal_Equal_Area", "laea"];
 
-},{"../common/adjust_lon":70,"../common/qsfnz":85}],116:[function(require,module,exports){
+},{"../common/adjust_lon":58,"../common/qsfnz":73}],104:[function(require,module,exports){
 var EPSLN = 1.0e-10;
 var msfnz = require('../common/msfnz');
 var tsfnz = require('../common/tsfnz');
@@ -15839,7 +15656,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Lambert Tangential Conformal Conic Projection", "Lambert_Conformal_Conic", "Lambert_Conformal_Conic_2SP", "lcc"];
 
-},{"../common/adjust_lon":70,"../common/msfnz":80,"../common/phi2z":81,"../common/sign":86,"../common/tsfnz":89}],117:[function(require,module,exports){
+},{"../common/adjust_lon":58,"../common/msfnz":68,"../common/phi2z":69,"../common/sign":74,"../common/tsfnz":77}],105:[function(require,module,exports){
 exports.init = function() {
   //no-op for longlat
 };
@@ -15851,7 +15668,7 @@ exports.forward = identity;
 exports.inverse = identity;
 exports.names = ["longlat", "identity"];
 
-},{}],118:[function(require,module,exports){
+},{}],106:[function(require,module,exports){
 var msfnz = require('../common/msfnz');
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
@@ -15950,7 +15767,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Mercator", "Popular Visualisation Pseudo Mercator", "Mercator_1SP", "Mercator_Auxiliary_Sphere", "merc"];
 
-},{"../common/adjust_lon":70,"../common/msfnz":80,"../common/phi2z":81,"../common/tsfnz":89}],119:[function(require,module,exports){
+},{"../common/adjust_lon":58,"../common/msfnz":68,"../common/phi2z":69,"../common/tsfnz":77}],107:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 /*
   reference
@@ -15997,7 +15814,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Miller_Cylindrical", "mill"];
 
-},{"../common/adjust_lon":70}],120:[function(require,module,exports){
+},{"../common/adjust_lon":58}],108:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var EPSLN = 1.0e-10;
 exports.init = function() {};
@@ -16076,7 +15893,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Mollweide", "moll"];
 
-},{"../common/adjust_lon":70}],121:[function(require,module,exports){
+},{"../common/adjust_lon":58}],109:[function(require,module,exports){
 var SEC_TO_RAD = 4.84813681109535993589914102357e-6;
 /*
   reference
@@ -16296,7 +16113,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["New_Zealand_Map_Grid", "nzmg"];
-},{}],122:[function(require,module,exports){
+},{}],110:[function(require,module,exports){
 var tsfnz = require('../common/tsfnz');
 var adjust_lon = require('../common/adjust_lon');
 var phi2z = require('../common/phi2z');
@@ -16465,7 +16282,7 @@ exports.inverse = function(p) {
 };
 
 exports.names = ["Hotine_Oblique_Mercator", "Hotine Oblique Mercator", "Hotine_Oblique_Mercator_Azimuth_Natural_Origin", "Hotine_Oblique_Mercator_Azimuth_Center", "omerc"];
-},{"../common/adjust_lon":70,"../common/phi2z":81,"../common/tsfnz":89}],123:[function(require,module,exports){
+},{"../common/adjust_lon":58,"../common/phi2z":69,"../common/tsfnz":77}],111:[function(require,module,exports){
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
 var e2fn = require('../common/e2fn');
@@ -16594,7 +16411,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Polyconic", "poly"];
-},{"../common/adjust_lat":69,"../common/adjust_lon":70,"../common/e0fn":72,"../common/e1fn":73,"../common/e2fn":74,"../common/e3fn":75,"../common/gN":76,"../common/mlfn":79}],124:[function(require,module,exports){
+},{"../common/adjust_lat":57,"../common/adjust_lon":58,"../common/e0fn":60,"../common/e1fn":61,"../common/e2fn":62,"../common/e3fn":63,"../common/gN":64,"../common/mlfn":67}],112:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var adjust_lat = require('../common/adjust_lat');
 var pj_enfn = require('../common/pj_enfn');
@@ -16701,7 +16518,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Sinusoidal", "sinu"];
-},{"../common/adjust_lat":69,"../common/adjust_lon":70,"../common/asinz":71,"../common/pj_enfn":82,"../common/pj_inv_mlfn":83,"../common/pj_mlfn":84}],125:[function(require,module,exports){
+},{"../common/adjust_lat":57,"../common/adjust_lon":58,"../common/asinz":59,"../common/pj_enfn":70,"../common/pj_inv_mlfn":71,"../common/pj_mlfn":72}],113:[function(require,module,exports){
 /*
   references:
     Formules et constantes pour le Calcul pour la
@@ -16783,7 +16600,7 @@ exports.inverse = function(p) {
 
 exports.names = ["somerc"];
 
-},{}],126:[function(require,module,exports){
+},{}],114:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
 var sign = require('../common/sign');
@@ -16951,7 +16768,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["stere", "Stereographic_South_Pole", "Polar Stereographic (variant B)"];
 
-},{"../common/adjust_lon":70,"../common/msfnz":80,"../common/phi2z":81,"../common/sign":86,"../common/tsfnz":89}],127:[function(require,module,exports){
+},{"../common/adjust_lon":58,"../common/msfnz":68,"../common/phi2z":69,"../common/sign":74,"../common/tsfnz":77}],115:[function(require,module,exports){
 var gauss = require('./gauss');
 var adjust_lon = require('../common/adjust_lon');
 exports.init = function() {
@@ -17010,7 +16827,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Stereographic_North_Pole", "Oblique_Stereographic", "Polar_Stereographic", "sterea","Oblique Stereographic Alternative"];
 
-},{"../common/adjust_lon":70,"./gauss":112}],128:[function(require,module,exports){
+},{"../common/adjust_lon":58,"./gauss":100}],116:[function(require,module,exports){
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
 var e2fn = require('../common/e2fn');
@@ -17147,7 +16964,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Transverse_Mercator", "Transverse Mercator", "tmerc"];
 
-},{"../common/adjust_lon":70,"../common/asinz":71,"../common/e0fn":72,"../common/e1fn":73,"../common/e2fn":74,"../common/e3fn":75,"../common/mlfn":79,"../common/sign":86}],129:[function(require,module,exports){
+},{"../common/adjust_lon":58,"../common/asinz":59,"../common/e0fn":60,"../common/e1fn":61,"../common/e2fn":62,"../common/e3fn":63,"../common/mlfn":67,"../common/sign":74}],117:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var tmerc = require('./tmerc');
 exports.dependsOn = 'tmerc';
@@ -17167,7 +16984,7 @@ exports.init = function() {
 };
 exports.names = ["Universal Transverse Mercator System", "utm"];
 
-},{"./tmerc":128}],130:[function(require,module,exports){
+},{"./tmerc":116}],118:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
@@ -17288,7 +17105,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Van_der_Grinten_I", "VanDerGrinten", "vandg"];
-},{"../common/adjust_lon":70,"../common/asinz":71}],131:[function(require,module,exports){
+},{"../common/adjust_lon":58,"../common/asinz":59}],119:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var R2D = 57.29577951308232088;
 var PJD_3PARAM = 1;
@@ -17361,7 +17178,7 @@ module.exports = function transform(source, dest, point) {
 
   return point;
 };
-},{"./Proj":67,"./adjust_axis":68,"./common/toPoint":88,"./datum_transform":96}],132:[function(require,module,exports){
+},{"./Proj":55,"./adjust_axis":56,"./common/toPoint":76,"./datum_transform":84}],120:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var extend = require('./extend');
 
@@ -17586,41 +17403,45 @@ module.exports = function(wkt, self) {
   return extend(self, obj.output);
 };
 
-},{"./extend":99}],133:[function(require,module,exports){
+},{"./extend":87}],121:[function(require,module,exports){
 module.exports={
   "_args": [
     [
-      "proj4@^2.1.0",
+      "proj4@^2.1.4",
       "/Users/cmetcalf/projects/shapefile-js"
     ]
   ],
-  "_from": "proj4@>=2.1.0 <3.0.0",
-  "_id": "proj4@2.3.12",
+  "_from": "proj4@>=2.1.4 <3.0.0",
+  "_id": "proj4@2.3.14",
   "_inCache": true,
   "_installable": true,
   "_location": "/proj4",
-  "_nodeVersion": "0.12.7",
+  "_nodeVersion": "4.2.6",
+  "_npmOperationalInternal": {
+    "host": "packages-13-west.internal.npmjs.com",
+    "tmp": "tmp/proj4-2.3.14.tgz_1457689264880_0.9409773757215589"
+  },
   "_npmUser": {
     "email": "andreas.hocevar@gmail.com",
     "name": "ahocevar"
   },
-  "_npmVersion": "2.11.3",
+  "_npmVersion": "2.14.12",
   "_phantomChildren": {},
   "_requested": {
     "name": "proj4",
-    "raw": "proj4@^2.1.0",
-    "rawSpec": "^2.1.0",
+    "raw": "proj4@^2.1.4",
+    "rawSpec": "^2.1.4",
     "scope": null,
-    "spec": ">=2.1.0 <3.0.0",
+    "spec": ">=2.1.4 <3.0.0",
     "type": "range"
   },
   "_requiredBy": [
     "/"
   ],
-  "_resolved": "https://registry.npmjs.org/proj4/-/proj4-2.3.12.tgz",
-  "_shasum": "96b9ed2a810dad6e62f1e32b4dad37c276b427a2",
+  "_resolved": "https://registry.npmjs.org/proj4/-/proj4-2.3.14.tgz",
+  "_shasum": "928906144388980c914c5a357fc493aba59a747a",
   "_shrinkwrap": null,
-  "_spec": "proj4@^2.1.0",
+  "_spec": "proj4@^2.1.4",
   "_where": "/Users/cmetcalf/projects/shapefile-js",
   "author": "",
   "bugs": {
@@ -17658,15 +17479,15 @@ module.exports={
   },
   "description": "Proj4js is a JavaScript library to transform point coordinates from one coordinate system to another, including datum transformations.",
   "devDependencies": {
-    "browserify": "~3.24.5",
+    "browserify": "~12.0.1",
     "chai": "~1.8.1",
     "curl": "git://github.com/cujojs/curl.git",
     "grunt": "~0.4.2",
-    "grunt-browserify": "~1.3.0",
+    "grunt-browserify": "~4.0.1",
     "grunt-cli": "~0.1.13",
     "grunt-contrib-connect": "~0.6.0",
     "grunt-contrib-jshint": "~0.8.0",
-    "grunt-contrib-uglify": "~0.3.2",
+    "grunt-contrib-uglify": "~0.11.1",
     "grunt-mocha-phantomjs": "~0.4.0",
     "istanbul": "~0.2.4",
     "mocha": "~1.17.1",
@@ -17677,10 +17498,10 @@ module.exports={
     "test": "test"
   },
   "dist": {
-    "shasum": "96b9ed2a810dad6e62f1e32b4dad37c276b427a2",
-    "tarball": "http://registry.npmjs.org/proj4/-/proj4-2.3.12.tgz"
+    "shasum": "928906144388980c914c5a357fc493aba59a747a",
+    "tarball": "http://registry.npmjs.org/proj4/-/proj4-2.3.14.tgz"
   },
-  "gitHead": "cd07cad5c6a5b6ed82b59a21356848979eafe22c",
+  "gitHead": "7619c8a63df1eae5bad0b9ad31ca1d87b0549243",
   "homepage": "https://github.com/proj4js/proj4js#readme",
   "jam": {
     "include": [
@@ -17713,10 +17534,10 @@ module.exports={
   "scripts": {
     "test": "./node_modules/istanbul/lib/cli.js test ./node_modules/mocha/bin/_mocha test/test.js"
   },
-  "version": "2.3.12"
+  "version": "2.3.14"
 }
 
-},{}],134:[function(require,module,exports){
+},{}],122:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 var proj4 = require('proj4');
@@ -17859,5 +17680,5 @@ shp.parseDbf = function (dbf) {
 module.exports = shp;
 
 }).call(this,{"isBuffer":require("../node_modules/is-buffer/index.js")})
-},{"../node_modules/is-buffer/index.js":10,"./binaryajax":1,"./parseShp":2,"./toArrayBuffer":3,"./unzip":4,"lie":37,"lru-cache":47,"parsedbf":65,"proj4":102}]},{},[134])(134)
+},{"../node_modules/is-buffer/index.js":10,"./binaryajax":1,"./parseShp":2,"./toArrayBuffer":3,"./unzip":4,"lie":34,"lru-cache":35,"parsedbf":53,"proj4":90}]},{},[122])(122)
 });

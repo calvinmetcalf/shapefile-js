@@ -18,14 +18,14 @@
   "license": "MIT",
   "readmeFilename": "README.md",
   "devDependencies": {
-    "browserify": "^11.0.0",
+    "browserify": "^13.0.0",
     "chai": "^3.3.0",
     "chai-as-promised": "^5.1.0",
-    "jshint": "^2.5.1",
     "jszip": "^2.5.0",
     "mocha": "^2.3.3",
     "testling": "^1.6.1",
-    "uglify-js": "^2.4.24"
+    "uglify-js": "^2.4.24",
+    "uglifyjs": "^2.4.10"
   },
   "dependencies": {
     "jszip": "^2.4.0",
