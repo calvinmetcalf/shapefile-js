@@ -23,20 +23,16 @@
     "chai-as-promised": "^5.1.0",
     "jshint": "^2.5.1",
     "jszip": "^2.5.0",
-    "lie": "^3.0.1",
-    "lru-cache": "^2.7.0",
     "mocha": "^2.3.3",
-    "parsedbf": "0.1.2",
-    "proj4": "^2.1.4",
     "testling": "^1.6.1",
     "uglify-js": "^2.4.24"
   },
   "dependencies": {
     "jszip": "^2.4.0",
-    "lie": "^2.7.6",
-    "lru-cache": "^2.5.0",
-    "parsedbf": "0.0.1",
-    "proj4": "^2.1.0"
+    "lie": "^3.0.1",
+    "lru-cache": "^2.7.0",
+    "parsedbf": "~0.1.2",
+    "proj4": "^2.1.4"
   },
   "browser": {
     "./lib/binaryajax.js": "./lib/binaryajax-browser.js"
