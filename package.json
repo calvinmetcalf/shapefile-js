@@ -1,6 +1,6 @@
 {
   "name": "shpjs",
-  "version": "3.3.1",
+  "version": "3.3.2",
   "description": "A binary shapefile loader, for javascript. Not many caveats",
   "main": "lib/index.js",
   "repository": {
