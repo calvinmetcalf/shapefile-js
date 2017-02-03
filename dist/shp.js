@@ -17606,7 +17606,11 @@ shp.parseZip = function(buffer, whiteList, options) {
 			zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = parseDbf(zip[key]);
 		}
 		else if (key.slice(-3).toLowerCase() === 'prj') {
-			zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = proj4(zip[key]);
+			if(options && options.ignoreProj) {
+				zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = zip[key];
+			} else {
+				zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = proj4(zip[key]);
+			}
 		}
 		else if (key.slice(-4).toLowerCase() === 'json' || whiteList.indexOf(key.split('.').pop()) > -1) {
 			names.push(key.slice(0, -3) + key.slice(-3).toLowerCase());
@@ -17627,9 +17631,11 @@ shp.parseZip = function(buffer, whiteList, options) {
 			parsed.fileName = name;
 		}
 		else {
-			if(!options || !options.ignoreProj) {
+			//if ignoring proj then return it with the geoJson only
+			if(options && options.ignoreProj) {
+				parsed.prjfile = zip[name + '.prj'];
+			} else {
 				prjfile = zip[name + '.prj'];
-				parsed.prjfile = prjfile;
 			}
 			parsed = shp.combine([parseShp(zip[name + '.shp'], prjfile), zip[name + '.dbf']]);
 			parsed.fileName = name;
