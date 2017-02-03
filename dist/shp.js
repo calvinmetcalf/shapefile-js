@@ -17583,9 +17583,13 @@ shp.combine = function(arr) {
  * @param {File} buffer
  * @param {type} whiteList
  * @param {Object} options may contain the following: {
- *    ignoreProj: false //if true, ignore the prj file and leave CRS unconverted
- *                        if a prj file is present, returns its string in
- *                        'prjfile' attribute of the geoJson
+ *    //function that if defined, will be called with the string contents of the
+ *    //shapefile prj file.  If the function return false, then no CRS conversion
+ *    //will take place and the parsed geoJson is returned unconverted along with
+ *    //an attribute 'prjfile' that includes the prj string content.
+ *    //If the function returns true, then the normal CRS conversion will be
+ *    //allowed to proceed where the geoJson is returned as standard WGS84.
+ *    allowCrsConvert: function(prjBody) { return true; }
  *  }
  * @returns {shp_L17541.shp.parseZip.geojson}Parse teh
  */
@@ -17606,10 +17610,10 @@ shp.parseZip = function(buffer, whiteList, options) {
 			zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = parseDbf(zip[key]);
 		}
 		else if (key.slice(-3).toLowerCase() === 'prj') {
-			if(options && options.ignoreProj) {
-				zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = zip[key];
-			} else {
+			if(options && options.allowCrsConvert && options.allowCrsConvert(zip[key])) {
 				zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = proj4(zip[key]);
+			} else {
+				zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = zip[key];
 			}
 		}
 		else if (key.slice(-4).toLowerCase() === 'json' || whiteList.indexOf(key.split('.').pop()) > -1) {
@@ -17631,14 +17635,16 @@ shp.parseZip = function(buffer, whiteList, options) {
 			parsed.fileName = name;
 		}
 		else {
-			//if ignoring proj then return it with the geoJson only
-			if(options && options.ignoreProj) {
-				parsed.prjfile = zip[name + '.prj'];
-			} else {
+			//if zip is still the raw prj text/string it means no crs conversion
+			if(typeof zip[name+'.prj'] !== 'string') {
 				prjfile = zip[name + '.prj'];
 			}
 			parsed = shp.combine([parseShp(zip[name + '.shp'], prjfile), zip[name + '.dbf']]);
 			parsed.fileName = name;
+			//if ignoring proj then return it with the geoJson only
+			if(!prjfile) {
+				parsed.prjfile = zip[name + '.prj'];
+			}
 		}
 		return parsed;
 	});
