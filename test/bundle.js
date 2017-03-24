@@ -1,4 +1,93 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+function dbfHeader(data) {
+  var out = {};
+  out.lastUpdated = new Date(data.readUInt8(1) + 1900, data.readUInt8(2), data.readUInt8(3));
+  out.records = data.readUInt32LE(4);
+  out.headerLen = data.readUInt16LE(8);
+  out.recLen = data.readUInt16LE(10);
+  return out;
+}
+
+function dbfRowHeader(data, headerLen, decoder) {
+  var out = [];
+  var offset = 32;
+  while (offset < headerLen) {
+    out.push({
+      name: decoder(data.slice(offset, offset + 11)),
+      dataType: String.fromCharCode(data.readUInt8(offset + 11)),
+      len: data.readUInt8(offset + 16),
+      decimal: data.readUInt8(offset + 17)
+    });
+    if (data.readUInt8(offset + 32) === 13) {
+      break;
+    } else {
+      offset += 32;
+    }
+  }
+  return out;
+}
+
+function rowFuncs(buffer, offset, len, type, decoder) {
+  var data = buffer.slice(offset, offset + len);
+  var textData = decoder(data);
+  switch (type) {
+    case 'N':
+    case 'F':
+    case 'O':
+      return parseFloat(textData, 10);
+    case 'D':
+      return new Date(textData.slice(0, 4), parseInt(textData.slice(4, 6), 10) - 1, textData.slice(6, 8));
+    case 'L':
+      return textData.toLowerCase() === 'y' || textData.toLowerCase() === 't';
+    default:
+      return textData;
+  }
+}
+
+function parseRow(buffer, offset, rowHeaders, decoder) {
+  var out = {};
+  var i = 0;
+  var len = rowHeaders.length;
+  var field;
+  var header;
+  while (i < len) {
+    header = rowHeaders[i];
+    field = rowFuncs(buffer, offset, header.len, header.dataType, decoder);
+    offset += header.len;
+    if (typeof field !== 'undefined') {
+      out[header.name] = field;
+    }
+    i++;
+  }
+  return out;
+}
+function defaultDecoder(data) {
+  return String.fromCharCode.apply(this, data).replace(/\0/g, '').trim();
+}
+function createDecoder(encoding) {
+  if (!encoding) {
+    return defaultDecoder;
+  }
+}
+module.exports = function(buffer, encoding) {
+  var decoder = createDecoder(encoding);
+  var header = dbfHeader(buffer);
+  var rowHeaders = dbfRowHeader(buffer, header.headerLen - 1, decoder);
+
+  var offset = ((rowHeaders.length + 1) << 5) + 2;
+  var recLen = header.recLen;
+  var records = header.records;
+  var out = [];
+  while (records) {
+    out.push(parseRow(buffer, offset, rowHeaders, decoder));
+    offset += recLen;
+    records--;
+  }
+  return out;
+};
+
+},{}],2:[function(require,module,exports){
+(function (Buffer){
 'use strict';
 var Promise = require('lie');
 module.exports = binaryAjax;
@@ -7,7 +96,7 @@ function binaryAjax(url){
 		var type = url.slice(-3);
 		var ajax = new XMLHttpRequest();
 		ajax.open('GET',url,true);
-		if(type !== 'prj'){
+		if(type !== 'prj' && type !== 'cpg'){
 			ajax.responseType='arraybuffer';
 		}
 		ajax.addEventListener('load', function (){
@@ -18,433 +107,440 @@ function binaryAjax(url){
 					return reject(new Error(ajax.status));
 				}
 			}
-			resolve(ajax.response);
+			if(type !== 'prj' && type !== 'cpg'){
+				return resolve(new Buffer(ajax.response));
+			} else {
+				return resolve(ajax.response);
+			}
 		}, false);
 		ajax.send();
 	});
 }
-},{"lie":86}],2:[function(require,module,exports){
-(function (Buffer){
+
+}).call(this,require("buffer").Buffer)
+},{"buffer":8,"lie":69}],3:[function(require,module,exports){
+(function (global,Buffer){
 'use strict';
 var proj4 = require('proj4');
 var unzip = require('./unzip');
 var binaryAjax = require('./binaryajax');
 var parseShp = require('./parseShp');
-var toArrayBuffer = require('./toArrayBuffer');
 var parseDbf = require('parsedbf');
 var Promise = require('lie');
 var Cache = require('lru-cache');
 var cache = new Cache({
-	max: 20
+  max: 20
 });
+
+function toBuffer(b) {
+  if (!b) {
+    throw new Error('forgot to pass buffer');
+  }
+  if (Buffer.isBuffer(b)) {
+    return b;
+  }
+  if (b instanceof global.ArrayBuffer) {
+    return new Buffer(b);
+  }
+  if (b.buffer instanceof global.ArrayBuffer) {
+    if (b.BYTES_PER_ELEMENT === 1) {
+      return new Buffer(b);
+    }
+    return new Buffer(b.buffer);
+  }
+}
+
 function shp(base, whiteList) {
-	if (typeof base === 'string' && cache.has(base)) {
-		return Promise.resolve(cache.get(base));
-	}
-	return shp.getShapefile(base, whiteList).then(function (resp) {
-		if (typeof base === 'string') {
-			cache.set(base, resp);
-		}
-		return resp;
-	});
+  if (typeof base === 'string' && cache.has(base)) {
+    return Promise.resolve(cache.get(base));
+  }
+  return shp.getShapefile(base, whiteList).then(function(resp) {
+    if (typeof base === 'string') {
+      cache.set(base, resp);
+    }
+    return resp;
+  });
 }
 shp.combine = function(arr) {
-	var out = {};
-	out.type = 'FeatureCollection';
-	out.features = [];
-	var i = 0;
-	var len = arr[0].length;
-	while (i < len) {
-		out.features.push({
-			'type': 'Feature',
-			'geometry': arr[0][i],
-			'properties': arr[1][i]
-		});
-		i++;
-	}
-	return out;
+  var out = {};
+  out.type = 'FeatureCollection';
+  out.features = [];
+  var i = 0;
+  var len = arr[0].length;
+  while (i < len) {
+    out.features.push({
+      'type': 'Feature',
+      'geometry': arr[0][i],
+      'properties': arr[1][i]
+    });
+    i++;
+  }
+  return out;
 };
 shp.parseZip = function(buffer, whiteList) {
-	var key;
-	var zip = unzip(buffer);
-	var names = [];
-	whiteList = whiteList || [];
-	for (key in zip) {
-		if (key.indexOf('__MACOSX') !== -1) {
-			continue;
-		}
-		if (key.slice(-3).toLowerCase() === 'shp') {
-			names.push(key.slice(0, - 4));
-		}
-		else if (key.slice(-3).toLowerCase() === 'dbf') {
-			zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = parseDbf(zip[key]);
-		}
-		else if (key.slice(-3).toLowerCase() === 'prj') {
-			zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = proj4(zip[key]);
-		}
-		else if (key.slice(-4).toLowerCase() === 'json' || whiteList.indexOf(key.split('.').pop()) > -1) {
-			names.push(key.slice(0, -3) + key.slice(-3).toLowerCase());
-		}
-	}
-	if (!names.length) {
-		throw new Error('no layers founds');
-	}
-	var geojson = names.map(function(name) {
-		var parsed;
-		if (name.slice(-4).toLowerCase() === 'json') {
-			parsed = JSON.parse(zip[name]);
-			parsed.fileName = name.slice(0, name.lastIndexOf('.'));
-		}
-		else if (whiteList.indexOf(name.slice(name.lastIndexOf('.') + 1)) > -1) {
-			parsed = zip[name];
-			parsed.fileName = name;
-		}
-		else {
-			parsed = shp.combine([parseShp(zip[name + '.shp'], zip[name + '.prj']), zip[name + '.dbf']]);
-			parsed.fileName = name;
-		}
-		return parsed;
-	});
-	if (geojson.length === 1) {
-		return geojson[0];
-	}
-	else {
-		return geojson;
-	}
+  var key;
+	buffer = toBuffer(buffer);
+  var zip = unzip(buffer);
+  var names = [];
+  whiteList = whiteList || [];
+  for (key in zip) {
+    if (key.indexOf('__MACOSX') !== -1) {
+      continue;
+    }
+    if (key.slice(-3).toLowerCase() === 'shp') {
+      names.push(key.slice(0, -4));
+      zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = zip[key];
+    } else if (key.slice(-3).toLowerCase() === 'dbf') {
+      zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = parseDbf(zip[key]);
+    } else if (key.slice(-3).toLowerCase() === 'prj') {
+      zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = proj4(zip[key]);
+    } else if (key.slice(-4).toLowerCase() === 'json' || whiteList.indexOf(key.split('.').pop()) > -1) {
+      names.push(key.slice(0, -3) + key.slice(-3).toLowerCase());
+    }
+  }
+  if (!names.length) {
+    throw new Error('no layers founds');
+  }
+  var geojson = names.map(function(name) {
+    var parsed;
+    var lastDotIdx = name.lastIndexOf('.');
+    if (lastDotIdx > -1 && name.slice(lastDotIdx).indexOf('json') > -1) {
+      parsed = JSON.parse(zip[name]);
+      parsed.fileName = name.slice(0, lastDotIdx);
+    } else if (whiteList.indexOf(name.slice(lastDotIdx + 1)) > -1) {
+      parsed = zip[name];
+      parsed.fileName = name;
+    } else {
+      parsed = shp.combine([parseShp(zip[name + '.shp'], zip[name + '.prj']), zip[name + '.dbf']]);
+      parsed.fileName = name;
+    }
+    return parsed;
+  });
+  if (geojson.length === 1) {
+    return geojson[0];
+  } else {
+    return geojson;
+  }
 };
 
 function getZip(base, whiteList) {
-	return binaryAjax(base).then(function(a) {
-		return shp.parseZip(a, whiteList);
-	});
+  return binaryAjax(base).then(function(a) {
+    return shp.parseZip(a, whiteList);
+  });
 }
 shp.getShapefile = function(base, whiteList) {
-	if (typeof base === 'string') {
-		if (base.slice(-4) === '.zip') {
-			return getZip(base, whiteList);
-		}
-		else {
-			return Promise.all([
-				Promise.all([
-					binaryAjax(base + '.shp'),
-					binaryAjax(base + '.prj')
-				]).then(function(args) {
-					return parseShp(args[0], args[1] ? proj4(args[1]) : false);
-				}),
-				binaryAjax(base + '.dbf').then(parseDbf)
-			]).then(shp.combine);
-		}
-	}
-	else {
-		return new Promise(function(resolve) {
-			resolve(shp.parseZip(base));
-		});
-	}
+  if (typeof base === 'string') {
+    if (base.slice(-4).toLowerCase() === '.zip') {
+      return getZip(base, whiteList);
+    } else {
+      return Promise.all([
+        Promise.all([
+          binaryAjax(base + '.shp'),
+          binaryAjax(base + '.prj')
+        ]).then(function(args) {
+          return parseShp(args[0], args[1] ? proj4(args[1]) : false);
+        }),
+        binaryAjax(base + '.dbf').then(parseDbf)
+      ]).then(shp.combine);
+    }
+  } else {
+    return new Promise(function(resolve) {
+      resolve(shp.parseZip(base));
+    });
+  }
 };
-shp.parseShp = function (shp, prj) {
-	if (Buffer.isBuffer(shp)) {
-		shp = toArrayBuffer(shp);
-	}
-	if (Buffer.isBuffer(prj)) {
-		prj = prj.toString();
-	}
-	if (typeof prj === 'string') {
-		prj = proj4(prj);
-		return parseShp(shp, prj);
-	} else {
-		return parseShp(shp);
-	}
+shp.parseShp = function(shp, prj) {
+	shp = toBuffer(shp);
+  if (Buffer.isBuffer(prj)) {
+    prj = prj.toString();
+  }
+  if (typeof prj === 'string') {
+    prj = proj4(prj);
+    return parseShp(shp, prj);
+  } else {
+    return parseShp(shp);
+  }
 };
-shp.parseDbf = function (dbf) {
-	if (Buffer.isBuffer(dbf)) {
-		dbf = toArrayBuffer(dbf);
-	}
-	return parseDbf(dbf);
+shp.parseDbf = function(dbf) {
+	dbf = toBuffer(dbf);
+  return parseDbf(dbf);
 };
 module.exports = shp;
 
-}).call(this,require("buffer").Buffer)
-},{"./binaryajax":1,"./parseShp":3,"./toArrayBuffer":4,"./unzip":5,"buffer":7,"lie":86,"lru-cache":101,"parsedbf":102,"proj4":138}],3:[function(require,module,exports){
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
+},{"./binaryajax":2,"./parseShp":4,"./unzip":5,"buffer":8,"lie":69,"lru-cache":70,"parsedbf":1,"proj4":124}],4:[function(require,module,exports){
 'use strict';
-function isClockWise(array){
-	var sum = 0;
-	var i = 1;
-	var len = array.length;
-	var prev,cur;
-	while(i<len){
-		prev = cur||array[0];
-		cur = array[i];
-		sum += ((cur[0]-prev[0])*(cur[1]+prev[1]));
-		i++;
-	}
-	return sum > 0;
+
+function isClockWise(array) {
+  var sum = 0;
+  var i = 1;
+  var len = array.length;
+  var prev, cur;
+  while (i < len) {
+    prev = cur || array[0];
+    cur = array[i];
+    sum += ((cur[0] - prev[0]) * (cur[1] + prev[1]));
+    i++;
+  }
+  return sum > 0;
 }
-function polyReduce(a,b){
-	if(isClockWise(b)||!a.length){
-		a.push([b]);
-	}else{
-		a[a.length-1].push(b);
-	}
-	return a;
+
+function polyReduce(a, b) {
+  if (isClockWise(b) || !a.length) {
+    a.push([b]);
+  } else {
+    a[a.length - 1].push(b);
+  }
+  return a;
 }
-ParseShp.prototype.parsePoint = function (data){
-	return {
-		'type': 'Point',
-		'coordinates': this.parseCoord(data,0)
-	};
+ParseShp.prototype.parsePoint = function(data) {
+  return {
+    'type': 'Point',
+    'coordinates': this.parseCoord(data, 0)
+  };
 };
-ParseShp.prototype.parseZPoint = function (data){
-	var pointXY = this.parsePoint(data);
-	pointXY.coordinates.push(this.parseCoord(data,16));
-	return pointXY;
+ParseShp.prototype.parseZPoint = function(data) {
+  var pointXY = this.parsePoint(data);
+  pointXY.coordinates.push(this.parseCoord(data, 16));
+  return pointXY;
 };
-ParseShp.prototype.parsePointArray = function (data,offset,num){
-	var out = [];
-	var done = 0;
-	while(done<num){
-		out.push(this.parseCoord(data,offset));
-		offset += 16;
-		done++;
-	}
-	return out;
+ParseShp.prototype.parsePointArray = function(data, offset, num) {
+  var out = [];
+  var done = 0;
+  while (done < num) {
+    out.push(this.parseCoord(data, offset));
+    offset += 16;
+    done++;
+  }
+  return out;
 };
-ParseShp.prototype.parseZPointArray = function (data,zOffset,num,coordinates){
-	var i = 0;
-	while(i<num){
-		coordinates[i].push(data.getFloat64(zOffset,true));
-		i++;
-		zOffset += 8;
-	}
-	return coordinates;
+ParseShp.prototype.parseZPointArray = function(data, zOffset, num, coordinates) {
+  var i = 0;
+  while (i < num) {
+    coordinates[i].push(data.readDoubleLE(zOffset));
+    i++;
+    zOffset += 8;
+  }
+  return coordinates;
 };
-ParseShp.prototype.parseArrayGroup = function (data,offset,partOffset,num,tot){
-	var out = [];
-	var done = 0;
-	var curNum,nextNum=0,pointNumber;
-	while(done<num){
-		done++;
-		partOffset += 4;
-		curNum = nextNum;
-		if(done===num){
-			nextNum = tot;
-		}else{
-			nextNum = data.getInt32(partOffset,true);
-		}
-		pointNumber = nextNum - curNum;
-		if(!pointNumber){
-			continue;
-		}
-		out.push(this.parsePointArray(data,offset,pointNumber));
-		offset += (pointNumber<<4);
-	}
-	return out;
+ParseShp.prototype.parseArrayGroup = function(data, offset, partOffset, num, tot) {
+  var out = [];
+  var done = 0;
+  var curNum, nextNum = 0,
+    pointNumber;
+  while (done < num) {
+    done++;
+    partOffset += 4;
+    curNum = nextNum;
+    if (done === num) {
+      nextNum = tot;
+    } else {
+      nextNum = data.readInt32LE(partOffset);
+    }
+    pointNumber = nextNum - curNum;
+    if (!pointNumber) {
+      continue;
+    }
+    out.push(this.parsePointArray(data, offset, pointNumber));
+    offset += (pointNumber << 4);
+  }
+  return out;
 };
-ParseShp.prototype.parseZArrayGroup = function(data,zOffset,num,coordinates){
-	var i = 0;
-	while(i<num){
-		coordinates[i] = this.parseZPointArray(data,zOffset,coordinates[i].length,coordinates[i]);
-		zOffset += (coordinates[i].length<<3);
-		i++;
-	}
-	return coordinates;
+ParseShp.prototype.parseZArrayGroup = function(data, zOffset, num, coordinates) {
+  var i = 0;
+  while (i < num) {
+    coordinates[i] = this.parseZPointArray(data, zOffset, coordinates[i].length, coordinates[i]);
+    zOffset += (coordinates[i].length << 3);
+    i++;
+  }
+  return coordinates;
 };
-ParseShp.prototype.parseMultiPoint = function (data){
-	var out = {};
-	var mins = this.parseCoord(data,0);
-	var maxs = this.parseCoord(data,16);
-	out.bbox = [
-		mins[0],
-		mins[1],
-		maxs[0],
-		maxs[1]
-	];
-	var num = data.getInt32(32,true);
-	var offset = 36;
-	if(num===1){
-		out.type = 'Point';
-		out.coordinates = this.parseCoord(data,offset);
-	}else{
-		out.type = 'MultiPoint';
-		out.coordinates = this.parsePointArray(data,offset,num);
-	}
-	return out;
+ParseShp.prototype.parseMultiPoint = function(data) {
+  var out = {};
+  var mins = this.parseCoord(data, 0);
+  var maxs = this.parseCoord(data, 16);
+  out.bbox = [
+    mins[0],
+    mins[1],
+    maxs[0],
+    maxs[1]
+  ];
+  var num = data.readInt32(32, true);
+  var offset = 36;
+  if (num === 1) {
+    out.type = 'Point';
+    out.coordinates = this.parseCoord(data, offset);
+  } else {
+    out.type = 'MultiPoint';
+    out.coordinates = this.parsePointArray(data, offset, num);
+  }
+  return out;
 };
-ParseShp.prototype.parseZMultiPoint = function(data){
-	var geoJson = this.parseMultiPoint(data);
-	var num;
-	if(geoJson.type === 'Point'){
-		geoJson.coordinates.push(data.getFloat64(72,true));
-		return geoJson;
-	}else{
-		num = geoJson.coordinates.length;
-	}
-	var zOffset = 56 + (num<<4);
-	geoJson.coordinates =  this.parseZPointArray(data,zOffset,num,geoJson.coordinates);
-	return geoJson;
+ParseShp.prototype.parseZMultiPoint = function(data) {
+  var geoJson = this.parseMultiPoint(data);
+  var num;
+  if (geoJson.type === 'Point') {
+    geoJson.coordinates.push(data.readDoubleLE(72));
+    return geoJson;
+  } else {
+    num = geoJson.coordinates.length;
+  }
+  var zOffset = 56 + (num << 4);
+  geoJson.coordinates = this.parseZPointArray(data, zOffset, num, geoJson.coordinates);
+  return geoJson;
 };
-ParseShp.prototype.parsePolyline = function (data){
-	var out = {};
-	var mins = this.parseCoord(data,0);
-	var maxs = this.parseCoord(data,16);
-	out.bbox = [
-		mins[0],
-		mins[1],
-		maxs[0],
-		maxs[1]
-	];
-	var numParts = data.getInt32(32,true);
-	var num = data.getInt32(36,true);
-	var offset,partOffset;
-	if(numParts === 1){
-		out.type = 'LineString';
-		offset = 44;
-		out.coordinates = this.parsePointArray(data,offset,num);
-	}else{
-		out.type = 'MultiLineString';
-		offset = 40 + (numParts<<2);
-		partOffset = 40;
-		out.coordinates = this.parseArrayGroup(data,offset,partOffset,numParts,num);
-	}
-	return out;
+ParseShp.prototype.parsePolyline = function(data) {
+  var out = {};
+  var mins = this.parseCoord(data, 0);
+  var maxs = this.parseCoord(data, 16);
+  out.bbox = [
+    mins[0],
+    mins[1],
+    maxs[0],
+    maxs[1]
+  ];
+  var numParts = data.readInt32LE(32);
+  var num = data.readInt32LE(36);
+  var offset, partOffset;
+  if (numParts === 1) {
+    out.type = 'LineString';
+    offset = 44;
+    out.coordinates = this.parsePointArray(data, offset, num);
+  } else {
+    out.type = 'MultiLineString';
+    offset = 40 + (numParts << 2);
+    partOffset = 40;
+    out.coordinates = this.parseArrayGroup(data, offset, partOffset, numParts, num);
+  }
+  return out;
 };
-ParseShp.prototype.parseZPolyline = function(data){
-	var geoJson = this.parsePolyline(data);
-	var num = geoJson.coordinates.length;
-	var zOffset = 60 + (num<<4);
-	if(geoJson.type === 'LineString'){
-		geoJson.coordinates =  this.parseZPointArray(data,zOffset,num,geoJson.coordinates);
-		return geoJson;
-	}else{
-		geoJson.coordinates =  this.parseZArrayGroup(data,zOffset,num,geoJson.coordinates);
-		return geoJson;
-	}
+ParseShp.prototype.parseZPolyline = function(data) {
+  var geoJson = this.parsePolyline(data);
+  var num = geoJson.coordinates.length;
+  var zOffset = 60 + (num << 4);
+  if (geoJson.type === 'LineString') {
+    geoJson.coordinates = this.parseZPointArray(data, zOffset, num, geoJson.coordinates);
+    return geoJson;
+  } else {
+    geoJson.coordinates = this.parseZArrayGroup(data, zOffset, num, geoJson.coordinates);
+    return geoJson;
+  }
 };
-ParseShp.prototype.polyFuncs = function (out){
-	if(out.type === 'LineString'){
-		out.type = 'Polygon';
-		out.coordinates = [out.coordinates];
-		return out;
-	}else{
-		out.coordinates = out.coordinates.reduce(polyReduce,[]);
-		if(out.coordinates.length === 1){
-			out.type = 'Polygon';
-			out.coordinates = out.coordinates[0];
-			return out;
-		}else{
-			out.type = 'MultiPolygon';
-			return out;
-		}
-	}
+ParseShp.prototype.polyFuncs = function(out) {
+  if (out.type === 'LineString') {
+    out.type = 'Polygon';
+    out.coordinates = [out.coordinates];
+    return out;
+  } else {
+    out.coordinates = out.coordinates.reduce(polyReduce, []);
+    if (out.coordinates.length === 1) {
+      out.type = 'Polygon';
+      out.coordinates = out.coordinates[0];
+      return out;
+    } else {
+      out.type = 'MultiPolygon';
+      return out;
+    }
+  }
 };
-ParseShp.prototype.parsePolygon = function (data){
-	return this.polyFuncs(this.parsePolyline(data));
+ParseShp.prototype.parsePolygon = function(data) {
+  return this.polyFuncs(this.parsePolyline(data));
 };
-ParseShp.prototype.parseZPolygon = function(data){
-	return this.polyFuncs(this.parseZPolyline(data));
+ParseShp.prototype.parseZPolygon = function(data) {
+  return this.polyFuncs(this.parseZPolyline(data));
 };
 var shpFuncObj = {
-	1:'parsePoint',
-	3:'parsePolyline',
-	5:'parsePolygon',
-	8:'parseMultiPoint',
-	11:'parseZPoint',
-	13:'parseZPolyline',
-	15:'parseZPolygon',
-	18:'parseZMultiPoint'
+  1: 'parsePoint',
+  3: 'parsePolyline',
+  5: 'parsePolygon',
+  8: 'parseMultiPoint',
+  11: 'parseZPoint',
+  13: 'parseZPolyline',
+  15: 'parseZPolygon',
+  18: 'parseZMultiPoint'
 };
 
 
 
-function makeParseCoord(trans){
-	if(trans){
-		return function(data,offset){
-			return trans.inverse([data.getFloat64(offset,true),data.getFloat64(offset+8,true)]);
-		};
-	}else{
-		return function(data,offset){
-			return [data.getFloat64(offset,true),data.getFloat64(offset+8,true)];
-		};
-	}
+function makeParseCoord(trans) {
+  if (trans) {
+    return function(data, offset) {
+      return trans.inverse([data.readDoubleLE(offset), data.readDoubleLE(offset + 8)]);
+    };
+  } else {
+    return function(data, offset) {
+      return [data.readDoubleLE(offset), data.readDoubleLE(offset + 8)];
+    };
+  }
 }
-function ParseShp(buffer,trans){
-	if(!(this instanceof ParseShp)){
-		return new ParseShp(buffer,trans);
-	}
-	this.buffer = buffer;
-	this.shpFuncs(trans);
-	this.rows = this.getRows();
+
+function ParseShp(buffer, trans) {
+  if (!(this instanceof ParseShp)) {
+    return new ParseShp(buffer, trans);
+  }
+  this.buffer = buffer;
+  this.shpFuncs(trans);
+  this.rows = this.getRows();
 }
-ParseShp.prototype.shpFuncs = function (tran){
-	var num = this.getShpCode();
-	if(num>20){
-		num -= 20;
-	}
-	if(!(num in shpFuncObj)){
-		throw new Error('I don\'t know that shp type');
-	}
-	this.parseFunc = this[shpFuncObj[num]];
-	this.parseCoord = makeParseCoord(tran);
+ParseShp.prototype.shpFuncs = function(tran) {
+  var num = this.getShpCode();
+  if (num > 20) {
+    num -= 20;
+  }
+  if (!(num in shpFuncObj)) {
+    throw new Error('I don\'t know that shp type');
+  }
+  this.parseFunc = this[shpFuncObj[num]];
+  this.parseCoord = makeParseCoord(tran);
 };
-ParseShp.prototype.getShpCode = function(){
-	return this.parseHeader().shpCode;
+ParseShp.prototype.getShpCode = function() {
+  return this.parseHeader().shpCode;
 };
-ParseShp.prototype.parseHeader = function (){
-	var view = new DataView(this.buffer,0,100) ;
-	return {
-		length : view.getInt32(6<<2,false),
-		version : view.getInt32(7<<2,true),
-		shpCode : view.getInt32(8<<2,true),
-		bbox : [
-			view.getFloat64(9<<2,true),
-			view.getFloat64(11<<2,true),
-			view.getFloat64(13<<2,true),
-			view.getFloat64(13<<2,true)
-		]
-	};
+ParseShp.prototype.parseHeader = function() {
+  var view = this.buffer.slice(0, 100);
+  return {
+    length: view.readInt32BE(6 << 2),
+    version: view.readInt32LE(7 << 2),
+    shpCode: view.readInt32LE(8 << 2),
+    bbox: [
+      view.readDoubleLE(9 << 2),
+      view.readDoubleLE(11 << 2),
+      view.readDoubleLE(13 << 2),
+      view.readDoubleLE(13 << 2)
+    ]
+  };
 };
-ParseShp.prototype.getRows = function(){
-	var offset=100;
-	var len = this.buffer.byteLength;
-	var out = [];
-	var current;
-	while(offset<len){
-		current = this.getRow(offset);
-		offset += 8;
-		offset += current.len;
-		if(current.type){
-			out.push(this.parseFunc(current.data));
-		}
-	}
-	return out;
-};
-ParseShp.prototype.getRow = function(offset){
-	var view = new DataView(this.buffer,offset,12);
-	var len = view.getInt32(4,false) << 1;
-	var data = new DataView(this.buffer,offset+12,len - 4);
-	
-	return {
-		id:view.getInt32(0,false),
-		len:len,
-		data:data,
-		type:view.getInt32(8,true)
-	};
-};
-module.exports = function(buffer, trans){
-	return new ParseShp(buffer, trans).rows;
-};
-},{}],4:[function(require,module,exports){
-'use strict';
-module.exports = toArrayBuffer;
-function toArrayBuffer(buffer) {
-    var arrayBuffer = new ArrayBuffer(buffer.length);
-    var view = new Uint8Array(arrayBuffer);
-    var i = -1;
-    var len = buffer.length;
-    while (++i < len) {
-        view[i] = buffer[i];
+ParseShp.prototype.getRows = function() {
+  var offset = 100;
+  var len = this.buffer.byteLength;
+  var out = [];
+  var current;
+  while (offset < len) {
+    current = this.getRow(offset);
+    offset += 8;
+    offset += current.len;
+    if (current.type) {
+      out.push(this.parseFunc(current.data));
     }
-    return arrayBuffer;
-}
+  }
+  return out;
+};
+ParseShp.prototype.getRow = function(offset) {
+  var view = this.buffer.slice(offset, offset + 12);
+  var len = view.readInt32BE(4) << 1;
+  var data = this.buffer.slice(offset + 12, offset + len + 8);
+
+  return {
+    id: view.readInt32BE(0),
+    len: len,
+    data: data,
+    type: view.readInt32LE(8)
+  };
+};
+module.exports = function(buffer, trans) {
+  return new ParseShp(buffer, trans).rows;
+};
+
 },{}],5:[function(require,module,exports){
 'use strict';
 
@@ -455,8 +551,7 @@ module.exports = function(buffer) {
 	var out = {};
 	files.forEach(function(a) {
 		if (a.name.slice(-3).toLowerCase() === 'shp' || a.name.slice(-3).toLowerCase() === 'dbf') {
-			out[a.name] = a.asText();
-			out[a.name] = a.asArrayBuffer();
+			out[a.name] = a.asNodeBuffer();
 		}
 		else {
 			out[a.name] = a.asText();
@@ -465,19 +560,251 @@ module.exports = function(buffer) {
 	return out;
 };
 
-},{"jszip":52}],6:[function(require,module,exports){
+},{"jszip":54}],6:[function(require,module,exports){
+/*!
+ * assertion-error
+ * Copyright(c) 2013 Jake Luer <jake@qualiancy.com>
+ * MIT Licensed
+ */
+
+/*!
+ * Return a function that will copy properties from
+ * one object to another excluding any originally
+ * listed. Returned function will create a new `{}`.
+ *
+ * @param {String} excluded properties ...
+ * @return {Function}
+ */
+
+function exclude () {
+  var excludes = [].slice.call(arguments);
+
+  function excludeProps (res, obj) {
+    Object.keys(obj).forEach(function (key) {
+      if (!~excludes.indexOf(key)) res[key] = obj[key];
+    });
+  }
+
+  return function extendExclude () {
+    var args = [].slice.call(arguments)
+      , i = 0
+      , res = {};
+
+    for (; i < args.length; i++) {
+      excludeProps(res, args[i]);
+    }
+
+    return res;
+  };
+};
+
+/*!
+ * Primary Exports
+ */
+
+module.exports = AssertionError;
+
+/**
+ * ### AssertionError
+ *
+ * An extension of the JavaScript `Error` constructor for
+ * assertion and validation scenarios.
+ *
+ * @param {String} message
+ * @param {Object} properties to include (optional)
+ * @param {callee} start stack function (optional)
+ */
+
+function AssertionError (message, _props, ssf) {
+  var extend = exclude('name', 'message', 'stack', 'constructor', 'toJSON')
+    , props = extend(_props || {});
+
+  // default values
+  this.message = message || 'Unspecified AssertionError';
+  this.showDiff = false;
+
+  // copy from properties
+  for (var key in props) {
+    this[key] = props[key];
+  }
+
+  // capture stack trace
+  ssf = ssf || arguments.callee;
+  if (ssf && Error.captureStackTrace) {
+    Error.captureStackTrace(this, ssf);
+  } else {
+    this.stack = new Error().stack;
+  }
+}
+
+/*!
+ * Inherit from Error.prototype
+ */
+
+AssertionError.prototype = Object.create(Error.prototype);
+
+/*!
+ * Statically set name
+ */
+
+AssertionError.prototype.name = 'AssertionError';
+
+/*!
+ * Ensure correct constructor
+ */
+
+AssertionError.prototype.constructor = AssertionError;
+
+/**
+ * Allow errors to be converted to JSON for static transfer.
+ *
+ * @param {Boolean} include stack (default: `true`)
+ * @return {Object} object that can be `JSON.stringify`
+ */
+
+AssertionError.prototype.toJSON = function (stack) {
+  var extend = exclude('constructor', 'toJSON', 'stack')
+    , props = extend({ name: this.name }, this);
+
+  // include stack if exists and not turned off
+  if (false !== stack && this.stack) {
+    props.stack = this.stack;
+  }
+
+  return props;
+};
 
 },{}],7:[function(require,module,exports){
+'use strict'
+
+exports.toByteArray = toByteArray
+exports.fromByteArray = fromByteArray
+
+var lookup = []
+var revLookup = []
+var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
+
+function init () {
+  var i
+  var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  var len = code.length
+
+  for (i = 0; i < len; i++) {
+    lookup[i] = code[i]
+  }
+
+  for (i = 0; i < len; ++i) {
+    revLookup[code.charCodeAt(i)] = i
+  }
+  revLookup['-'.charCodeAt(0)] = 62
+  revLookup['_'.charCodeAt(0)] = 63
+}
+
+init()
+
+function toByteArray (b64) {
+  var i, j, l, tmp, placeHolders, arr
+  var len = b64.length
+
+  if (len % 4 > 0) {
+    throw new Error('Invalid string. Length must be a multiple of 4')
+  }
+
+  // the number of equal signs (place holders)
+  // if there are two placeholders, than the two characters before it
+  // represent one byte
+  // if there is only one, then the three characters before it represent 2 bytes
+  // this is just a cheap hack to not do indexOf twice
+  placeHolders = b64[len - 2] === '=' ? 2 : b64[len - 1] === '=' ? 1 : 0
+
+  // base64 is 4/3 + up to two characters of the original data
+  arr = new Arr(len * 3 / 4 - placeHolders)
+
+  // if there are placeholders, only get up to the last complete 4 chars
+  l = placeHolders > 0 ? len - 4 : len
+
+  var L = 0
+
+  for (i = 0, j = 0; i < l; i += 4, j += 3) {
+    tmp = (revLookup[b64.charCodeAt(i)] << 18) | (revLookup[b64.charCodeAt(i + 1)] << 12) | (revLookup[b64.charCodeAt(i + 2)] << 6) | revLookup[b64.charCodeAt(i + 3)]
+    arr[L++] = (tmp & 0xFF0000) >> 16
+    arr[L++] = (tmp & 0xFF00) >> 8
+    arr[L++] = tmp & 0xFF
+  }
+
+  if (placeHolders === 2) {
+    tmp = (revLookup[b64.charCodeAt(i)] << 2) | (revLookup[b64.charCodeAt(i + 1)] >> 4)
+    arr[L++] = tmp & 0xFF
+  } else if (placeHolders === 1) {
+    tmp = (revLookup[b64.charCodeAt(i)] << 10) | (revLookup[b64.charCodeAt(i + 1)] << 4) | (revLookup[b64.charCodeAt(i + 2)] >> 2)
+    arr[L++] = (tmp >> 8) & 0xFF
+    arr[L++] = tmp & 0xFF
+  }
+
+  return arr
+}
+
+function tripletToBase64 (num) {
+  return lookup[num >> 18 & 0x3F] + lookup[num >> 12 & 0x3F] + lookup[num >> 6 & 0x3F] + lookup[num & 0x3F]
+}
+
+function encodeChunk (uint8, start, end) {
+  var tmp
+  var output = []
+  for (var i = start; i < end; i += 3) {
+    tmp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
+    output.push(tripletToBase64(tmp))
+  }
+  return output.join('')
+}
+
+function fromByteArray (uint8) {
+  var tmp
+  var len = uint8.length
+  var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
+  var output = ''
+  var parts = []
+  var maxChunkLength = 16383 // must be multiple of 3
+
+  // go through the array every three bytes, we'll deal with trailing stuff later
+  for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
+    parts.push(encodeChunk(uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)))
+  }
+
+  // pad the end with zeros, but make sure to not forget the extra bytes
+  if (extraBytes === 1) {
+    tmp = uint8[len - 1]
+    output += lookup[tmp >> 2]
+    output += lookup[(tmp << 4) & 0x3F]
+    output += '=='
+  } else if (extraBytes === 2) {
+    tmp = (uint8[len - 2] << 8) + (uint8[len - 1])
+    output += lookup[tmp >> 10]
+    output += lookup[(tmp >> 4) & 0x3F]
+    output += lookup[(tmp << 2) & 0x3F]
+    output += '='
+  }
+
+  parts.push(output)
+
+  return parts.join('')
+}
+
+},{}],8:[function(require,module,exports){
+(function (global){
 /*!
  * The buffer module from node.js, for the browser.
  *
  * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
  * @license  MIT
  */
+/* eslint-disable no-proto */
+
+'use strict'
 
 var base64 = require('base64-js')
 var ieee754 = require('ieee754')
-var isArray = require('is-array')
+var isArray = require('isarray')
 
 exports.Buffer = Buffer
 exports.SlowBuffer = SlowBuffer
@@ -494,35 +821,37 @@ var rootParent = {}
  * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
  * Opera 11.6+, iOS 4.2+.
  *
+ * Due to various browser bugs, sometimes the Object implementation will be used even
+ * when the browser supports typed arrays.
+ *
  * Note:
  *
- * - Implementation must support adding new properties to `Uint8Array` instances.
- *   Firefox 4-29 lacked support, fixed in Firefox 30+.
- *   See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
+ *   - Firefox 4-29 lacks support for adding new properties to `Uint8Array` instances,
+ *     See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
  *
- *  - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
+ *   - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
  *
- *  - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
- *    incorrect length in some situations.
- *
- * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they will
- * get the Object implementation, which is slower but will work correctly.
+ *   - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
+ *     incorrect length in some situations.
+
+ * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they
+ * get the Object implementation, which is slower but behaves correctly.
  */
-Buffer.TYPED_ARRAY_SUPPORT = (function () {
-  function Foo () {}
+Buffer.TYPED_ARRAY_SUPPORT = global.TYPED_ARRAY_SUPPORT !== undefined
+  ? global.TYPED_ARRAY_SUPPORT
+  : typedArraySupport()
+
+function typedArraySupport () {
   try {
-    var buf = new ArrayBuffer(0)
-    var arr = new Uint8Array(buf)
+    var arr = new Uint8Array(1)
     arr.foo = function () { return 42 }
-    arr.constructor = Foo
     return arr.foo() === 42 && // typed array instances can be augmented
-        arr.constructor === Foo && // constructor can be set
         typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
-        new Uint8Array(1).subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
+        arr.subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
   } catch (e) {
     return false
   }
-})()
+}
 
 function kMaxLength () {
   return Buffer.TYPED_ARRAY_SUPPORT
@@ -531,16 +860,13 @@ function kMaxLength () {
 }
 
 /**
- * Class: Buffer
- * =============
+ * The Buffer constructor returns instances of `Uint8Array` that have their
+ * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
+ * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
+ * and the `Uint8Array` methods. Square bracket notation works as expected -- it
+ * returns a single octet.
  *
- * The Buffer constructor returns instances of `Uint8Array` that are augmented
- * with function properties for all the node `Buffer` API functions. We use
- * `Uint8Array` so that square bracket notation works as expected -- it returns
- * a single octet.
- *
- * By augmenting the instances, we can avoid modifying the `Uint8Array`
- * prototype.
+ * The `Uint8Array` prototype remains unmodified.
  */
 function Buffer (arg) {
   if (!(this instanceof Buffer)) {
@@ -549,8 +875,10 @@ function Buffer (arg) {
     return new Buffer(arg)
   }
 
-  this.length = 0
-  this.parent = undefined
+  if (!Buffer.TYPED_ARRAY_SUPPORT) {
+    this.length = 0
+    this.parent = undefined
+  }
 
   // Common case.
   if (typeof arg === 'number') {
@@ -564,6 +892,12 @@ function Buffer (arg) {
 
   // Unusual.
   return fromObject(this, arg)
+}
+
+// TODO: Legacy, not needed anymore. Remove in next major version.
+Buffer._augment = function (arr) {
+  arr.__proto__ = Buffer.prototype
+  return arr
 }
 
 function fromNumber (that, length) {
@@ -596,8 +930,13 @@ function fromObject (that, object) {
     throw new TypeError('must start with number, buffer, array or string')
   }
 
-  if (typeof ArrayBuffer !== 'undefined' && object.buffer instanceof ArrayBuffer) {
-    return fromTypedArray(that, object)
+  if (typeof ArrayBuffer !== 'undefined') {
+    if (object.buffer instanceof ArrayBuffer) {
+      return fromTypedArray(that, object)
+    }
+    if (object instanceof ArrayBuffer) {
+      return fromArrayBuffer(that, object)
+    }
   }
 
   if (object.length) return fromArrayLike(that, object)
@@ -634,6 +973,20 @@ function fromTypedArray (that, array) {
   return that
 }
 
+function fromArrayBuffer (that, array) {
+  array.byteLength // this throws if `array` is not a valid ArrayBuffer
+
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    // Return an augmented `Uint8Array` instance, for best performance
+    that = new Uint8Array(array)
+    that.__proto__ = Buffer.prototype
+  } else {
+    // Fallback: Return an object instance of the Buffer class
+    that = fromTypedArray(that, new Uint8Array(array))
+  }
+  return that
+}
+
 function fromArrayLike (that, array) {
   var length = checked(array.length) | 0
   that = allocate(that, length)
@@ -661,14 +1014,31 @@ function fromJsonObject (that, object) {
   return that
 }
 
+if (Buffer.TYPED_ARRAY_SUPPORT) {
+  Buffer.prototype.__proto__ = Uint8Array.prototype
+  Buffer.__proto__ = Uint8Array
+  if (typeof Symbol !== 'undefined' && Symbol.species &&
+      Buffer[Symbol.species] === Buffer) {
+    // Fix subarray() in ES2016. See: https://github.com/feross/buffer/pull/97
+    Object.defineProperty(Buffer, Symbol.species, {
+      value: null,
+      configurable: true
+    })
+  }
+} else {
+  // pre-set for values that may exist in the future
+  Buffer.prototype.length = undefined
+  Buffer.prototype.parent = undefined
+}
+
 function allocate (that, length) {
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     // Return an augmented `Uint8Array` instance, for best performance
-    that = Buffer._augment(new Uint8Array(length))
+    that = new Uint8Array(length)
+    that.__proto__ = Buffer.prototype
   } else {
     // Fallback: Return an object instance of the Buffer class
     that.length = length
-    that._isBuffer = true
   }
 
   var fromPool = length !== 0 && length <= Buffer.poolSize >>> 1
@@ -751,8 +1121,6 @@ Buffer.concat = function concat (list, length) {
 
   if (list.length === 0) {
     return new Buffer(0)
-  } else if (list.length === 1) {
-    return list[0]
   }
 
   var i
@@ -810,10 +1178,6 @@ function byteLength (string, encoding) {
 }
 Buffer.byteLength = byteLength
 
-// pre-set for values that may exist in the future
-Buffer.prototype.length = undefined
-Buffer.prototype.parent = undefined
-
 function slowToString (encoding, start, end) {
   var loweredCase = false
 
@@ -856,6 +1220,10 @@ function slowToString (encoding, start, end) {
     }
   }
 }
+
+// The property is used by `Buffer.isBuffer` and `is-buffer` (in Safari 5-7) to detect
+// Buffer instances.
+Buffer.prototype._isBuffer = true
 
 Buffer.prototype.toString = function toString () {
   var length = this.length | 0
@@ -925,18 +1293,6 @@ Buffer.prototype.indexOf = function indexOf (val, byteOffset) {
   }
 
   throw new TypeError('val must be string, number or Buffer')
-}
-
-// `get` will be removed in Node 0.13+
-Buffer.prototype.get = function get (offset) {
-  console.log('.get() is deprecated. Access using array indexes instead.')
-  return this.readUInt8(offset)
-}
-
-// `set` will be removed in Node 0.13+
-Buffer.prototype.set = function set (v, offset) {
-  console.log('.set() is deprecated. Access using array indexes instead.')
-  return this.writeUInt8(v, offset)
 }
 
 function hexWrite (buf, string, offset, length) {
@@ -1074,20 +1430,99 @@ function base64Slice (buf, start, end) {
 }
 
 function utf8Slice (buf, start, end) {
-  var res = ''
-  var tmp = ''
   end = Math.min(buf.length, end)
+  var res = []
 
-  for (var i = start; i < end; i++) {
-    if (buf[i] <= 0x7F) {
-      res += decodeUtf8Char(tmp) + String.fromCharCode(buf[i])
-      tmp = ''
-    } else {
-      tmp += '%' + buf[i].toString(16)
+  var i = start
+  while (i < end) {
+    var firstByte = buf[i]
+    var codePoint = null
+    var bytesPerSequence = (firstByte > 0xEF) ? 4
+      : (firstByte > 0xDF) ? 3
+      : (firstByte > 0xBF) ? 2
+      : 1
+
+    if (i + bytesPerSequence <= end) {
+      var secondByte, thirdByte, fourthByte, tempCodePoint
+
+      switch (bytesPerSequence) {
+        case 1:
+          if (firstByte < 0x80) {
+            codePoint = firstByte
+          }
+          break
+        case 2:
+          secondByte = buf[i + 1]
+          if ((secondByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
+            if (tempCodePoint > 0x7F) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 3:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
+            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 4:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          fourthByte = buf[i + 3]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
+            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
+              codePoint = tempCodePoint
+            }
+          }
+      }
     }
+
+    if (codePoint === null) {
+      // we did not generate a valid codePoint so insert a
+      // replacement char (U+FFFD) and advance only 1 byte
+      codePoint = 0xFFFD
+      bytesPerSequence = 1
+    } else if (codePoint > 0xFFFF) {
+      // encode to utf16 (surrogate pair dance)
+      codePoint -= 0x10000
+      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
+      codePoint = 0xDC00 | codePoint & 0x3FF
+    }
+
+    res.push(codePoint)
+    i += bytesPerSequence
   }
 
-  return res + decodeUtf8Char(tmp)
+  return decodeCodePointsArray(res)
+}
+
+// Based on http://stackoverflow.com/a/22747272/680742, the browser with
+// the lowest limit is Chrome, with 0x10000 args.
+// We go 1 magnitude less, for safety
+var MAX_ARGUMENTS_LENGTH = 0x1000
+
+function decodeCodePointsArray (codePoints) {
+  var len = codePoints.length
+  if (len <= MAX_ARGUMENTS_LENGTH) {
+    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
+  }
+
+  // Decode in chunks to avoid "call stack size exceeded".
+  var res = ''
+  var i = 0
+  while (i < len) {
+    res += String.fromCharCode.apply(
+      String,
+      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
+    )
+  }
+  return res
 }
 
 function asciiSlice (buf, start, end) {
@@ -1155,7 +1590,8 @@ Buffer.prototype.slice = function slice (start, end) {
 
   var newBuf
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    newBuf = Buffer._augment(this.subarray(start, end))
+    newBuf = this.subarray(start, end)
+    newBuf.__proto__ = Buffer.prototype
   } else {
     var sliceLen = end - start
     newBuf = new Buffer(sliceLen, undefined)
@@ -1376,7 +1812,7 @@ Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
   offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
   if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
-  this[offset] = value
+  this[offset] = (value & 0xff)
   return offset + 1
 }
 
@@ -1393,7 +1829,7 @@ Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert
   offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = value
+    this[offset] = (value & 0xff)
     this[offset + 1] = (value >>> 8)
   } else {
     objectWriteUInt16(this, value, offset, true)
@@ -1407,7 +1843,7 @@ Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert
   if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     this[offset] = (value >>> 8)
-    this[offset + 1] = value
+    this[offset + 1] = (value & 0xff)
   } else {
     objectWriteUInt16(this, value, offset, false)
   }
@@ -1429,7 +1865,7 @@ Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert
     this[offset + 3] = (value >>> 24)
     this[offset + 2] = (value >>> 16)
     this[offset + 1] = (value >>> 8)
-    this[offset] = value
+    this[offset] = (value & 0xff)
   } else {
     objectWriteUInt32(this, value, offset, true)
   }
@@ -1444,7 +1880,7 @@ Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert
     this[offset] = (value >>> 24)
     this[offset + 1] = (value >>> 16)
     this[offset + 2] = (value >>> 8)
-    this[offset + 3] = value
+    this[offset + 3] = (value & 0xff)
   } else {
     objectWriteUInt32(this, value, offset, false)
   }
@@ -1497,7 +1933,7 @@ Buffer.prototype.writeInt8 = function writeInt8 (value, offset, noAssert) {
   if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
   if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
   if (value < 0) value = 0xff + value + 1
-  this[offset] = value
+  this[offset] = (value & 0xff)
   return offset + 1
 }
 
@@ -1506,7 +1942,7 @@ Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) 
   offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = value
+    this[offset] = (value & 0xff)
     this[offset + 1] = (value >>> 8)
   } else {
     objectWriteUInt16(this, value, offset, true)
@@ -1520,7 +1956,7 @@ Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) 
   if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     this[offset] = (value >>> 8)
-    this[offset + 1] = value
+    this[offset + 1] = (value & 0xff)
   } else {
     objectWriteUInt16(this, value, offset, false)
   }
@@ -1532,7 +1968,7 @@ Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) 
   offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = value
+    this[offset] = (value & 0xff)
     this[offset + 1] = (value >>> 8)
     this[offset + 2] = (value >>> 16)
     this[offset + 3] = (value >>> 24)
@@ -1551,7 +1987,7 @@ Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) 
     this[offset] = (value >>> 24)
     this[offset + 1] = (value >>> 16)
     this[offset + 2] = (value >>> 8)
-    this[offset + 3] = value
+    this[offset + 3] = (value & 0xff)
   } else {
     objectWriteUInt32(this, value, offset, false)
   }
@@ -1559,7 +1995,6 @@ Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) 
 }
 
 function checkIEEE754 (buf, value, offset, ext, max, min) {
-  if (value > max || value < min) throw new RangeError('value is out of bounds')
   if (offset + ext > buf.length) throw new RangeError('index out of range')
   if (offset < 0) throw new RangeError('index out of range')
 }
@@ -1622,13 +2057,24 @@ Buffer.prototype.copy = function copy (target, targetStart, start, end) {
   }
 
   var len = end - start
+  var i
 
-  if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
-    for (var i = 0; i < len; i++) {
+  if (this === target && start < targetStart && targetStart < end) {
+    // descending copy from end
+    for (i = len - 1; i >= 0; i--) {
+      target[i + targetStart] = this[i + start]
+    }
+  } else if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
+    // ascending copy from start
+    for (i = 0; i < len; i++) {
       target[i + targetStart] = this[i + start]
     }
   } else {
-    target._set(this.subarray(start, start + len), targetStart)
+    Uint8Array.prototype.set.call(
+      target,
+      this.subarray(start, start + len),
+      targetStart
+    )
   }
 
   return len
@@ -1665,98 +2111,10 @@ Buffer.prototype.fill = function fill (value, start, end) {
   return this
 }
 
-/**
- * Creates a new `ArrayBuffer` with the *copied* memory of the buffer instance.
- * Added in Node 0.12. Only available in browsers that support ArrayBuffer.
- */
-Buffer.prototype.toArrayBuffer = function toArrayBuffer () {
-  if (typeof Uint8Array !== 'undefined') {
-    if (Buffer.TYPED_ARRAY_SUPPORT) {
-      return (new Buffer(this)).buffer
-    } else {
-      var buf = new Uint8Array(this.length)
-      for (var i = 0, len = buf.length; i < len; i += 1) {
-        buf[i] = this[i]
-      }
-      return buf.buffer
-    }
-  } else {
-    throw new TypeError('Buffer.toArrayBuffer not supported in this browser')
-  }
-}
-
 // HELPER FUNCTIONS
 // ================
 
-var BP = Buffer.prototype
-
-/**
- * Augment a Uint8Array *instance* (not the Uint8Array class!) with Buffer methods
- */
-Buffer._augment = function _augment (arr) {
-  arr.constructor = Buffer
-  arr._isBuffer = true
-
-  // save reference to original Uint8Array set method before overwriting
-  arr._set = arr.set
-
-  // deprecated, will be removed in node 0.13+
-  arr.get = BP.get
-  arr.set = BP.set
-
-  arr.write = BP.write
-  arr.toString = BP.toString
-  arr.toLocaleString = BP.toString
-  arr.toJSON = BP.toJSON
-  arr.equals = BP.equals
-  arr.compare = BP.compare
-  arr.indexOf = BP.indexOf
-  arr.copy = BP.copy
-  arr.slice = BP.slice
-  arr.readUIntLE = BP.readUIntLE
-  arr.readUIntBE = BP.readUIntBE
-  arr.readUInt8 = BP.readUInt8
-  arr.readUInt16LE = BP.readUInt16LE
-  arr.readUInt16BE = BP.readUInt16BE
-  arr.readUInt32LE = BP.readUInt32LE
-  arr.readUInt32BE = BP.readUInt32BE
-  arr.readIntLE = BP.readIntLE
-  arr.readIntBE = BP.readIntBE
-  arr.readInt8 = BP.readInt8
-  arr.readInt16LE = BP.readInt16LE
-  arr.readInt16BE = BP.readInt16BE
-  arr.readInt32LE = BP.readInt32LE
-  arr.readInt32BE = BP.readInt32BE
-  arr.readFloatLE = BP.readFloatLE
-  arr.readFloatBE = BP.readFloatBE
-  arr.readDoubleLE = BP.readDoubleLE
-  arr.readDoubleBE = BP.readDoubleBE
-  arr.writeUInt8 = BP.writeUInt8
-  arr.writeUIntLE = BP.writeUIntLE
-  arr.writeUIntBE = BP.writeUIntBE
-  arr.writeUInt16LE = BP.writeUInt16LE
-  arr.writeUInt16BE = BP.writeUInt16BE
-  arr.writeUInt32LE = BP.writeUInt32LE
-  arr.writeUInt32BE = BP.writeUInt32BE
-  arr.writeIntLE = BP.writeIntLE
-  arr.writeIntBE = BP.writeIntBE
-  arr.writeInt8 = BP.writeInt8
-  arr.writeInt16LE = BP.writeInt16LE
-  arr.writeInt16BE = BP.writeInt16BE
-  arr.writeInt32LE = BP.writeInt32LE
-  arr.writeInt32BE = BP.writeInt32BE
-  arr.writeFloatLE = BP.writeFloatLE
-  arr.writeFloatBE = BP.writeFloatBE
-  arr.writeDoubleLE = BP.writeDoubleLE
-  arr.writeDoubleBE = BP.writeDoubleBE
-  arr.fill = BP.fill
-  arr.inspect = BP.inspect
-  arr.toArrayBuffer = BP.toArrayBuffer
-
-  return arr
-}
-
-var INVALID_BASE64_RE = /[^+\/0-9A-z\-]/g
+var INVALID_BASE64_RE = /[^+\/0-9A-Za-z-_]/g
 
 function base64clean (str) {
   // Node strips out invalid characters like \n and \t from the string, base64-js does not
@@ -1786,28 +2144,15 @@ function utf8ToBytes (string, units) {
   var length = string.length
   var leadSurrogate = null
   var bytes = []
-  var i = 0
 
-  for (; i < length; i++) {
+  for (var i = 0; i < length; i++) {
     codePoint = string.charCodeAt(i)
 
     // is surrogate component
     if (codePoint > 0xD7FF && codePoint < 0xE000) {
       // last char was a lead
-      if (leadSurrogate) {
-        // 2 leads in a row
-        if (codePoint < 0xDC00) {
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          leadSurrogate = codePoint
-          continue
-        } else {
-          // valid surrogate pair
-          codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
-          leadSurrogate = null
-        }
-      } else {
+      if (!leadSurrogate) {
         // no lead yet
-
         if (codePoint > 0xDBFF) {
           // unexpected trail
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
@@ -1816,17 +2161,29 @@ function utf8ToBytes (string, units) {
           // unpaired lead
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
           continue
-        } else {
-          // valid lead
-          leadSurrogate = codePoint
-          continue
         }
+
+        // valid lead
+        leadSurrogate = codePoint
+
+        continue
       }
+
+      // 2 leads in a row
+      if (codePoint < 0xDC00) {
+        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+        leadSurrogate = codePoint
+        continue
+      }
+
+      // valid surrogate pair
+      codePoint = (leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00) + 0x10000
     } else if (leadSurrogate) {
       // valid bmp char, but last char was a lead
       if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-      leadSurrogate = null
     }
+
+    leadSurrogate = null
 
     // encode utf8
     if (codePoint < 0x80) {
@@ -1845,7 +2202,7 @@ function utf8ToBytes (string, units) {
         codePoint >> 0x6 & 0x3F | 0x80,
         codePoint & 0x3F | 0x80
       )
-    } else if (codePoint < 0x200000) {
+    } else if (codePoint < 0x110000) {
       if ((units -= 4) < 0) break
       bytes.push(
         codePoint >> 0x12 | 0xF0,
@@ -1898,262 +2255,15 @@ function blitBuffer (src, dst, offset, length) {
   return i
 }
 
-function decodeUtf8Char (str) {
-  try {
-    return decodeURIComponent(str)
-  } catch (err) {
-    return String.fromCharCode(0xFFFD) // UTF 8 invalid char
-  }
-}
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"base64-js":7,"ieee754":44,"isarray":9}],9:[function(require,module,exports){
+var toString = {}.toString;
 
-},{"base64-js":8,"ieee754":9,"is-array":10}],8:[function(require,module,exports){
-var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-;(function (exports) {
-	'use strict';
-
-  var Arr = (typeof Uint8Array !== 'undefined')
-    ? Uint8Array
-    : Array
-
-	var PLUS   = '+'.charCodeAt(0)
-	var SLASH  = '/'.charCodeAt(0)
-	var NUMBER = '0'.charCodeAt(0)
-	var LOWER  = 'a'.charCodeAt(0)
-	var UPPER  = 'A'.charCodeAt(0)
-	var PLUS_URL_SAFE = '-'.charCodeAt(0)
-	var SLASH_URL_SAFE = '_'.charCodeAt(0)
-
-	function decode (elt) {
-		var code = elt.charCodeAt(0)
-		if (code === PLUS ||
-		    code === PLUS_URL_SAFE)
-			return 62 // '+'
-		if (code === SLASH ||
-		    code === SLASH_URL_SAFE)
-			return 63 // '/'
-		if (code < NUMBER)
-			return -1 //no match
-		if (code < NUMBER + 10)
-			return code - NUMBER + 26 + 26
-		if (code < UPPER + 26)
-			return code - UPPER
-		if (code < LOWER + 26)
-			return code - LOWER + 26
-	}
-
-	function b64ToByteArray (b64) {
-		var i, j, l, tmp, placeHolders, arr
-
-		if (b64.length % 4 > 0) {
-			throw new Error('Invalid string. Length must be a multiple of 4')
-		}
-
-		// the number of equal signs (place holders)
-		// if there are two placeholders, than the two characters before it
-		// represent one byte
-		// if there is only one, then the three characters before it represent 2 bytes
-		// this is just a cheap hack to not do indexOf twice
-		var len = b64.length
-		placeHolders = '=' === b64.charAt(len - 2) ? 2 : '=' === b64.charAt(len - 1) ? 1 : 0
-
-		// base64 is 4/3 + up to two characters of the original data
-		arr = new Arr(b64.length * 3 / 4 - placeHolders)
-
-		// if there are placeholders, only get up to the last complete 4 chars
-		l = placeHolders > 0 ? b64.length - 4 : b64.length
-
-		var L = 0
-
-		function push (v) {
-			arr[L++] = v
-		}
-
-		for (i = 0, j = 0; i < l; i += 4, j += 3) {
-			tmp = (decode(b64.charAt(i)) << 18) | (decode(b64.charAt(i + 1)) << 12) | (decode(b64.charAt(i + 2)) << 6) | decode(b64.charAt(i + 3))
-			push((tmp & 0xFF0000) >> 16)
-			push((tmp & 0xFF00) >> 8)
-			push(tmp & 0xFF)
-		}
-
-		if (placeHolders === 2) {
-			tmp = (decode(b64.charAt(i)) << 2) | (decode(b64.charAt(i + 1)) >> 4)
-			push(tmp & 0xFF)
-		} else if (placeHolders === 1) {
-			tmp = (decode(b64.charAt(i)) << 10) | (decode(b64.charAt(i + 1)) << 4) | (decode(b64.charAt(i + 2)) >> 2)
-			push((tmp >> 8) & 0xFF)
-			push(tmp & 0xFF)
-		}
-
-		return arr
-	}
-
-	function uint8ToBase64 (uint8) {
-		var i,
-			extraBytes = uint8.length % 3, // if we have 1 byte left, pad 2 bytes
-			output = "",
-			temp, length
-
-		function encode (num) {
-			return lookup.charAt(num)
-		}
-
-		function tripletToBase64 (num) {
-			return encode(num >> 18 & 0x3F) + encode(num >> 12 & 0x3F) + encode(num >> 6 & 0x3F) + encode(num & 0x3F)
-		}
-
-		// go through the array every three bytes, we'll deal with trailing stuff later
-		for (i = 0, length = uint8.length - extraBytes; i < length; i += 3) {
-			temp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
-			output += tripletToBase64(temp)
-		}
-
-		// pad the end with zeros, but make sure to not forget the extra bytes
-		switch (extraBytes) {
-			case 1:
-				temp = uint8[uint8.length - 1]
-				output += encode(temp >> 2)
-				output += encode((temp << 4) & 0x3F)
-				output += '=='
-				break
-			case 2:
-				temp = (uint8[uint8.length - 2] << 8) + (uint8[uint8.length - 1])
-				output += encode(temp >> 10)
-				output += encode((temp >> 4) & 0x3F)
-				output += encode((temp << 2) & 0x3F)
-				output += '='
-				break
-		}
-
-		return output
-	}
-
-	exports.toByteArray = b64ToByteArray
-	exports.fromByteArray = uint8ToBase64
-}(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
-
-},{}],9:[function(require,module,exports){
-exports.read = function (buffer, offset, isLE, mLen, nBytes) {
-  var e, m
-  var eLen = nBytes * 8 - mLen - 1
-  var eMax = (1 << eLen) - 1
-  var eBias = eMax >> 1
-  var nBits = -7
-  var i = isLE ? (nBytes - 1) : 0
-  var d = isLE ? -1 : 1
-  var s = buffer[offset + i]
-
-  i += d
-
-  e = s & ((1 << (-nBits)) - 1)
-  s >>= (-nBits)
-  nBits += eLen
-  for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8) {}
-
-  m = e & ((1 << (-nBits)) - 1)
-  e >>= (-nBits)
-  nBits += mLen
-  for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8) {}
-
-  if (e === 0) {
-    e = 1 - eBias
-  } else if (e === eMax) {
-    return m ? NaN : ((s ? -1 : 1) * Infinity)
-  } else {
-    m = m + Math.pow(2, mLen)
-    e = e - eBias
-  }
-  return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
-}
-
-exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
-  var e, m, c
-  var eLen = nBytes * 8 - mLen - 1
-  var eMax = (1 << eLen) - 1
-  var eBias = eMax >> 1
-  var rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0)
-  var i = isLE ? 0 : (nBytes - 1)
-  var d = isLE ? 1 : -1
-  var s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0
-
-  value = Math.abs(value)
-
-  if (isNaN(value) || value === Infinity) {
-    m = isNaN(value) ? 1 : 0
-    e = eMax
-  } else {
-    e = Math.floor(Math.log(value) / Math.LN2)
-    if (value * (c = Math.pow(2, -e)) < 1) {
-      e--
-      c *= 2
-    }
-    if (e + eBias >= 1) {
-      value += rt / c
-    } else {
-      value += rt * Math.pow(2, 1 - eBias)
-    }
-    if (value * c >= 2) {
-      e++
-      c /= 2
-    }
-
-    if (e + eBias >= eMax) {
-      m = 0
-      e = eMax
-    } else if (e + eBias >= 1) {
-      m = (value * c - 1) * Math.pow(2, mLen)
-      e = e + eBias
-    } else {
-      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen)
-      e = 0
-    }
-  }
-
-  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8) {}
-
-  e = (e << mLen) | m
-  eLen += mLen
-  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
-
-  buffer[offset + i - d] |= s * 128
-}
-
-},{}],10:[function(require,module,exports){
-
-/**
- * isArray
- */
-
-var isArray = Array.isArray;
-
-/**
- * toString
- */
-
-var str = Object.prototype.toString;
-
-/**
- * Whether or not the given `val`
- * is an array.
- *
- * example:
- *
- *        isArray([]);
- *        // > true
- *        isArray(arguments);
- *        // > false
- *        isArray('');
- *        // > false
- *
- * @param {mixed} val
- * @return {bool}
- */
-
-module.exports = isArray || function (val) {
-  return !! val && '[object Array]' == str.call(val);
+module.exports = Array.isArray || function (arr) {
+  return toString.call(arr) == '[object Array]';
 };
 
-},{}],11:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 (function () {
     "use strict";
 
@@ -2190,8 +2300,11 @@ module.exports = isArray || function (val) {
         var Assertion = chai.Assertion;
         var assert = chai.assert;
 
-        function isJQueryPromise(thenable) {
-            return typeof thenable.always === "function" &&
+        function isLegacyJQueryPromise(thenable) {
+            // jQuery promises are Promises/A+-compatible since 3.0.0. jQuery 3.0.0 is also the first version
+            // to define the catch method.
+            return typeof thenable.catch !== "function" &&
+                   typeof thenable.always === "function" &&
                    typeof thenable.done === "function" &&
                    typeof thenable.fail === "function" &&
                    typeof thenable.pipe === "function" &&
@@ -2203,9 +2316,10 @@ module.exports = isArray || function (val) {
             if (typeof assertion._obj.then !== "function") {
                 throw new TypeError(utils.inspect(assertion._obj) + " is not a thenable.");
             }
-            if (isJQueryPromise(assertion._obj)) {
-                throw new TypeError("Chai as Promised is incompatible with jQuery's thenables, sorry! Please use a " +
-                                    "Promises/A+ compatible library (see http://promisesaplus.com/).");
+            if (isLegacyJQueryPromise(assertion._obj)) {
+                throw new TypeError("Chai as Promised is incompatible with thenables of jQuery<3.0.0, sorry! Please " +
+                                    "upgrade jQuery or use another Promises/A+ compatible library (see " +
+                                    "http://promisesaplus.com/).");
             }
         }
 
@@ -2389,8 +2503,8 @@ module.exports = isArray || function (val) {
             doNotify(getBasePromise(this), done);
         });
 
-        method("become", function (value) {
-            return this.eventually.deep.equal(value);
+        method("become", function (value, message) {
+            return this.eventually.deep.equal(value, message);
         });
 
         ////////
@@ -2414,28 +2528,22 @@ module.exports = isArray || function (val) {
         });
 
         getterNames.forEach(function (getterName) {
-            var propertyDesc = propertyDescs[getterName];
-
             // Chainable methods are things like `an`, which can work both for `.should.be.an.instanceOf` and as
             // `should.be.an("object")`. We need to handle those specially.
-            var isChainableMethod = false;
-            try {
-                isChainableMethod = typeof propertyDesc.get.call({}) === "function";
-            } catch (e) { }
+            var isChainableMethod = Assertion.prototype.__methods.hasOwnProperty(getterName);
 
             if (isChainableMethod) {
-                Assertion.addChainableMethod(
+                Assertion.overwriteChainableMethod(
                     getterName,
-                    function () {
-                        var assertion = this;
-                        function originalMethod() {
-                            return propertyDesc.get.call(assertion).apply(assertion, arguments);
-                        }
-                        doAsserterAsyncAndAddThen(originalMethod, this, arguments);
+                    function (originalMethod) {
+                        return function() {
+                            doAsserterAsyncAndAddThen(originalMethod, this, arguments);
+                        };
                     },
-                    function () {
-                        var originalGetter = propertyDesc.get;
-                        doAsserterAsyncAndAddThen(originalGetter, this);
+                    function (originalGetter) {
+                        return function() {
+                            doAsserterAsyncAndAddThen(originalGetter, this);
+                        };
                     }
                 );
             } else {
@@ -2532,10 +2640,10 @@ module.exports = isArray || function (val) {
     }
 }());
 
-},{}],12:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 module.exports = require('./lib/chai');
 
-},{"./lib/chai":13}],13:[function(require,module,exports){
+},{"./lib/chai":12}],12:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011-2014 Jake Luer <jake@alogicalparadox.com>
@@ -2549,7 +2657,7 @@ var used = []
  * Chai version
  */
 
-exports.version = '1.10.0';
+exports.version = '3.5.0';
 
 /*!
  * Assertion Error
@@ -2581,6 +2689,12 @@ exports.use = function (fn) {
 
   return this;
 };
+
+/*!
+ * Utility Functions
+ */
+
+exports.util = util;
 
 /*!
  * Configuration
@@ -2624,7 +2738,7 @@ exports.use(should);
 var assert = require('./chai/interface/assert');
 exports.use(assert);
 
-},{"./chai/assertion":14,"./chai/config":15,"./chai/core/assertions":16,"./chai/interface/assert":17,"./chai/interface/expect":18,"./chai/interface/should":19,"./chai/utils":30,"assertion-error":39}],14:[function(require,module,exports){
+},{"./chai/assertion":13,"./chai/config":14,"./chai/core/assertions":15,"./chai/interface/assert":16,"./chai/interface/expect":17,"./chai/interface/should":18,"./chai/utils":32,"assertion-error":6}],13:[function(require,module,exports){
 /*!
  * chai
  * http://chaijs.com
@@ -2633,7 +2747,6 @@ exports.use(assert);
  */
 
 var config = require('./config');
-var NOOP = function() { };
 
 module.exports = function (_chai, util) {
   /*!
@@ -2697,10 +2810,6 @@ module.exports = function (_chai, util) {
     util.addChainableMethod(this.prototype, name, fn, chainingBehavior);
   };
 
-  Assertion.addChainableNoop = function(name, fn) {
-    util.addChainableMethod(this.prototype, name, NOOP, fn);
-  };
-
   Assertion.overwriteProperty = function (name, fn) {
     util.overwriteProperty(this.prototype, name, fn);
   };
@@ -2713,17 +2822,18 @@ module.exports = function (_chai, util) {
     util.overwriteChainableMethod(this.prototype, name, fn, chainingBehavior);
   };
 
-  /*!
-   * ### .assert(expression, message, negateMessage, expected, actual)
+  /**
+   * ### .assert(expression, message, negateMessage, expected, actual, showDiff)
    *
    * Executes an expression and check expectations. Throws AssertionError for reporting if test doesn't pass.
    *
    * @name assert
    * @param {Philosophical} expression to be tested
-   * @param {String or Function} message or function that returns message to display if fails
-   * @param {String or Function} negatedMessage or function that returns negatedMessage to display if negated expression fails
+   * @param {String|Function} message or function that returns message to display if expression fails
+   * @param {String|Function} negatedMessage or function that returns negatedMessage to display if negated expression fails
    * @param {Mixed} expected value (remember to check for negation)
    * @param {Mixed} actual (optional) will default to `this.obj`
+   * @param {Boolean} showDiff (optional) when set to `true`, assert will display a diff in addition to the message if expression fails
    * @api private
    */
 
@@ -2761,7 +2871,7 @@ module.exports = function (_chai, util) {
   });
 };
 
-},{"./config":15}],15:[function(require,module,exports){
+},{"./config":14}],14:[function(require,module,exports){
 module.exports = {
 
   /**
@@ -2798,10 +2908,15 @@ module.exports = {
    * ### config.truncateThreshold
    *
    * User configurable property, sets length threshold for actual and
-   * expected values in assertion errors. If this threshold is exceeded,
-   * the value is truncated.
+   * expected values in assertion errors. If this threshold is exceeded, for
+   * example for large data structures, the value is replaced with something
+   * like `[ Array(3) ]` or `{ Object (prop1, prop2) }`.
    *
    * Set it to zero if you want to disable truncating altogether.
+   *
+   * This is especially userful when doing assertions on arrays: having this
+   * set to a reasonable large value makes the failure messages readily
+   * inspectable.
    *
    *     chai.config.truncateThreshold = 0;  // disable truncating
    *
@@ -2813,7 +2928,7 @@ module.exports = {
 
 };
 
-},{}],16:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 /*!
  * chai
  * http://chaijs.com
@@ -2841,6 +2956,7 @@ module.exports = function (chai, _) {
    * - been
    * - is
    * - that
+   * - which
    * - and
    * - has
    * - have
@@ -2850,12 +2966,13 @@ module.exports = function (chai, _) {
    * - same
    *
    * @name language chains
+   * @namespace BDD
    * @api public
    */
 
   [ 'to', 'be', 'been'
   , 'is', 'and', 'has', 'have'
-  , 'with', 'that', 'at'
+  , 'with', 'that', 'which', 'at'
   , 'of', 'same' ].forEach(function (chain) {
     Assertion.addProperty(chain, function () {
       return this;
@@ -2873,6 +2990,7 @@ module.exports = function (chai, _) {
    *       .and.not.equal('bar');
    *
    * @name not
+   * @namespace BDD
    * @api public
    */
 
@@ -2890,12 +3008,56 @@ module.exports = function (chai, _) {
    *     expect({ foo: { bar: { baz: 'quux' } } })
    *       .to.have.deep.property('foo.bar.baz', 'quux');
    *
+   * `.deep.property` special characters can be escaped
+   * by adding two slashes before the `.` or `[]`.
+   *
+   *     var deepCss = { '.link': { '[target]': 42 }};
+   *     expect(deepCss).to.have.deep.property('\\.link.\\[target\\]', 42);
+   *
    * @name deep
+   * @namespace BDD
    * @api public
    */
 
   Assertion.addProperty('deep', function () {
     flag(this, 'deep', true);
+  });
+
+  /**
+   * ### .any
+   *
+   * Sets the `any` flag, (opposite of the `all` flag)
+   * later used in the `keys` assertion.
+   *
+   *     expect(foo).to.have.any.keys('bar', 'baz');
+   *
+   * @name any
+   * @namespace BDD
+   * @api public
+   */
+
+  Assertion.addProperty('any', function () {
+    flag(this, 'any', true);
+    flag(this, 'all', false)
+  });
+
+
+  /**
+   * ### .all
+   *
+   * Sets the `all` flag (opposite of the `any` flag)
+   * later used by the `keys` assertion.
+   *
+   *     expect(foo).to.have.all.keys('bar', 'baz');
+   *
+   * @name all
+   * @namespace BDD
+   * @api public
+   */
+
+  Assertion.addProperty('all', function () {
+    flag(this, 'all', true);
+    flag(this, 'any', false);
   });
 
   /**
@@ -2910,6 +3072,13 @@ module.exports = function (chai, _) {
    *     expect({ foo: 'bar' }).to.be.an('object');
    *     expect(null).to.be.a('null');
    *     expect(undefined).to.be.an('undefined');
+   *     expect(new Error).to.be.an('error');
+   *     expect(new Promise).to.be.a('promise');
+   *     expect(new Float32Array()).to.be.a('float32array');
+   *     expect(Symbol()).to.be.a('symbol');
+   *
+   *     // es6 overrides
+   *     expect({[Symbol.toStringTag]:()=>'foo'}).to.be.a('foo');
    *
    *     // language chain
    *     expect(foo).to.be.an.instanceof(Foo);
@@ -2918,6 +3087,7 @@ module.exports = function (chai, _) {
    * @alias an
    * @param {String} type
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -2943,7 +3113,7 @@ module.exports = function (chai, _) {
    * The `include` and `contain` assertions can be used as either property
    * based language chains or as methods to assert the inclusion of an object
    * in an array or a substring in a string. When used as language chains,
-   * they toggle the `contain` flag for the `keys` assertion.
+   * they toggle the `contains` flag for the `keys` assertion.
    *
    *     expect([1,2,3]).to.include(2);
    *     expect('foobar').to.contain('foo');
@@ -2951,8 +3121,11 @@ module.exports = function (chai, _) {
    *
    * @name include
    * @alias contain
+   * @alias includes
+   * @alias contains
    * @param {Object|String|Number} obj
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -2961,9 +3134,12 @@ module.exports = function (chai, _) {
   }
 
   function include (val, msg) {
+    _.expectTypes(this, ['array', 'object', 'string']);
+
     if (msg) flag(this, 'message', msg);
     var obj = flag(this, 'object');
     var expected = false;
+
     if (_.type(obj) === 'array' && _.type(val) === 'object') {
       for (var i in obj) {
         if (_.eql(obj[i], val)) {
@@ -2976,11 +3152,11 @@ module.exports = function (chai, _) {
         for (var k in val) new Assertion(obj).property(k, val[k]);
         return;
       }
-      var subset = {}
-      for (var k in val) subset[k] = obj[k]
+      var subset = {};
+      for (var k in val) subset[k] = obj[k];
       expected = _.eql(subset, val);
     } else {
-      expected = obj && ~obj.indexOf(val)
+      expected = (obj != undefined) && ~obj.indexOf(val);
     }
     this.assert(
         expected
@@ -2990,27 +3166,26 @@ module.exports = function (chai, _) {
 
   Assertion.addChainableMethod('include', include, includeChainingBehavior);
   Assertion.addChainableMethod('contain', include, includeChainingBehavior);
+  Assertion.addChainableMethod('contains', include, includeChainingBehavior);
+  Assertion.addChainableMethod('includes', include, includeChainingBehavior);
 
   /**
    * ### .ok
    *
    * Asserts that the target is truthy.
    *
-   *     expect('everthing').to.be.ok;
+   *     expect('everything').to.be.ok;
    *     expect(1).to.be.ok;
    *     expect(false).to.not.be.ok;
    *     expect(undefined).to.not.be.ok;
    *     expect(null).to.not.be.ok;
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect('everthing').to.be.ok();
-   *     
    * @name ok
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('ok', function () {
+  Assertion.addProperty('ok', function () {
     this.assert(
         flag(this, 'object')
       , 'expected #{this} to be truthy'
@@ -3025,15 +3200,12 @@ module.exports = function (chai, _) {
    *     expect(true).to.be.true;
    *     expect(1).to.not.be.true;
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect(true).to.be.true();
-   *
    * @name true
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('true', function () {
+  Assertion.addProperty('true', function () {
     this.assert(
         true === flag(this, 'object')
       , 'expected #{this} to be true'
@@ -3050,15 +3222,12 @@ module.exports = function (chai, _) {
    *     expect(false).to.be.false;
    *     expect(0).to.not.be.false;
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect(false).to.be.false();
-   *
    * @name false
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('false', function () {
+  Assertion.addProperty('false', function () {
     this.assert(
         false === flag(this, 'object')
       , 'expected #{this} to be false'
@@ -3073,17 +3242,14 @@ module.exports = function (chai, _) {
    * Asserts that the target is `null`.
    *
    *     expect(null).to.be.null;
-   *     expect(undefined).not.to.be.null;
-   *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect(null).to.be.null();
+   *     expect(undefined).to.not.be.null;
    *
    * @name null
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('null', function () {
+  Assertion.addProperty('null', function () {
     this.assert(
         null === flag(this, 'object')
       , 'expected #{this} to be null'
@@ -3099,19 +3265,36 @@ module.exports = function (chai, _) {
    *     expect(undefined).to.be.undefined;
    *     expect(null).to.not.be.undefined;
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect(undefined).to.be.undefined();
-   *
    * @name undefined
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('undefined', function () {
+  Assertion.addProperty('undefined', function () {
     this.assert(
         undefined === flag(this, 'object')
       , 'expected #{this} to be undefined'
       , 'expected #{this} not to be undefined'
+    );
+  });
+
+  /**
+   * ### .NaN
+   * Asserts that the target is `NaN`.
+   *
+   *     expect('foo').to.be.NaN;
+   *     expect(4).not.to.be.NaN;
+   *
+   * @name NaN
+   * @namespace BDD
+   * @api public
+   */
+
+  Assertion.addProperty('NaN', function () {
+    this.assert(
+        isNaN(flag(this, 'object'))
+        , 'expected #{this} to be NaN'
+        , 'expected #{this} not to be NaN'
     );
   });
 
@@ -3128,15 +3311,12 @@ module.exports = function (chai, _) {
    *     expect(bar).to.not.exist;
    *     expect(baz).to.not.exist;
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect(foo).to.exist();
-   *
    * @name exist
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('exist', function () {
+  Assertion.addProperty('exist', function () {
     this.assert(
         null != flag(this, 'object')
       , 'expected #{this} to exist'
@@ -3148,7 +3328,7 @@ module.exports = function (chai, _) {
   /**
    * ### .empty
    *
-   * Asserts that the target's length is `0`. For arrays, it checks
+   * Asserts that the target's length is `0`. For arrays and strings, it checks
    * the `length` property. For objects, it gets the count of
    * enumerable keys.
    *
@@ -3156,15 +3336,12 @@ module.exports = function (chai, _) {
    *     expect('').to.be.empty;
    *     expect({}).to.be.empty;
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect([]).to.be.empty();
-   *
    * @name empty
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('empty', function () {
+  Assertion.addProperty('empty', function () {
     var obj = flag(this, 'object')
       , expected = obj;
 
@@ -3190,14 +3367,9 @@ module.exports = function (chai, _) {
    *       expect(arguments).to.be.arguments;
    *     }
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     function test () {
-   *       expect(arguments).to.be.arguments();
-   *     }
-   *
    * @name arguments
    * @alias Arguments
+   * @namespace BDD
    * @api public
    */
 
@@ -3211,8 +3383,8 @@ module.exports = function (chai, _) {
     );
   }
 
-  Assertion.addChainableNoop('arguments', checkArguments);
-  Assertion.addChainableNoop('Arguments', checkArguments);
+  Assertion.addProperty('arguments', checkArguments);
+  Assertion.addProperty('Arguments', checkArguments);
 
   /**
    * ### .equal(value)
@@ -3233,6 +3405,7 @@ module.exports = function (chai, _) {
    * @alias deep.equal
    * @param {Mixed} value
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3269,6 +3442,7 @@ module.exports = function (chai, _) {
    * @alias eqls
    * @param {Mixed} value
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3307,6 +3481,7 @@ module.exports = function (chai, _) {
    * @alias greaterThan
    * @param {Number} value
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3355,6 +3530,7 @@ module.exports = function (chai, _) {
    * @alias gte
    * @param {Number} value
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3403,6 +3579,7 @@ module.exports = function (chai, _) {
    * @alias lessThan
    * @param {Number} value
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3451,6 +3628,7 @@ module.exports = function (chai, _) {
    * @alias lte
    * @param {Number} value
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3498,6 +3676,7 @@ module.exports = function (chai, _) {
    * @param {Number} start lowerbound inclusive
    * @param {Number} finish upperbound inclusive
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3537,6 +3716,7 @@ module.exports = function (chai, _) {
    * @param {Constructor} constructor
    * @param {String} message _optional_
    * @alias instanceOf
+   * @namespace BDD
    * @api public
    */
 
@@ -3571,7 +3751,7 @@ module.exports = function (chai, _) {
    *         green: { tea: 'matcha' }
    *       , teas: [ 'chai', 'matcha', { tea: 'konacha' } ]
    *     };
-
+   *
    *     expect(deepObj).to.have.deep.property('green.tea', 'matcha');
    *     expect(deepObj).to.have.deep.property('teas[1]', 'matcha');
    *     expect(deepObj).to.have.deep.property('teas[2].tea', 'konacha');
@@ -3603,38 +3783,56 @@ module.exports = function (chai, _) {
    *       .with.deep.property('[2]')
    *         .that.deep.equals({ tea: 'konacha' });
    *
+   * Note that dots and bracket in `name` must be backslash-escaped when
+   * the `deep` flag is set, while they must NOT be escaped when the `deep`
+   * flag is not set.
+   *
+   *     // simple referencing
+   *     var css = { '.link[target]': 42 };
+   *     expect(css).to.have.property('.link[target]', 42);
+   *
+   *     // deep referencing
+   *     var deepCss = { '.link': { '[target]': 42 }};
+   *     expect(deepCss).to.have.deep.property('\\.link.\\[target\\]', 42);
+   *
    * @name property
    * @alias deep.property
    * @param {String} name
    * @param {Mixed} value (optional)
    * @param {String} message _optional_
    * @returns value of property for chaining
+   * @namespace BDD
    * @api public
    */
 
   Assertion.addMethod('property', function (name, val, msg) {
     if (msg) flag(this, 'message', msg);
 
-    var descriptor = flag(this, 'deep') ? 'deep property ' : 'property '
+    var isDeep = !!flag(this, 'deep')
+      , descriptor = isDeep ? 'deep property ' : 'property '
       , negate = flag(this, 'negate')
       , obj = flag(this, 'object')
-      , value = flag(this, 'deep')
-        ? _.getPathValue(name, obj)
+      , pathInfo = isDeep ? _.getPathInfo(name, obj) : null
+      , hasProperty = isDeep
+        ? pathInfo.exists
+        : _.hasProperty(name, obj)
+      , value = isDeep
+        ? pathInfo.value
         : obj[name];
 
-    if (negate && undefined !== val) {
+    if (negate && arguments.length > 1) {
       if (undefined === value) {
         msg = (msg != null) ? msg + ': ' : '';
         throw new Error(msg + _.inspect(obj) + ' has no ' + descriptor + _.inspect(name));
       }
     } else {
       this.assert(
-          undefined !== value
+          hasProperty
         , 'expected #{this} to have a ' + descriptor + _.inspect(name)
         , 'expected #{this} to not have ' + descriptor + _.inspect(name));
     }
 
-    if (undefined !== val) {
+    if (arguments.length > 1) {
       this.assert(
           val === value
         , 'expected #{this} to have a ' + descriptor + _.inspect(name) + ' of #{exp}, but got #{act}'
@@ -3659,6 +3857,7 @@ module.exports = function (chai, _) {
    * @alias haveOwnProperty
    * @param {String} name
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3676,16 +3875,60 @@ module.exports = function (chai, _) {
   Assertion.addMethod('haveOwnProperty', assertOwnProperty);
 
   /**
-   * ### .length(value)
+   * ### .ownPropertyDescriptor(name[, descriptor[, message]])
    *
-   * Asserts that the target's `length` property has
-   * the expected value.
+   * Asserts that the target has an own property descriptor `name`, that optionally matches `descriptor`.
    *
-   *     expect([ 1, 2, 3]).to.have.length(3);
-   *     expect('foobar').to.have.length(6);
+   *     expect('test').to.have.ownPropertyDescriptor('length');
+   *     expect('test').to.have.ownPropertyDescriptor('length', { enumerable: false, configurable: false, writable: false, value: 4 });
+   *     expect('test').not.to.have.ownPropertyDescriptor('length', { enumerable: false, configurable: false, writable: false, value: 3 });
+   *     expect('test').ownPropertyDescriptor('length').to.have.property('enumerable', false);
+   *     expect('test').ownPropertyDescriptor('length').to.have.keys('value');
    *
-   * Can also be used as a chain precursor to a value
-   * comparison for the length property.
+   * @name ownPropertyDescriptor
+   * @alias haveOwnPropertyDescriptor
+   * @param {String} name
+   * @param {Object} descriptor _optional_
+   * @param {String} message _optional_
+   * @namespace BDD
+   * @api public
+   */
+
+  function assertOwnPropertyDescriptor (name, descriptor, msg) {
+    if (typeof descriptor === 'string') {
+      msg = descriptor;
+      descriptor = null;
+    }
+    if (msg) flag(this, 'message', msg);
+    var obj = flag(this, 'object');
+    var actualDescriptor = Object.getOwnPropertyDescriptor(Object(obj), name);
+    if (actualDescriptor && descriptor) {
+      this.assert(
+          _.eql(descriptor, actualDescriptor)
+        , 'expected the own property descriptor for ' + _.inspect(name) + ' on #{this} to match ' + _.inspect(descriptor) + ', got ' + _.inspect(actualDescriptor)
+        , 'expected the own property descriptor for ' + _.inspect(name) + ' on #{this} to not match ' + _.inspect(descriptor)
+        , descriptor
+        , actualDescriptor
+        , true
+      );
+    } else {
+      this.assert(
+          actualDescriptor
+        , 'expected #{this} to have an own property descriptor for ' + _.inspect(name)
+        , 'expected #{this} to not have an own property descriptor for ' + _.inspect(name)
+      );
+    }
+    flag(this, 'object', actualDescriptor);
+  }
+
+  Assertion.addMethod('ownPropertyDescriptor', assertOwnPropertyDescriptor);
+  Assertion.addMethod('haveOwnPropertyDescriptor', assertOwnPropertyDescriptor);
+
+  /**
+   * ### .length
+   *
+   * Sets the `doLength` flag later used as a chain precursor to a value
+   * comparison for the `length` property.
    *
    *     expect('foo').to.have.length.above(2);
    *     expect([ 1, 2, 3 ]).to.have.length.above(2);
@@ -3694,10 +3937,29 @@ module.exports = function (chai, _) {
    *     expect('foo').to.have.length.within(2,4);
    *     expect([ 1, 2, 3 ]).to.have.length.within(2,4);
    *
+   * *Deprecation notice:* Using `length` as an assertion will be deprecated
+   * in version 2.4.0 and removed in 3.0.0. Code using the old style of
+   * asserting for `length` property value using `length(value)` should be
+   * switched to use `lengthOf(value)` instead.
+   *
    * @name length
-   * @alias lengthOf
+   * @namespace BDD
+   * @api public
+   */
+
+  /**
+   * ### .lengthOf(value[, message])
+   *
+   * Asserts that the target's `length` property has
+   * the expected value.
+   *
+   *     expect([ 1, 2, 3]).to.have.lengthOf(3);
+   *     expect('foobar').to.have.lengthOf(6);
+   *
+   * @name lengthOf
    * @param {Number} length
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3731,12 +3993,13 @@ module.exports = function (chai, _) {
    *     expect('foobar').to.match(/^foo/);
    *
    * @name match
+   * @alias matches
    * @param {RegExp} RegularExpression
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
-
-  Assertion.addMethod('match', function (re, msg) {
+  function assertMatch(re, msg) {
     if (msg) flag(this, 'message', msg);
     var obj = flag(this, 'object');
     this.assert(
@@ -3744,7 +4007,10 @@ module.exports = function (chai, _) {
       , 'expected #{this} to match ' + re
       , 'expected #{this} not to match ' + re
     );
-  });
+  }
+
+  Assertion.addMethod('match', assertMatch);
+  Assertion.addMethod('matches', assertMatch);
 
   /**
    * ### .string(string)
@@ -3756,6 +4022,7 @@ module.exports = function (chai, _) {
    * @name string
    * @param {String} string
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3775,42 +4042,88 @@ module.exports = function (chai, _) {
   /**
    * ### .keys(key1, [key2], [...])
    *
-   * Asserts that the target has exactly the given keys, or
-   * asserts the inclusion of some keys when using the
-   * `include` or `contain` modifiers.
+   * Asserts that the target contains any or all of the passed-in keys.
+   * Use in combination with `any`, `all`, `contains`, or `have` will affect
+   * what will pass.
    *
-   *     expect({ foo: 1, bar: 2 }).to.have.keys(['foo', 'bar']);
-   *     expect({ foo: 1, bar: 2, baz: 3 }).to.contain.keys('foo', 'bar');
+   * When used in conjunction with `any`, at least one key that is passed
+   * in must exist in the target object. This is regardless whether or not
+   * the `have` or `contain` qualifiers are used. Note, either `any` or `all`
+   * should be used in the assertion. If neither are used, the assertion is
+   * defaulted to `all`.
+   *
+   * When both `all` and `contain` are used, the target object must have at
+   * least all of the passed-in keys but may have more keys not listed.
+   *
+   * When both `all` and `have` are used, the target object must both contain
+   * all of the passed-in keys AND the number of keys in the target object must
+   * match the number of keys passed in (in other words, a target object must
+   * have all and only all of the passed-in keys).
+   *
+   *     expect({ foo: 1, bar: 2 }).to.have.any.keys('foo', 'baz');
+   *     expect({ foo: 1, bar: 2 }).to.have.any.keys('foo');
+   *     expect({ foo: 1, bar: 2 }).to.contain.any.keys('bar', 'baz');
+   *     expect({ foo: 1, bar: 2 }).to.contain.any.keys(['foo']);
+   *     expect({ foo: 1, bar: 2 }).to.contain.any.keys({'foo': 6});
+   *     expect({ foo: 1, bar: 2 }).to.have.all.keys(['bar', 'foo']);
+   *     expect({ foo: 1, bar: 2 }).to.have.all.keys({'bar': 6, 'foo': 7});
+   *     expect({ foo: 1, bar: 2, baz: 3 }).to.contain.all.keys(['bar', 'foo']);
+   *     expect({ foo: 1, bar: 2, baz: 3 }).to.contain.all.keys({'bar': 6});
+   *
    *
    * @name keys
    * @alias key
-   * @param {String...|Array} keys
+   * @param {...String|Array|Object} keys
+   * @namespace BDD
    * @api public
    */
 
   function assertKeys (keys) {
     var obj = flag(this, 'object')
       , str
-      , ok = true;
+      , ok = true
+      , mixedArgsMsg = 'keys must be given single argument of Array|Object|String, or multiple String arguments';
 
-    keys = keys instanceof Array
-      ? keys
-      : Array.prototype.slice.call(arguments);
+    switch (_.type(keys)) {
+      case "array":
+        if (arguments.length > 1) throw (new Error(mixedArgsMsg));
+        break;
+      case "object":
+        if (arguments.length > 1) throw (new Error(mixedArgsMsg));
+        keys = Object.keys(keys);
+        break;
+      default:
+        keys = Array.prototype.slice.call(arguments);
+    }
 
     if (!keys.length) throw new Error('keys required');
 
     var actual = Object.keys(obj)
       , expected = keys
-      , len = keys.length;
+      , len = keys.length
+      , any = flag(this, 'any')
+      , all = flag(this, 'all');
 
-    // Inclusion
-    ok = keys.every(function(key){
-      return ~actual.indexOf(key);
-    });
+    if (!any && !all) {
+      all = true;
+    }
 
-    // Strict
-    if (!flag(this, 'negate') && !flag(this, 'contains')) {
-      ok = ok && keys.length == actual.length;
+    // Has any
+    if (any) {
+      var intersection = expected.filter(function(key) {
+        return ~actual.indexOf(key);
+      });
+      ok = intersection.length > 0;
+    }
+
+    // Has all
+    if (all) {
+      ok = keys.every(function(key){
+        return ~actual.indexOf(key);
+      });
+      if (!flag(this, 'negate') && !flag(this, 'contains')) {
+        ok = ok && keys.length == actual.length;
+      }
     }
 
     // Key string
@@ -3819,7 +4132,12 @@ module.exports = function (chai, _) {
         return _.inspect(key);
       });
       var last = keys.pop();
-      str = keys.join(', ') + ', and ' + last;
+      if (all) {
+        str = keys.join(', ') + ', and ' + last;
+      }
+      if (any) {
+        str = keys.join(', ') + ', or ' + last;
+      }
     } else {
       str = _.inspect(keys[0]);
     }
@@ -3835,7 +4153,7 @@ module.exports = function (chai, _) {
         ok
       , 'expected #{this} to ' + str
       , 'expected #{this} to not ' + str
-      , expected.sort()
+      , expected.slice(0).sort()
       , actual.sort()
       , true
     );
@@ -3859,7 +4177,6 @@ module.exports = function (chai, _) {
    *     expect(fn).to.not.throw('good function');
    *     expect(fn).to.throw(ReferenceError, /bad function/);
    *     expect(fn).to.throw(err);
-   *     expect(fn).to.not.throw(new RangeError('Out of range.'));
    *
    * Please note that when a throw expectation is negated, it will check each
    * parameter independently, starting with error constructor type. The appropriate way
@@ -3877,6 +4194,7 @@ module.exports = function (chai, _) {
    * @param {String} message _optional_
    * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types
    * @returns error for chaining (null if no error)
+   * @namespace BDD
    * @api public
    */
 
@@ -3901,9 +4219,9 @@ module.exports = function (chai, _) {
       constructor = null;
       errMsg = null;
     } else if (typeof constructor === 'function') {
-      name = constructor.prototype.name || constructor.name;
-      if (name === 'Error' && constructor !== Error) {
-        name = (new constructor()).name;
+      name = constructor.prototype.name;
+      if (!name || (name === 'Error' && constructor !== Error)) {
+        name = constructor.name || (new constructor()).name;
       }
     } else {
       constructor = null;
@@ -3943,7 +4261,7 @@ module.exports = function (chai, _) {
       }
 
       // next, check message
-      var message = 'object' === _.type(err) && "message" in err
+      var message = 'error' === _.type(err) && "message" in err
         ? err.message
         : '' + err;
 
@@ -4017,12 +4335,14 @@ module.exports = function (chai, _) {
    *     expect(Klass).itself.to.respondTo('baz');
    *
    * @name respondTo
+   * @alias respondsTo
    * @param {String} method
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addMethod('respondTo', function (method, msg) {
+  function respondTo (method, msg) {
     if (msg) flag(this, 'message', msg);
     var obj = flag(this, 'object')
       , itself = flag(this, 'itself')
@@ -4035,7 +4355,10 @@ module.exports = function (chai, _) {
       , 'expected #{this} to respond to ' + _.inspect(method)
       , 'expected #{this} to not respond to ' + _.inspect(method)
     );
-  });
+  }
+
+  Assertion.addMethod('respondTo', respondTo);
+  Assertion.addMethod('respondsTo', respondTo);
 
   /**
    * ### .itself
@@ -4050,6 +4373,7 @@ module.exports = function (chai, _) {
    *     expect(Foo).itself.not.to.respondTo('baz');
    *
    * @name itself
+   * @namespace BDD
    * @api public
    */
 
@@ -4065,12 +4389,14 @@ module.exports = function (chai, _) {
    *     expect(1).to.satisfy(function(num) { return num > 0; });
    *
    * @name satisfy
+   * @alias satisfies
    * @param {Function} matcher
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addMethod('satisfy', function (matcher, msg) {
+  function satisfy (matcher, msg) {
     if (msg) flag(this, 'message', msg);
     var obj = flag(this, 'object');
     var result = matcher(obj);
@@ -4081,7 +4407,10 @@ module.exports = function (chai, _) {
       , this.negate ? false : true
       , result
     );
-  });
+  }
+
+  Assertion.addMethod('satisfy', satisfy);
+  Assertion.addMethod('satisfies', satisfy);
 
   /**
    * ### .closeTo(expected, delta)
@@ -4091,19 +4420,21 @@ module.exports = function (chai, _) {
    *     expect(1.5).to.be.closeTo(1, 0.5);
    *
    * @name closeTo
+   * @alias approximately
    * @param {Number} expected
    * @param {Number} delta
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addMethod('closeTo', function (expected, delta, msg) {
+  function closeTo(expected, delta, msg) {
     if (msg) flag(this, 'message', msg);
     var obj = flag(this, 'object');
 
     new Assertion(obj, msg).is.a('number');
     if (_.type(expected) !== 'number' || _.type(delta) !== 'number') {
-      throw new Error('the arguments to closeTo must be numbers');
+      throw new Error('the arguments to closeTo or approximately must be numbers');
     }
 
     this.assert(
@@ -4111,7 +4442,10 @@ module.exports = function (chai, _) {
       , 'expected #{this} to be close to ' + expected + ' +/- ' + delta
       , 'expected #{this} not to be close to ' + expected + ' +/- ' + delta
     );
-  });
+  }
+
+  Assertion.addMethod('closeTo', closeTo);
+  Assertion.addMethod('approximately', closeTo);
 
   function isSubsetOf(subset, superset, cmp) {
     return subset.every(function(elem) {
@@ -4142,6 +4476,7 @@ module.exports = function (chai, _) {
    * @name members
    * @param {Array} set
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -4172,9 +4507,290 @@ module.exports = function (chai, _) {
         , subset
     );
   });
+
+  /**
+   * ### .oneOf(list)
+   *
+   * Assert that a value appears somewhere in the top level of array `list`.
+   *
+   *     expect('a').to.be.oneOf(['a', 'b', 'c']);
+   *     expect(9).to.not.be.oneOf(['z']);
+   *     expect([3]).to.not.be.oneOf([1, 2, [3]]);
+   *
+   *     var three = [3];
+   *     // for object-types, contents are not compared
+   *     expect(three).to.not.be.oneOf([1, 2, [3]]);
+   *     // comparing references works
+   *     expect(three).to.be.oneOf([1, 2, three]);
+   *
+   * @name oneOf
+   * @param {Array<*>} list
+   * @param {String} message _optional_
+   * @namespace BDD
+   * @api public
+   */
+
+  function oneOf (list, msg) {
+    if (msg) flag(this, 'message', msg);
+    var expected = flag(this, 'object');
+    new Assertion(list).to.be.an('array');
+
+    this.assert(
+        list.indexOf(expected) > -1
+      , 'expected #{this} to be one of #{exp}'
+      , 'expected #{this} to not be one of #{exp}'
+      , list
+      , expected
+    );
+  }
+
+  Assertion.addMethod('oneOf', oneOf);
+
+
+  /**
+   * ### .change(function)
+   *
+   * Asserts that a function changes an object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val += 3 };
+   *     var noChangeFn = function() { return 'foo' + 'bar'; }
+   *     expect(fn).to.change(obj, 'val');
+   *     expect(noChangeFn).to.not.change(obj, 'val')
+   *
+   * @name change
+   * @alias changes
+   * @alias Change
+   * @param {String} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace BDD
+   * @api public
+   */
+
+  function assertChanges (object, prop, msg) {
+    if (msg) flag(this, 'message', msg);
+    var fn = flag(this, 'object');
+    new Assertion(object, msg).to.have.property(prop);
+    new Assertion(fn).is.a('function');
+
+    var initial = object[prop];
+    fn();
+
+    this.assert(
+      initial !== object[prop]
+      , 'expected .' + prop + ' to change'
+      , 'expected .' + prop + ' to not change'
+    );
+  }
+
+  Assertion.addChainableMethod('change', assertChanges);
+  Assertion.addChainableMethod('changes', assertChanges);
+
+  /**
+   * ### .increase(function)
+   *
+   * Asserts that a function increases an object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 15 };
+   *     expect(fn).to.increase(obj, 'val');
+   *
+   * @name increase
+   * @alias increases
+   * @alias Increase
+   * @param {String} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace BDD
+   * @api public
+   */
+
+  function assertIncreases (object, prop, msg) {
+    if (msg) flag(this, 'message', msg);
+    var fn = flag(this, 'object');
+    new Assertion(object, msg).to.have.property(prop);
+    new Assertion(fn).is.a('function');
+
+    var initial = object[prop];
+    fn();
+
+    this.assert(
+      object[prop] - initial > 0
+      , 'expected .' + prop + ' to increase'
+      , 'expected .' + prop + ' to not increase'
+    );
+  }
+
+  Assertion.addChainableMethod('increase', assertIncreases);
+  Assertion.addChainableMethod('increases', assertIncreases);
+
+  /**
+   * ### .decrease(function)
+   *
+   * Asserts that a function decreases an object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 5 };
+   *     expect(fn).to.decrease(obj, 'val');
+   *
+   * @name decrease
+   * @alias decreases
+   * @alias Decrease
+   * @param {String} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace BDD
+   * @api public
+   */
+
+  function assertDecreases (object, prop, msg) {
+    if (msg) flag(this, 'message', msg);
+    var fn = flag(this, 'object');
+    new Assertion(object, msg).to.have.property(prop);
+    new Assertion(fn).is.a('function');
+
+    var initial = object[prop];
+    fn();
+
+    this.assert(
+      object[prop] - initial < 0
+      , 'expected .' + prop + ' to decrease'
+      , 'expected .' + prop + ' to not decrease'
+    );
+  }
+
+  Assertion.addChainableMethod('decrease', assertDecreases);
+  Assertion.addChainableMethod('decreases', assertDecreases);
+
+  /**
+   * ### .extensible
+   *
+   * Asserts that the target is extensible (can have new properties added to
+   * it).
+   *
+   *     var nonExtensibleObject = Object.preventExtensions({});
+   *     var sealedObject = Object.seal({});
+   *     var frozenObject = Object.freeze({});
+   *
+   *     expect({}).to.be.extensible;
+   *     expect(nonExtensibleObject).to.not.be.extensible;
+   *     expect(sealedObject).to.not.be.extensible;
+   *     expect(frozenObject).to.not.be.extensible;
+   *
+   * @name extensible
+   * @namespace BDD
+   * @api public
+   */
+
+  Assertion.addProperty('extensible', function() {
+    var obj = flag(this, 'object');
+
+    // In ES5, if the argument to this method is not an object (a primitive), then it will cause a TypeError.
+    // In ES6, a non-object argument will be treated as if it was a non-extensible ordinary object, simply return false.
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/isExtensible
+    // The following provides ES6 behavior when a TypeError is thrown under ES5.
+
+    var isExtensible;
+
+    try {
+      isExtensible = Object.isExtensible(obj);
+    } catch (err) {
+      if (err instanceof TypeError) isExtensible = false;
+      else throw err;
+    }
+
+    this.assert(
+      isExtensible
+      , 'expected #{this} to be extensible'
+      , 'expected #{this} to not be extensible'
+    );
+  });
+
+  /**
+   * ### .sealed
+   *
+   * Asserts that the target is sealed (cannot have new properties added to it
+   * and its existing properties cannot be removed).
+   *
+   *     var sealedObject = Object.seal({});
+   *     var frozenObject = Object.freeze({});
+   *
+   *     expect(sealedObject).to.be.sealed;
+   *     expect(frozenObject).to.be.sealed;
+   *     expect({}).to.not.be.sealed;
+   *
+   * @name sealed
+   * @namespace BDD
+   * @api public
+   */
+
+  Assertion.addProperty('sealed', function() {
+    var obj = flag(this, 'object');
+
+    // In ES5, if the argument to this method is not an object (a primitive), then it will cause a TypeError.
+    // In ES6, a non-object argument will be treated as if it was a sealed ordinary object, simply return true.
+    // See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/isSealed
+    // The following provides ES6 behavior when a TypeError is thrown under ES5.
+
+    var isSealed;
+
+    try {
+      isSealed = Object.isSealed(obj);
+    } catch (err) {
+      if (err instanceof TypeError) isSealed = true;
+      else throw err;
+    }
+
+    this.assert(
+      isSealed
+      , 'expected #{this} to be sealed'
+      , 'expected #{this} to not be sealed'
+    );
+  });
+
+  /**
+   * ### .frozen
+   *
+   * Asserts that the target is frozen (cannot have new properties added to it
+   * and its existing properties cannot be modified).
+   *
+   *     var frozenObject = Object.freeze({});
+   *
+   *     expect(frozenObject).to.be.frozen;
+   *     expect({}).to.not.be.frozen;
+   *
+   * @name frozen
+   * @namespace BDD
+   * @api public
+   */
+
+  Assertion.addProperty('frozen', function() {
+    var obj = flag(this, 'object');
+
+    // In ES5, if the argument to this method is not an object (a primitive), then it will cause a TypeError.
+    // In ES6, a non-object argument will be treated as if it was a frozen ordinary object, simply return true.
+    // See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/isFrozen
+    // The following provides ES6 behavior when a TypeError is thrown under ES5.
+
+    var isFrozen;
+
+    try {
+      isFrozen = Object.isFrozen(obj);
+    } catch (err) {
+      if (err instanceof TypeError) isFrozen = true;
+      else throw err;
+    }
+
+    this.assert(
+      isFrozen
+      , 'expected #{this} to be frozen'
+      , 'expected #{this} to not be frozen'
+    );
+  });
 };
 
-},{}],17:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011-2014 Jake Luer <jake@alogicalparadox.com>
@@ -4206,6 +4822,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} expression to test for truthiness
    * @param {String} message to display on error
    * @name assert
+   * @namespace Assert
    * @api public
    */
 
@@ -4228,6 +4845,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} expected
    * @param {String} message
    * @param {String} operator
+   * @namespace Assert
    * @api public
    */
 
@@ -4241,38 +4859,42 @@ module.exports = function (chai, util) {
   };
 
   /**
-   * ### .ok(object, [message])
+   * ### .isOk(object, [message])
    *
    * Asserts that `object` is truthy.
    *
-   *     assert.ok('everything', 'everything is ok');
-   *     assert.ok(false, 'this will fail');
+   *     assert.isOk('everything', 'everything is ok');
+   *     assert.isOk(false, 'this will fail');
    *
-   * @name ok
+   * @name isOk
+   * @alias ok
    * @param {Mixed} object to test
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
-  assert.ok = function (val, msg) {
+  assert.isOk = function (val, msg) {
     new Assertion(val, msg).is.ok;
   };
 
   /**
-   * ### .notOk(object, [message])
+   * ### .isNotOk(object, [message])
    *
    * Asserts that `object` is falsy.
    *
-   *     assert.notOk('everything', 'this will fail');
-   *     assert.notOk(false, 'this will pass');
+   *     assert.isNotOk('everything', 'this will fail');
+   *     assert.isNotOk(false, 'this will pass');
    *
-   * @name notOk
+   * @name isNotOk
+   * @alias notOk
    * @param {Mixed} object to test
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
-  assert.notOk = function (val, msg) {
+  assert.isNotOk = function (val, msg) {
     new Assertion(val, msg).is.not.ok;
   };
 
@@ -4287,6 +4909,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} actual
    * @param {Mixed} expected
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4313,6 +4936,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} actual
    * @param {Mixed} expected
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4339,6 +4963,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} actual
    * @param {Mixed} expected
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4357,6 +4982,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} actual
    * @param {Mixed} expected
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4375,6 +5001,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} actual
    * @param {Mixed} expected
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4393,11 +5020,90 @@ module.exports = function (chai, util) {
    * @param {Mixed} actual
    * @param {Mixed} expected
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.notDeepEqual = function (act, exp, msg) {
     new Assertion(act, msg).to.not.eql(exp);
+  };
+
+   /**
+   * ### .isAbove(valueToCheck, valueToBeAbove, [message])
+   *
+   * Asserts `valueToCheck` is strictly greater than (>) `valueToBeAbove`
+   *
+   *     assert.isAbove(5, 2, '5 is strictly greater than 2');
+   *
+   * @name isAbove
+   * @param {Mixed} valueToCheck
+   * @param {Mixed} valueToBeAbove
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isAbove = function (val, abv, msg) {
+    new Assertion(val, msg).to.be.above(abv);
+  };
+
+   /**
+   * ### .isAtLeast(valueToCheck, valueToBeAtLeast, [message])
+   *
+   * Asserts `valueToCheck` is greater than or equal to (>=) `valueToBeAtLeast`
+   *
+   *     assert.isAtLeast(5, 2, '5 is greater or equal to 2');
+   *     assert.isAtLeast(3, 3, '3 is greater or equal to 3');
+   *
+   * @name isAtLeast
+   * @param {Mixed} valueToCheck
+   * @param {Mixed} valueToBeAtLeast
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isAtLeast = function (val, atlst, msg) {
+    new Assertion(val, msg).to.be.least(atlst);
+  };
+
+   /**
+   * ### .isBelow(valueToCheck, valueToBeBelow, [message])
+   *
+   * Asserts `valueToCheck` is strictly less than (<) `valueToBeBelow`
+   *
+   *     assert.isBelow(3, 6, '3 is strictly less than 6');
+   *
+   * @name isBelow
+   * @param {Mixed} valueToCheck
+   * @param {Mixed} valueToBeBelow
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isBelow = function (val, blw, msg) {
+    new Assertion(val, msg).to.be.below(blw);
+  };
+
+   /**
+   * ### .isAtMost(valueToCheck, valueToBeAtMost, [message])
+   *
+   * Asserts `valueToCheck` is less than or equal to (<=) `valueToBeAtMost`
+   *
+   *     assert.isAtMost(3, 6, '3 is less than or equal to 6');
+   *     assert.isAtMost(4, 4, '4 is less than or equal to 4');
+   *
+   * @name isAtMost
+   * @param {Mixed} valueToCheck
+   * @param {Mixed} valueToBeAtMost
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isAtMost = function (val, atmst, msg) {
+    new Assertion(val, msg).to.be.most(atmst);
   };
 
   /**
@@ -4411,11 +5117,31 @@ module.exports = function (chai, util) {
    * @name isTrue
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.isTrue = function (val, msg) {
     new Assertion(val, msg).is['true'];
+  };
+
+  /**
+   * ### .isNotTrue(value, [message])
+   *
+   * Asserts that `value` is not true.
+   *
+   *     var tea = 'tasty chai';
+   *     assert.isNotTrue(tea, 'great, time for tea!');
+   *
+   * @name isNotTrue
+   * @param {Mixed} value
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isNotTrue = function (val, msg) {
+    new Assertion(val, msg).to.not.equal(true);
   };
 
   /**
@@ -4429,11 +5155,31 @@ module.exports = function (chai, util) {
    * @name isFalse
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.isFalse = function (val, msg) {
     new Assertion(val, msg).is['false'];
+  };
+
+  /**
+   * ### .isNotFalse(value, [message])
+   *
+   * Asserts that `value` is not false.
+   *
+   *     var tea = 'tasty chai';
+   *     assert.isNotFalse(tea, 'great, time for tea!');
+   *
+   * @name isNotFalse
+   * @param {Mixed} value
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isNotFalse = function (val, msg) {
+    new Assertion(val, msg).to.not.equal(false);
   };
 
   /**
@@ -4446,6 +5192,7 @@ module.exports = function (chai, util) {
    * @name isNull
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4464,11 +5211,45 @@ module.exports = function (chai, util) {
    * @name isNotNull
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.isNotNull = function (val, msg) {
     new Assertion(val, msg).to.not.equal(null);
+  };
+
+  /**
+   * ### .isNaN
+   * Asserts that value is NaN
+   *
+   *    assert.isNaN('foo', 'foo is NaN');
+   *
+   * @name isNaN
+   * @param {Mixed} value
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isNaN = function (val, msg) {
+    new Assertion(val, msg).to.be.NaN;
+  };
+
+  /**
+   * ### .isNotNaN
+   * Asserts that value is not NaN
+   *
+   *    assert.isNotNaN(4, '4 is not NaN');
+   *
+   * @name isNotNaN
+   * @param {Mixed} value
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+  assert.isNotNaN = function (val, msg) {
+    new Assertion(val, msg).not.to.be.NaN;
   };
 
   /**
@@ -4482,6 +5263,7 @@ module.exports = function (chai, util) {
    * @name isUndefined
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4500,6 +5282,7 @@ module.exports = function (chai, util) {
    * @name isDefined
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4518,6 +5301,7 @@ module.exports = function (chai, util) {
    * @name isFunction
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4536,6 +5320,7 @@ module.exports = function (chai, util) {
    * @name isNotFunction
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4546,8 +5331,8 @@ module.exports = function (chai, util) {
   /**
    * ### .isObject(value, [message])
    *
-   * Asserts that `value` is an object (as revealed by
-   * `Object.prototype.toString`).
+   * Asserts that `value` is an object of type 'Object' (as revealed by `Object.prototype.toString`).
+   * _The assertion does not match subclassed objects._
    *
    *     var selection = { name: 'Chai', serve: 'with spices' };
    *     assert.isObject(selection, 'tea selection is an object');
@@ -4555,6 +5340,7 @@ module.exports = function (chai, util) {
    * @name isObject
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4565,7 +5351,7 @@ module.exports = function (chai, util) {
   /**
    * ### .isNotObject(value, [message])
    *
-   * Asserts that `value` is _not_ an object.
+   * Asserts that `value` is _not_ an object of type 'Object' (as revealed by `Object.prototype.toString`).
    *
    *     var selection = 'chai'
    *     assert.isNotObject(selection, 'tea selection is not an object');
@@ -4574,6 +5360,7 @@ module.exports = function (chai, util) {
    * @name isNotObject
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4592,6 +5379,7 @@ module.exports = function (chai, util) {
    * @name isArray
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4610,6 +5398,7 @@ module.exports = function (chai, util) {
    * @name isNotArray
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4628,6 +5417,7 @@ module.exports = function (chai, util) {
    * @name isString
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4646,6 +5436,7 @@ module.exports = function (chai, util) {
    * @name isNotString
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4664,6 +5455,7 @@ module.exports = function (chai, util) {
    * @name isNumber
    * @param {Number} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4682,6 +5474,7 @@ module.exports = function (chai, util) {
    * @name isNotNumber
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4703,6 +5496,7 @@ module.exports = function (chai, util) {
    * @name isBoolean
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4724,6 +5518,7 @@ module.exports = function (chai, util) {
    * @name isNotBoolean
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4748,6 +5543,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} value
    * @param {String} name
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4767,6 +5563,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} value
    * @param {String} typeof name
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4788,6 +5585,7 @@ module.exports = function (chai, util) {
    * @param {Object} object
    * @param {Constructor} constructor
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4809,6 +5607,7 @@ module.exports = function (chai, util) {
    * @param {Object} object
    * @param {Constructor} constructor
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4829,6 +5628,7 @@ module.exports = function (chai, util) {
    * @param {Array|String} haystack
    * @param {Mixed} needle
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4841,7 +5641,7 @@ module.exports = function (chai, util) {
    *
    * Asserts that `haystack` does not include `needle`. Works
    * for strings and arrays.
-   *i
+   *
    *     assert.notInclude('foobar', 'baz', 'string not include substring');
    *     assert.notInclude([ 1, 2, 3 ], 4, 'array not include contain value');
    *
@@ -4849,6 +5649,7 @@ module.exports = function (chai, util) {
    * @param {Array|String} haystack
    * @param {Mixed} needle
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4867,6 +5668,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} value
    * @param {RegExp} regexp
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4885,6 +5687,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} value
    * @param {RegExp} regexp
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4903,6 +5706,7 @@ module.exports = function (chai, util) {
    * @param {Object} object
    * @param {String} property
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4921,6 +5725,7 @@ module.exports = function (chai, util) {
    * @param {Object} object
    * @param {String} property
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4940,6 +5745,7 @@ module.exports = function (chai, util) {
    * @param {Object} object
    * @param {String} property
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4959,6 +5765,7 @@ module.exports = function (chai, util) {
    * @param {Object} object
    * @param {String} property
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4979,6 +5786,7 @@ module.exports = function (chai, util) {
    * @param {String} property
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4999,6 +5807,7 @@ module.exports = function (chai, util) {
    * @param {String} property
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -5020,6 +5829,7 @@ module.exports = function (chai, util) {
    * @param {String} property
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -5041,6 +5851,7 @@ module.exports = function (chai, util) {
    * @param {String} property
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -5054,12 +5865,13 @@ module.exports = function (chai, util) {
    * Asserts that `object` has a `length` property with the expected value.
    *
    *     assert.lengthOf([1,2,3], 3, 'array has length of 3');
-   *     assert.lengthOf('foobar', 5, 'string has length of 6');
+   *     assert.lengthOf('foobar', 6, 'string has length of 6');
    *
    * @name lengthOf
    * @param {Mixed} object
    * @param {Number} length
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -5074,11 +5886,11 @@ module.exports = function (chai, util) {
    * `constructor`, or alternately that it will throw an error with message
    * matching `regexp`.
    *
-   *     assert.throw(fn, 'function throws a reference error');
-   *     assert.throw(fn, /function throws a reference error/);
-   *     assert.throw(fn, ReferenceError);
-   *     assert.throw(fn, ReferenceError, 'function throws a reference error');
-   *     assert.throw(fn, ReferenceError, /function throws a reference error/);
+   *     assert.throws(fn, 'function throws a reference error');
+   *     assert.throws(fn, /function throws a reference error/);
+   *     assert.throws(fn, ReferenceError);
+   *     assert.throws(fn, ReferenceError, 'function throws a reference error');
+   *     assert.throws(fn, ReferenceError, /function throws a reference error/);
    *
    * @name throws
    * @alias throw
@@ -5088,16 +5900,17 @@ module.exports = function (chai, util) {
    * @param {RegExp} regexp
    * @param {String} message
    * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types
+   * @namespace Assert
    * @api public
    */
 
-  assert.Throw = function (fn, errt, errs, msg) {
+  assert.throws = function (fn, errt, errs, msg) {
     if ('string' === typeof errt || errt instanceof RegExp) {
       errs = errt;
       errt = null;
     }
 
-    var assertErr = new Assertion(fn, msg).to.Throw(errt, errs);
+    var assertErr = new Assertion(fn, msg).to.throw(errt, errs);
     return flag(assertErr, 'object');
   };
 
@@ -5116,6 +5929,7 @@ module.exports = function (chai, util) {
    * @param {RegExp} regexp
    * @param {String} message
    * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types
+   * @namespace Assert
    * @api public
    */
 
@@ -5141,14 +5955,41 @@ module.exports = function (chai, util) {
    * @param {String} operator
    * @param {Mixed} val2
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.operator = function (val, operator, val2, msg) {
-    if (!~['==', '===', '>', '>=', '<', '<=', '!=', '!=='].indexOf(operator)) {
-      throw new Error('Invalid operator "' + operator + '"');
+    var ok;
+    switch(operator) {
+      case '==':
+        ok = val == val2;
+        break;
+      case '===':
+        ok = val === val2;
+        break;
+      case '>':
+        ok = val > val2;
+        break;
+      case '>=':
+        ok = val >= val2;
+        break;
+      case '<':
+        ok = val < val2;
+        break;
+      case '<=':
+        ok = val <= val2;
+        break;
+      case '!=':
+        ok = val != val2;
+        break;
+      case '!==':
+        ok = val !== val2;
+        break;
+      default:
+        throw new Error('Invalid operator "' + operator + '"');
     }
-    var test = new Assertion(eval(val + operator + val2), msg);
+    var test = new Assertion(ok, msg);
     test.assert(
         true === flag(test, 'object')
       , 'expected ' + util.inspect(val) + ' to be ' + operator + ' ' + util.inspect(val2)
@@ -5167,11 +6008,32 @@ module.exports = function (chai, util) {
    * @param {Number} expected
    * @param {Number} delta
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.closeTo = function (act, exp, delta, msg) {
     new Assertion(act, msg).to.be.closeTo(exp, delta);
+  };
+
+  /**
+   * ### .approximately(actual, expected, delta, [message])
+   *
+   * Asserts that the target is equal `expected`, to within a +/- `delta` range.
+   *
+   *     assert.approximately(1.5, 1, 0.5, 'numbers are close');
+   *
+   * @name approximately
+   * @param {Number} actual
+   * @param {Number} expected
+   * @param {Number} delta
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.approximately = function (act, exp, delta, msg) {
+    new Assertion(act, msg).to.be.approximately(exp, delta);
   };
 
   /**
@@ -5186,11 +6048,32 @@ module.exports = function (chai, util) {
    * @param {Array} set1
    * @param {Array} set2
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.sameMembers = function (set1, set2, msg) {
     new Assertion(set1, msg).to.have.same.members(set2);
+  }
+
+  /**
+   * ### .sameDeepMembers(set1, set2, [message])
+   *
+   * Asserts that `set1` and `set2` have the same members - using a deep equality checking.
+   * Order is not taken into account.
+   *
+   *     assert.sameDeepMembers([ {b: 3}, {a: 2}, {c: 5} ], [ {c: 5}, {b: 3}, {a: 2} ], 'same deep members');
+   *
+   * @name sameDeepMembers
+   * @param {Array} set1
+   * @param {Array} set2
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.sameDeepMembers = function (set1, set2, msg) {
+    new Assertion(set1, msg).to.have.same.deep.members(set2);
   }
 
   /**
@@ -5205,6 +6088,7 @@ module.exports = function (chai, util) {
    * @param {Array} superset
    * @param {Array} subset
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -5212,12 +6096,325 @@ module.exports = function (chai, util) {
     new Assertion(superset, msg).to.include.members(subset);
   }
 
-  /*!
-   * Undocumented / untested
+  /**
+   * ### .includeDeepMembers(superset, subset, [message])
+   *
+   * Asserts that `subset` is included in `superset` - using deep equality checking.
+   * Order is not taken into account.
+   * Duplicates are ignored.
+   *
+   *     assert.includeDeepMembers([ {a: 1}, {b: 2}, {c: 3} ], [ {b: 2}, {a: 1}, {b: 2} ], 'include deep members');
+   *
+   * @name includeDeepMembers
+   * @param {Array} superset
+   * @param {Array} subset
+   * @param {String} message
+   * @namespace Assert
+   * @api public
    */
 
-  assert.ifError = function (val, msg) {
-    new Assertion(val, msg).to.not.be.ok;
+  assert.includeDeepMembers = function (superset, subset, msg) {
+    new Assertion(superset, msg).to.include.deep.members(subset);
+  }
+
+  /**
+   * ### .oneOf(inList, list, [message])
+   *
+   * Asserts that non-object, non-array value `inList` appears in the flat array `list`.
+   *
+   *     assert.oneOf(1, [ 2, 1 ], 'Not found in list');
+   *
+   * @name oneOf
+   * @param {*} inList
+   * @param {Array<*>} list
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.oneOf = function (inList, list, msg) {
+    new Assertion(inList, msg).to.be.oneOf(list);
+  }
+
+   /**
+   * ### .changes(function, object, property)
+   *
+   * Asserts that a function changes the value of a property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 22 };
+   *     assert.changes(fn, obj, 'val');
+   *
+   * @name changes
+   * @param {Function} modifier function
+   * @param {Object} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.changes = function (fn, obj, prop) {
+    new Assertion(fn).to.change(obj, prop);
+  }
+
+   /**
+   * ### .doesNotChange(function, object, property)
+   *
+   * Asserts that a function does not changes the value of a property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { console.log('foo'); };
+   *     assert.doesNotChange(fn, obj, 'val');
+   *
+   * @name doesNotChange
+   * @param {Function} modifier function
+   * @param {Object} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.doesNotChange = function (fn, obj, prop) {
+    new Assertion(fn).to.not.change(obj, prop);
+  }
+
+   /**
+   * ### .increases(function, object, property)
+   *
+   * Asserts that a function increases an object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 13 };
+   *     assert.increases(fn, obj, 'val');
+   *
+   * @name increases
+   * @param {Function} modifier function
+   * @param {Object} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.increases = function (fn, obj, prop) {
+    new Assertion(fn).to.increase(obj, prop);
+  }
+
+   /**
+   * ### .doesNotIncrease(function, object, property)
+   *
+   * Asserts that a function does not increase object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 8 };
+   *     assert.doesNotIncrease(fn, obj, 'val');
+   *
+   * @name doesNotIncrease
+   * @param {Function} modifier function
+   * @param {Object} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.doesNotIncrease = function (fn, obj, prop) {
+    new Assertion(fn).to.not.increase(obj, prop);
+  }
+
+   /**
+   * ### .decreases(function, object, property)
+   *
+   * Asserts that a function decreases an object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 5 };
+   *     assert.decreases(fn, obj, 'val');
+   *
+   * @name decreases
+   * @param {Function} modifier function
+   * @param {Object} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.decreases = function (fn, obj, prop) {
+    new Assertion(fn).to.decrease(obj, prop);
+  }
+
+   /**
+   * ### .doesNotDecrease(function, object, property)
+   *
+   * Asserts that a function does not decreases an object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 15 };
+   *     assert.doesNotDecrease(fn, obj, 'val');
+   *
+   * @name doesNotDecrease
+   * @param {Function} modifier function
+   * @param {Object} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.doesNotDecrease = function (fn, obj, prop) {
+    new Assertion(fn).to.not.decrease(obj, prop);
+  }
+
+  /*!
+   * ### .ifError(object)
+   *
+   * Asserts if value is not a false value, and throws if it is a true value.
+   * This is added to allow for chai to be a drop-in replacement for Node's
+   * assert class.
+   *
+   *     var err = new Error('I am a custom error');
+   *     assert.ifError(err); // Rethrows err!
+   *
+   * @name ifError
+   * @param {Object} object
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.ifError = function (val) {
+    if (val) {
+      throw(val);
+    }
+  };
+
+  /**
+   * ### .isExtensible(object)
+   *
+   * Asserts that `object` is extensible (can have new properties added to it).
+   *
+   *     assert.isExtensible({});
+   *
+   * @name isExtensible
+   * @alias extensible
+   * @param {Object} object
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isExtensible = function (obj, msg) {
+    new Assertion(obj, msg).to.be.extensible;
+  };
+
+  /**
+   * ### .isNotExtensible(object)
+   *
+   * Asserts that `object` is _not_ extensible.
+   *
+   *     var nonExtensibleObject = Object.preventExtensions({});
+   *     var sealedObject = Object.seal({});
+   *     var frozenObject = Object.freese({});
+   *
+   *     assert.isNotExtensible(nonExtensibleObject);
+   *     assert.isNotExtensible(sealedObject);
+   *     assert.isNotExtensible(frozenObject);
+   *
+   * @name isNotExtensible
+   * @alias notExtensible
+   * @param {Object} object
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isNotExtensible = function (obj, msg) {
+    new Assertion(obj, msg).to.not.be.extensible;
+  };
+
+  /**
+   * ### .isSealed(object)
+   *
+   * Asserts that `object` is sealed (cannot have new properties added to it
+   * and its existing properties cannot be removed).
+   *
+   *     var sealedObject = Object.seal({});
+   *     var frozenObject = Object.seal({});
+   *
+   *     assert.isSealed(sealedObject);
+   *     assert.isSealed(frozenObject);
+   *
+   * @name isSealed
+   * @alias sealed
+   * @param {Object} object
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isSealed = function (obj, msg) {
+    new Assertion(obj, msg).to.be.sealed;
+  };
+
+  /**
+   * ### .isNotSealed(object)
+   *
+   * Asserts that `object` is _not_ sealed.
+   *
+   *     assert.isNotSealed({});
+   *
+   * @name isNotSealed
+   * @alias notSealed
+   * @param {Object} object
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isNotSealed = function (obj, msg) {
+    new Assertion(obj, msg).to.not.be.sealed;
+  };
+
+  /**
+   * ### .isFrozen(object)
+   *
+   * Asserts that `object` is frozen (cannot have new properties added to it
+   * and its existing properties cannot be modified).
+   *
+   *     var frozenObject = Object.freeze({});
+   *     assert.frozen(frozenObject);
+   *
+   * @name isFrozen
+   * @alias frozen
+   * @param {Object} object
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isFrozen = function (obj, msg) {
+    new Assertion(obj, msg).to.be.frozen;
+  };
+
+  /**
+   * ### .isNotFrozen(object)
+   *
+   * Asserts that `object` is _not_ frozen.
+   *
+   *     assert.isNotFrozen({});
+   *
+   * @name isNotFrozen
+   * @alias notFrozen
+   * @param {Object} object
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isNotFrozen = function (obj, msg) {
+    new Assertion(obj, msg).to.not.be.frozen;
   };
 
   /*!
@@ -5228,11 +6425,19 @@ module.exports = function (chai, util) {
     assert[as] = assert[name];
     return alias;
   })
-  ('Throw', 'throw')
-  ('Throw', 'throws');
+  ('isOk', 'ok')
+  ('isNotOk', 'notOk')
+  ('throws', 'throw')
+  ('throws', 'Throw')
+  ('isExtensible', 'extensible')
+  ('isNotExtensible', 'notExtensible')
+  ('isSealed', 'sealed')
+  ('isNotSealed', 'notSealed')
+  ('isFrozen', 'frozen')
+  ('isNotFrozen', 'notFrozen');
 };
 
-},{}],18:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5243,10 +6448,32 @@ module.exports = function (chai, util) {
   chai.expect = function (val, message) {
     return new chai.Assertion(val, message);
   };
+
+  /**
+   * ### .fail(actual, expected, [message], [operator])
+   *
+   * Throw a failure.
+   *
+   * @name fail
+   * @param {Mixed} actual
+   * @param {Mixed} expected
+   * @param {String} message
+   * @param {String} operator
+   * @namespace Expect
+   * @api public
+   */
+
+  chai.expect.fail = function (actual, expected, message, operator) {
+    message = message || 'expect.fail()';
+    throw new chai.AssertionError(message, {
+        actual: actual
+      , expected: expected
+      , operator: operator
+    }, chai.expect.fail);
+  };
 };
 
-
-},{}],19:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5259,10 +6486,8 @@ module.exports = function (chai, util) {
   function loadShould () {
     // explicitly define this method as function as to have it's name to include as `ssfi`
     function shouldGetter() {
-      if (this instanceof String || this instanceof Number) {
-        return new Assertion(this.constructor(this), null, shouldGetter);
-      } else if (this instanceof Boolean) {
-        return new Assertion(this == true, null, shouldGetter);
+      if (this instanceof String || this instanceof Number || this instanceof Boolean ) {
+        return new Assertion(this.valueOf(), null, shouldGetter);
       }
       return new Assertion(this, null, shouldGetter);
     }
@@ -5289,13 +6514,89 @@ module.exports = function (chai, util) {
 
     var should = {};
 
+    /**
+     * ### .fail(actual, expected, [message], [operator])
+     *
+     * Throw a failure.
+     *
+     * @name fail
+     * @param {Mixed} actual
+     * @param {Mixed} expected
+     * @param {String} message
+     * @param {String} operator
+     * @namespace Should
+     * @api public
+     */
+
+    should.fail = function (actual, expected, message, operator) {
+      message = message || 'should.fail()';
+      throw new chai.AssertionError(message, {
+          actual: actual
+        , expected: expected
+        , operator: operator
+      }, should.fail);
+    };
+
+    /**
+     * ### .equal(actual, expected, [message])
+     *
+     * Asserts non-strict equality (`==`) of `actual` and `expected`.
+     *
+     *     should.equal(3, '3', '== coerces values to strings');
+     *
+     * @name equal
+     * @param {Mixed} actual
+     * @param {Mixed} expected
+     * @param {String} message
+     * @namespace Should
+     * @api public
+     */
+
     should.equal = function (val1, val2, msg) {
       new Assertion(val1, msg).to.equal(val2);
     };
 
+    /**
+     * ### .throw(function, [constructor/string/regexp], [string/regexp], [message])
+     *
+     * Asserts that `function` will throw an error that is an instance of
+     * `constructor`, or alternately that it will throw an error with message
+     * matching `regexp`.
+     *
+     *     should.throw(fn, 'function throws a reference error');
+     *     should.throw(fn, /function throws a reference error/);
+     *     should.throw(fn, ReferenceError);
+     *     should.throw(fn, ReferenceError, 'function throws a reference error');
+     *     should.throw(fn, ReferenceError, /function throws a reference error/);
+     *
+     * @name throw
+     * @alias Throw
+     * @param {Function} function
+     * @param {ErrorConstructor} constructor
+     * @param {RegExp} regexp
+     * @param {String} message
+     * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types
+     * @namespace Should
+     * @api public
+     */
+
     should.Throw = function (fn, errt, errs, msg) {
       new Assertion(fn, msg).to.Throw(errt, errs);
     };
+
+    /**
+     * ### .exist
+     *
+     * Asserts that the target is neither `null` nor `undefined`.
+     *
+     *     var foo = 'hi';
+     *
+     *     should.exist(foo, 'foo exists');
+     *
+     * @name exist
+     * @namespace Should
+     * @api public
+     */
 
     should.exist = function (val, msg) {
       new Assertion(val, msg).to.exist;
@@ -5304,13 +6605,62 @@ module.exports = function (chai, util) {
     // negation
     should.not = {}
 
+    /**
+     * ### .not.equal(actual, expected, [message])
+     *
+     * Asserts non-strict inequality (`!=`) of `actual` and `expected`.
+     *
+     *     should.not.equal(3, 4, 'these numbers are not equal');
+     *
+     * @name not.equal
+     * @param {Mixed} actual
+     * @param {Mixed} expected
+     * @param {String} message
+     * @namespace Should
+     * @api public
+     */
+
     should.not.equal = function (val1, val2, msg) {
       new Assertion(val1, msg).to.not.equal(val2);
     };
 
+    /**
+     * ### .throw(function, [constructor/regexp], [message])
+     *
+     * Asserts that `function` will _not_ throw an error that is an instance of
+     * `constructor`, or alternately that it will not throw an error with message
+     * matching `regexp`.
+     *
+     *     should.not.throw(fn, Error, 'function does not throw');
+     *
+     * @name not.throw
+     * @alias not.Throw
+     * @param {Function} function
+     * @param {ErrorConstructor} constructor
+     * @param {RegExp} regexp
+     * @param {String} message
+     * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types
+     * @namespace Should
+     * @api public
+     */
+
     should.not.Throw = function (fn, errt, errs, msg) {
       new Assertion(fn, msg).to.not.Throw(errt, errs);
     };
+
+    /**
+     * ### .not.exist
+     *
+     * Asserts that the target is neither `null` nor `undefined`.
+     *
+     *     var bar = null;
+     *
+     *     should.not.exist(bar, 'bar does not exist');
+     *
+     * @name not.exist
+     * @namespace Should
+     * @api public
+     */
 
     should.not.exist = function (val, msg) {
       new Assertion(val, msg).to.not.exist;
@@ -5326,7 +6676,7 @@ module.exports = function (chai, util) {
   chai.Should = loadShould;
 };
 
-},{}],20:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 /*!
  * Chai - addChainingMethod utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5381,6 +6731,7 @@ var call  = Function.prototype.call,
  * @param {String} name of method to add
  * @param {Function} method function to be used for `name`, when called
  * @param {Function} chainingBehavior function to be called every time the property is accessed
+ * @namespace Utils
  * @name addChainableMethod
  * @api public
  */
@@ -5439,7 +6790,7 @@ module.exports = function (ctx, name, method, chainingBehavior) {
   });
 };
 
-},{"../config":15,"./flag":23,"./transferFlags":37}],21:[function(require,module,exports){
+},{"../config":14,"./flag":23,"./transferFlags":39}],20:[function(require,module,exports){
 /*!
  * Chai - addMethod utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5469,6 +6820,7 @@ var config = require('../config');
  * @param {Object} ctx object to which the method is added
  * @param {String} name of method to add
  * @param {Function} method function to be used for name
+ * @namespace Utils
  * @name addMethod
  * @api public
  */
@@ -5484,12 +6836,15 @@ module.exports = function (ctx, name, method) {
   };
 };
 
-},{"../config":15,"./flag":23}],22:[function(require,module,exports){
+},{"../config":14,"./flag":23}],21:[function(require,module,exports){
 /*!
  * Chai - addProperty utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
  * MIT Licensed
  */
+
+var config = require('../config');
+var flag = require('./flag');
 
 /**
  * ### addProperty (ctx, name, getter)
@@ -5512,13 +6867,18 @@ module.exports = function (ctx, name, method) {
  * @param {Object} ctx object to which the property is added
  * @param {String} name of property to add
  * @param {Function} getter function to be used for name
+ * @namespace Utils
  * @name addProperty
  * @api public
  */
 
 module.exports = function (ctx, name, getter) {
   Object.defineProperty(ctx, name,
-    { get: function () {
+    { get: function addProperty() {
+        var old_ssfi = flag(this, 'ssfi');
+        if (old_ssfi && config.includeStack === false)
+          flag(this, 'ssfi', addProperty);
+
         var result = getter.call(this);
         return result === undefined ? this : result;
       }
@@ -5526,7 +6886,51 @@ module.exports = function (ctx, name, getter) {
   });
 };
 
-},{}],23:[function(require,module,exports){
+},{"../config":14,"./flag":23}],22:[function(require,module,exports){
+/*!
+ * Chai - expectTypes utility
+ * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
+ * MIT Licensed
+ */
+
+/**
+ * ### expectTypes(obj, types)
+ *
+ * Ensures that the object being tested against is of a valid type.
+ *
+ *     utils.expectTypes(this, ['array', 'object', 'string']);
+ *
+ * @param {Mixed} obj constructed Assertion
+ * @param {Array} type A list of allowed types for this assertion
+ * @namespace Utils
+ * @name expectTypes
+ * @api public
+ */
+
+var AssertionError = require('assertion-error');
+var flag = require('./flag');
+var type = require('type-detect');
+
+module.exports = function (obj, types) {
+  var obj = flag(obj, 'object');
+  types = types.map(function (t) { return t.toLowerCase(); });
+  types.sort();
+
+  // Transforms ['lorem', 'ipsum'] into 'a lirum, or an ipsum'
+  var str = types.map(function (t, index) {
+    var art = ~[ 'a', 'e', 'i', 'o', 'u' ].indexOf(t.charAt(0)) ? 'an' : 'a';
+    var or = types.length > 1 && index === types.length - 1 ? 'or ' : '';
+    return or + art + ' ' + t;
+  }).join(', ');
+
+  if (!types.some(function (expected) { return type(obj) === expected; })) {
+    throw new AssertionError(
+      'object tested must be ' + str + ', but ' + type(obj) + ' given'
+    );
+  }
+};
+
+},{"./flag":23,"assertion-error":6,"type-detect":156}],23:[function(require,module,exports){
 /*!
  * Chai - flag utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5534,7 +6938,7 @@ module.exports = function (ctx, name, getter) {
  */
 
 /**
- * ### flag(object ,key, [value])
+ * ### flag(object, key, [value])
  *
  * Get or set a flag value on an object. If a
  * value is provided it will be set, else it will
@@ -5544,9 +6948,10 @@ module.exports = function (ctx, name, getter) {
  *     utils.flag(this, 'foo', 'bar'); // setter
  *     utils.flag(this, 'foo'); // getter, returns `bar`
  *
- * @param {Object} object (constructed Assertion
+ * @param {Object} object constructed Assertion
  * @param {String} key
  * @param {Mixed} value (optional)
+ * @namespace Utils
  * @name flag
  * @api private
  */
@@ -5574,6 +6979,8 @@ module.exports = function (obj, key, value) {
  *
  * @param {Object} object (constructed Assertion)
  * @param {Arguments} chai.Assertion.prototype.assert arguments
+ * @namespace Utils
+ * @name getActual
  */
 
 module.exports = function (obj, args) {
@@ -5595,6 +7002,7 @@ module.exports = function (obj, args) {
  *
  * @param {Object} object
  * @returns {Array}
+ * @namespace Utils
  * @name getEnumerableProperties
  * @api public
  */
@@ -5637,6 +7045,7 @@ var flag = require('./flag')
  *
  * @param {Object} object (constructed Assertion)
  * @param {Arguments} chai.Assertion.prototype.assert arguments
+ * @namespace Utils
  * @name getMessage
  * @api public
  */
@@ -5652,14 +7061,14 @@ module.exports = function (obj, args) {
   if(typeof msg === "function") msg = msg();
   msg = msg || '';
   msg = msg
-    .replace(/#{this}/g, objDisplay(val))
-    .replace(/#{act}/g, objDisplay(actual))
-    .replace(/#{exp}/g, objDisplay(expected));
+    .replace(/#\{this\}/g, function () { return objDisplay(val); })
+    .replace(/#\{act\}/g, function () { return objDisplay(actual); })
+    .replace(/#\{exp\}/g, function () { return objDisplay(expected); });
 
   return flagMsg ? flagMsg + ': ' + msg : msg;
 };
 
-},{"./flag":23,"./getActual":24,"./inspect":31,"./objDisplay":32}],27:[function(require,module,exports){
+},{"./flag":23,"./getActual":24,"./inspect":33,"./objDisplay":34}],27:[function(require,module,exports){
 /*!
  * Chai - getName utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5672,6 +7081,8 @@ module.exports = function (obj, args) {
  * Gets the name of a function, in a cross-browser way.
  *
  * @param {Function} a function (usually a constructor)
+ * @namespace Utils
+ * @name getName
  */
 
 module.exports = function (func) {
@@ -5683,11 +7094,126 @@ module.exports = function (func) {
 
 },{}],28:[function(require,module,exports){
 /*!
+ * Chai - getPathInfo utility
+ * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
+ * MIT Licensed
+ */
+
+var hasProperty = require('./hasProperty');
+
+/**
+ * ### .getPathInfo(path, object)
+ *
+ * This allows the retrieval of property info in an
+ * object given a string path.
+ *
+ * The path info consists of an object with the
+ * following properties:
+ *
+ * * parent - The parent object of the property referenced by `path`
+ * * name - The name of the final property, a number if it was an array indexer
+ * * value - The value of the property, if it exists, otherwise `undefined`
+ * * exists - Whether the property exists or not
+ *
+ * @param {String} path
+ * @param {Object} object
+ * @returns {Object} info
+ * @namespace Utils
+ * @name getPathInfo
+ * @api public
+ */
+
+module.exports = function getPathInfo(path, obj) {
+  var parsed = parsePath(path),
+      last = parsed[parsed.length - 1];
+
+  var info = {
+    parent: parsed.length > 1 ? _getPathValue(parsed, obj, parsed.length - 1) : obj,
+    name: last.p || last.i,
+    value: _getPathValue(parsed, obj)
+  };
+  info.exists = hasProperty(info.name, info.parent);
+
+  return info;
+};
+
+
+/*!
+ * ## parsePath(path)
+ *
+ * Helper function used to parse string object
+ * paths. Use in conjunction with `_getPathValue`.
+ *
+ *      var parsed = parsePath('myobject.property.subprop');
+ *
+ * ### Paths:
+ *
+ * * Can be as near infinitely deep and nested
+ * * Arrays are also valid using the formal `myobject.document[3].property`.
+ * * Literal dots and brackets (not delimiter) must be backslash-escaped.
+ *
+ * @param {String} path
+ * @returns {Object} parsed
+ * @api private
+ */
+
+function parsePath (path) {
+  var str = path.replace(/([^\\])\[/g, '$1.[')
+    , parts = str.match(/(\\\.|[^.]+?)+/g);
+  return parts.map(function (value) {
+    var re = /^\[(\d+)\]$/
+      , mArr = re.exec(value);
+    if (mArr) return { i: parseFloat(mArr[1]) };
+    else return { p: value.replace(/\\([.\[\]])/g, '$1') };
+  });
+}
+
+
+/*!
+ * ## _getPathValue(parsed, obj)
+ *
+ * Helper companion function for `.parsePath` that returns
+ * the value located at the parsed address.
+ *
+ *      var value = getPathValue(parsed, obj);
+ *
+ * @param {Object} parsed definition from `parsePath`.
+ * @param {Object} object to search against
+ * @param {Number} object to search against
+ * @returns {Object|Undefined} value
+ * @api private
+ */
+
+function _getPathValue (parsed, obj, index) {
+  var tmp = obj
+    , res;
+
+  index = (index === undefined ? parsed.length : index);
+
+  for (var i = 0, l = index; i < l; i++) {
+    var part = parsed[i];
+    if (tmp) {
+      if ('undefined' !== typeof part.p)
+        tmp = tmp[part.p];
+      else if ('undefined' !== typeof part.i)
+        tmp = tmp[part.i];
+      if (i == (l - 1)) res = tmp;
+    } else {
+      res = undefined;
+    }
+  }
+  return res;
+}
+
+},{"./hasProperty":31}],29:[function(require,module,exports){
+/*!
  * Chai - getPathValue utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
  * @see https://github.com/logicalparadox/filtr
  * MIT Licensed
  */
+
+var getPathInfo = require('./getPathInfo');
 
 /**
  * ### .getPathValue(path, object)
@@ -5715,77 +7241,16 @@ module.exports = function (func) {
  * @param {String} path
  * @param {Object} object
  * @returns {Object} value or `undefined`
+ * @namespace Utils
  * @name getPathValue
  * @api public
  */
-
-var getPathValue = module.exports = function (path, obj) {
-  var parsed = parsePath(path);
-  return _getPathValue(parsed, obj);
+module.exports = function(path, obj) {
+  var info = getPathInfo(path, obj);
+  return info.value;
 };
 
-/*!
- * ## parsePath(path)
- *
- * Helper function used to parse string object
- * paths. Use in conjunction with `_getPathValue`.
- *
- *      var parsed = parsePath('myobject.property.subprop');
- *
- * ### Paths:
- *
- * * Can be as near infinitely deep and nested
- * * Arrays are also valid using the formal `myobject.document[3].property`.
- *
- * @param {String} path
- * @returns {Object} parsed
- * @api private
- */
-
-function parsePath (path) {
-  var str = path.replace(/\[/g, '.[')
-    , parts = str.match(/(\\\.|[^.]+?)+/g);
-  return parts.map(function (value) {
-    var re = /\[(\d+)\]$/
-      , mArr = re.exec(value)
-    if (mArr) return { i: parseFloat(mArr[1]) };
-    else return { p: value };
-  });
-};
-
-/*!
- * ## _getPathValue(parsed, obj)
- *
- * Helper companion function for `.parsePath` that returns
- * the value located at the parsed address.
- *
- *      var value = getPathValue(parsed, obj);
- *
- * @param {Object} parsed definition from `parsePath`.
- * @param {Object} object to search against
- * @returns {Object|Undefined} value
- * @api private
- */
-
-function _getPathValue (parsed, obj) {
-  var tmp = obj
-    , res;
-  for (var i = 0, l = parsed.length; i < l; i++) {
-    var part = parsed[i];
-    if (tmp) {
-      if ('undefined' !== typeof part.p)
-        tmp = tmp[part.p];
-      else if ('undefined' !== typeof part.i)
-        tmp = tmp[part.i];
-      if (i == (l - 1)) res = tmp;
-    } else {
-      res = undefined;
-    }
-  }
-  return res;
-};
-
-},{}],29:[function(require,module,exports){
+},{"./getPathInfo":28}],30:[function(require,module,exports){
 /*!
  * Chai - getProperties utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5800,12 +7265,13 @@ function _getPathValue (parsed, obj) {
  *
  * @param {Object} object
  * @returns {Array}
+ * @namespace Utils
  * @name getProperties
  * @api public
  */
 
 module.exports = function getProperties(object) {
-  var result = Object.getOwnPropertyNames(subject);
+  var result = Object.getOwnPropertyNames(object);
 
   function addProperty(property) {
     if (result.indexOf(property) === -1) {
@@ -5813,7 +7279,7 @@ module.exports = function getProperties(object) {
     }
   }
 
-  var proto = Object.getPrototypeOf(subject);
+  var proto = Object.getPrototypeOf(object);
   while (proto !== null) {
     Object.getOwnPropertyNames(proto).forEach(addProperty);
     proto = Object.getPrototypeOf(proto);
@@ -5822,7 +7288,73 @@ module.exports = function getProperties(object) {
   return result;
 };
 
-},{}],30:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
+/*!
+ * Chai - hasProperty utility
+ * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
+ * MIT Licensed
+ */
+
+var type = require('type-detect');
+
+/**
+ * ### .hasProperty(object, name)
+ *
+ * This allows checking whether an object has
+ * named property or numeric array index.
+ *
+ * Basically does the same thing as the `in`
+ * operator but works properly with natives
+ * and null/undefined values.
+ *
+ *     var obj = {
+ *         arr: ['a', 'b', 'c']
+ *       , str: 'Hello'
+ *     }
+ *
+ * The following would be the results.
+ *
+ *     hasProperty('str', obj);  // true
+ *     hasProperty('constructor', obj);  // true
+ *     hasProperty('bar', obj);  // false
+ *
+ *     hasProperty('length', obj.str); // true
+ *     hasProperty(1, obj.str);  // true
+ *     hasProperty(5, obj.str);  // false
+ *
+ *     hasProperty('length', obj.arr);  // true
+ *     hasProperty(2, obj.arr);  // true
+ *     hasProperty(3, obj.arr);  // false
+ *
+ * @param {Objuect} object
+ * @param {String|Number} name
+ * @returns {Boolean} whether it exists
+ * @namespace Utils
+ * @name getPathInfo
+ * @api public
+ */
+
+var literals = {
+    'number': Number
+  , 'string': String
+};
+
+module.exports = function hasProperty(name, obj) {
+  var ot = type(obj);
+
+  // Bad Object, obviously no props at all
+  if(ot === 'null' || ot === 'undefined')
+    return false;
+
+  // The `in` operator does not work with certain literals
+  // box these before the check
+  if(literals[ot] && typeof obj !== 'object')
+    obj = new literals[ot](obj);
+
+  return name in obj;
+};
+
+},{"type-detect":156}],32:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011 Jake Luer <jake@alogicalparadox.com>
@@ -5845,7 +7377,12 @@ exports.test = require('./test');
  * type utility
  */
 
-exports.type = require('./type');
+exports.type = require('type-detect');
+
+/*!
+ * expectTypes utility
+ */
+exports.expectTypes = require('./expectTypes');
 
 /*!
  * message utility
@@ -5896,6 +7433,18 @@ exports.eql = require('deep-eql');
 exports.getPathValue = require('./getPathValue');
 
 /*!
+ * Deep path info
+ */
+
+exports.getPathInfo = require('./getPathInfo');
+
+/*!
+ * Check if a property exists
+ */
+
+exports.hasProperty = require('./hasProperty');
+
+/*!
  * Function name
  */
 
@@ -5937,8 +7486,7 @@ exports.addChainableMethod = require('./addChainableMethod');
 
 exports.overwriteChainableMethod = require('./overwriteChainableMethod');
 
-
-},{"./addChainableMethod":20,"./addMethod":21,"./addProperty":22,"./flag":23,"./getActual":24,"./getMessage":26,"./getName":27,"./getPathValue":28,"./inspect":31,"./objDisplay":32,"./overwriteChainableMethod":33,"./overwriteMethod":34,"./overwriteProperty":35,"./test":36,"./transferFlags":37,"./type":38,"deep-eql":40}],31:[function(require,module,exports){
+},{"./addChainableMethod":19,"./addMethod":20,"./addProperty":21,"./expectTypes":22,"./flag":23,"./getActual":24,"./getMessage":26,"./getName":27,"./getPathInfo":28,"./getPathValue":29,"./hasProperty":31,"./inspect":33,"./objDisplay":34,"./overwriteChainableMethod":35,"./overwriteMethod":36,"./overwriteProperty":37,"./test":38,"./transferFlags":39,"deep-eql":40,"type-detect":156}],33:[function(require,module,exports){
 // This is (almost) directly from Node.js utils
 // https://github.com/joyent/node/blob/f8c335d0caf47f16d31413f89aa28eda3878e3aa/lib/util.js
 
@@ -5958,6 +7506,8 @@ module.exports = inspect;
  * @param {Number} depth Depth in which to descend in object. Default is 2.
  * @param {Boolean} colors Flag to turn on ANSI escape codes to color the
  *    output. Default is false (no coloring).
+ * @namespace Utils
+ * @name inspect
  */
 function inspect(obj, showHidden, depth, colors) {
   var ctx = {
@@ -6273,7 +7823,7 @@ function objectToString(o) {
   return Object.prototype.toString.call(o);
 }
 
-},{"./getEnumerableProperties":25,"./getName":27,"./getProperties":29}],32:[function(require,module,exports){
+},{"./getEnumerableProperties":25,"./getName":27,"./getProperties":30}],34:[function(require,module,exports){
 /*!
  * Chai - flag utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6296,6 +7846,7 @@ var config = require('../config');
  *
  * @param {Mixed} javascript object to inspect
  * @name objDisplay
+ * @namespace Utils
  * @api public
  */
 
@@ -6324,7 +7875,7 @@ module.exports = function (obj) {
   }
 };
 
-},{"../config":15,"./inspect":31}],33:[function(require,module,exports){
+},{"../config":14,"./inspect":33}],35:[function(require,module,exports){
 /*!
  * Chai - overwriteChainableMethod utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6332,7 +7883,7 @@ module.exports = function (obj) {
  */
 
 /**
- * ### overwriteChainableMethod (ctx, name, fn)
+ * ### overwriteChainableMethod (ctx, name, method, chainingBehavior)
  *
  * Overwites an already existing chainable method
  * and provides access to the previous function or
@@ -6359,6 +7910,7 @@ module.exports = function (obj) {
  * @param {String} name of method / property to overwrite
  * @param {Function} method function that returns a function to be used for name
  * @param {Function} chainingBehavior function that returns a function to be used for property
+ * @namespace Utils
  * @name overwriteChainableMethod
  * @api public
  */
@@ -6379,7 +7931,7 @@ module.exports = function (ctx, name, method, chainingBehavior) {
   };
 };
 
-},{}],34:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 /*!
  * Chai - overwriteMethod utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6415,6 +7967,7 @@ module.exports = function (ctx, name, method, chainingBehavior) {
  * @param {Object} ctx object whose method is to be overwritten
  * @param {String} name of method to overwrite
  * @param {Function} method function that returns a function to be used for name
+ * @namespace Utils
  * @name overwriteMethod
  * @api public
  */
@@ -6432,7 +7985,7 @@ module.exports = function (ctx, name, method) {
   }
 };
 
-},{}],35:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 /*!
  * Chai - overwriteProperty utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6468,6 +8021,7 @@ module.exports = function (ctx, name, method) {
  * @param {Object} ctx object whose property is to be overwritten
  * @param {String} name of property to overwrite
  * @param {Function} getter function that returns a getter function to be used for name
+ * @namespace Utils
  * @name overwriteProperty
  * @api public
  */
@@ -6488,7 +8042,7 @@ module.exports = function (ctx, name, getter) {
   });
 };
 
-},{}],36:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 /*!
  * Chai - test utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6508,6 +8062,8 @@ var flag = require('./flag');
  *
  * @param {Object} object (constructed Assertion)
  * @param {Arguments} chai.Assertion.prototype.assert arguments
+ * @namespace Utils
+ * @name test
  */
 
 module.exports = function (obj, args) {
@@ -6516,7 +8072,7 @@ module.exports = function (obj, args) {
   return negate ? !expr : expr;
 };
 
-},{"./flag":23}],37:[function(require,module,exports){
+},{"./flag":23}],39:[function(require,module,exports){
 /*!
  * Chai - transferFlags utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6539,9 +8095,10 @@ module.exports = function (obj, args) {
  *     utils.transferFlags(assertion, anotherAssertion, false);
  *
  * @param {Assertion} assertion the assertion to transfer the flags from
- * @param {Object} object the object to transfer the flags too; usually a new assertion
+ * @param {Object} object the object to transfer the flags to; usually a new assertion
  * @param {Boolean} includeAll
- * @name getAllFlags
+ * @namespace Utils
+ * @name transferFlags
  * @api private
  */
 
@@ -6560,165 +8117,6 @@ module.exports = function (assertion, object, includeAll) {
       object.__flags[flag] = flags[flag];
     }
   }
-};
-
-},{}],38:[function(require,module,exports){
-/*!
- * Chai - type utility
- * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
- * MIT Licensed
- */
-
-/*!
- * Detectable javascript natives
- */
-
-var natives = {
-    '[object Arguments]': 'arguments'
-  , '[object Array]': 'array'
-  , '[object Date]': 'date'
-  , '[object Function]': 'function'
-  , '[object Number]': 'number'
-  , '[object RegExp]': 'regexp'
-  , '[object String]': 'string'
-};
-
-/**
- * ### type(object)
- *
- * Better implementation of `typeof` detection that can
- * be used cross-browser. Handles the inconsistencies of
- * Array, `null`, and `undefined` detection.
- *
- *     utils.type({}) // 'object'
- *     utils.type(null) // `null'
- *     utils.type(undefined) // `undefined`
- *     utils.type([]) // `array`
- *
- * @param {Mixed} object to detect type of
- * @name type
- * @api private
- */
-
-module.exports = function (obj) {
-  var str = Object.prototype.toString.call(obj);
-  if (natives[str]) return natives[str];
-  if (obj === null) return 'null';
-  if (obj === undefined) return 'undefined';
-  if (obj === Object(obj)) return 'object';
-  return typeof obj;
-};
-
-},{}],39:[function(require,module,exports){
-/*!
- * assertion-error
- * Copyright(c) 2013 Jake Luer <jake@qualiancy.com>
- * MIT Licensed
- */
-
-/*!
- * Return a function that will copy properties from
- * one object to another excluding any originally
- * listed. Returned function will create a new `{}`.
- *
- * @param {String} excluded properties ...
- * @return {Function}
- */
-
-function exclude () {
-  var excludes = [].slice.call(arguments);
-
-  function excludeProps (res, obj) {
-    Object.keys(obj).forEach(function (key) {
-      if (!~excludes.indexOf(key)) res[key] = obj[key];
-    });
-  }
-
-  return function extendExclude () {
-    var args = [].slice.call(arguments)
-      , i = 0
-      , res = {};
-
-    for (; i < args.length; i++) {
-      excludeProps(res, args[i]);
-    }
-
-    return res;
-  };
-};
-
-/*!
- * Primary Exports
- */
-
-module.exports = AssertionError;
-
-/**
- * ### AssertionError
- *
- * An extension of the JavaScript `Error` constructor for
- * assertion and validation scenarios.
- *
- * @param {String} message
- * @param {Object} properties to include (optional)
- * @param {callee} start stack function (optional)
- */
-
-function AssertionError (message, _props, ssf) {
-  var extend = exclude('name', 'message', 'stack', 'constructor', 'toJSON')
-    , props = extend(_props || {});
-
-  // default values
-  this.message = message || 'Unspecified AssertionError';
-  this.showDiff = false;
-
-  // copy from properties
-  for (var key in props) {
-    this[key] = props[key];
-  }
-
-  // capture stack trace
-  ssf = ssf || arguments.callee;
-  if (ssf && Error.captureStackTrace) {
-    Error.captureStackTrace(this, ssf);
-  }
-}
-
-/*!
- * Inherit from Error.prototype
- */
-
-AssertionError.prototype = Object.create(Error.prototype);
-
-/*!
- * Statically set name
- */
-
-AssertionError.prototype.name = 'AssertionError';
-
-/*!
- * Ensure correct constructor
- */
-
-AssertionError.prototype.constructor = AssertionError;
-
-/**
- * Allow errors to be converted to JSON for static transfer.
- *
- * @param {Boolean} include stack (default: `true`)
- * @return {Object} object that can be `JSON.stringify`
- */
-
-AssertionError.prototype.toJSON = function (stack) {
-  var extend = exclude('constructor', 'toJSON', 'stack')
-    , props = extend({ name: this.name }, this);
-
-  // include stack if exists and not turned off
-  if (false !== stack && this.stack) {
-    props.stack = this.stack;
-  }
-
-  return props;
 };
 
 },{}],40:[function(require,module,exports){
@@ -6983,7 +8381,7 @@ function objectEqual(a, b, m) {
   return true;
 }
 
-},{"buffer":7,"type-detect":42}],42:[function(require,module,exports){
+},{"buffer":8,"type-detect":42}],42:[function(require,module,exports){
 module.exports = require('./lib/type');
 
 },{"./lib/type":43}],43:[function(require,module,exports){
@@ -7131,6 +8529,165 @@ Library.prototype.test = function (obj, type) {
 };
 
 },{}],44:[function(require,module,exports){
+exports.read = function (buffer, offset, isLE, mLen, nBytes) {
+  var e, m
+  var eLen = nBytes * 8 - mLen - 1
+  var eMax = (1 << eLen) - 1
+  var eBias = eMax >> 1
+  var nBits = -7
+  var i = isLE ? (nBytes - 1) : 0
+  var d = isLE ? -1 : 1
+  var s = buffer[offset + i]
+
+  i += d
+
+  e = s & ((1 << (-nBits)) - 1)
+  s >>= (-nBits)
+  nBits += eLen
+  for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8) {}
+
+  m = e & ((1 << (-nBits)) - 1)
+  e >>= (-nBits)
+  nBits += mLen
+  for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8) {}
+
+  if (e === 0) {
+    e = 1 - eBias
+  } else if (e === eMax) {
+    return m ? NaN : ((s ? -1 : 1) * Infinity)
+  } else {
+    m = m + Math.pow(2, mLen)
+    e = e - eBias
+  }
+  return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
+}
+
+exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
+  var e, m, c
+  var eLen = nBytes * 8 - mLen - 1
+  var eMax = (1 << eLen) - 1
+  var eBias = eMax >> 1
+  var rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0)
+  var i = isLE ? 0 : (nBytes - 1)
+  var d = isLE ? 1 : -1
+  var s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0
+
+  value = Math.abs(value)
+
+  if (isNaN(value) || value === Infinity) {
+    m = isNaN(value) ? 1 : 0
+    e = eMax
+  } else {
+    e = Math.floor(Math.log(value) / Math.LN2)
+    if (value * (c = Math.pow(2, -e)) < 1) {
+      e--
+      c *= 2
+    }
+    if (e + eBias >= 1) {
+      value += rt / c
+    } else {
+      value += rt * Math.pow(2, 1 - eBias)
+    }
+    if (value * c >= 2) {
+      e++
+      c /= 2
+    }
+
+    if (e + eBias >= eMax) {
+      m = 0
+      e = eMax
+    } else if (e + eBias >= 1) {
+      m = (value * c - 1) * Math.pow(2, mLen)
+      e = e + eBias
+    } else {
+      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen)
+      e = 0
+    }
+  }
+
+  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8) {}
+
+  e = (e << mLen) | m
+  eLen += mLen
+  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
+
+  buffer[offset + i - d] |= s * 128
+}
+
+},{}],45:[function(require,module,exports){
+(function (global){
+'use strict';
+var Mutation = global.MutationObserver || global.WebKitMutationObserver;
+
+var scheduleDrain;
+
+{
+  if (Mutation) {
+    var called = 0;
+    var observer = new Mutation(nextTick);
+    var element = global.document.createTextNode('');
+    observer.observe(element, {
+      characterData: true
+    });
+    scheduleDrain = function () {
+      element.data = (called = ++called % 2);
+    };
+  } else if (!global.setImmediate && typeof global.MessageChannel !== 'undefined') {
+    var channel = new global.MessageChannel();
+    channel.port1.onmessage = nextTick;
+    scheduleDrain = function () {
+      channel.port2.postMessage(0);
+    };
+  } else if ('document' in global && 'onreadystatechange' in global.document.createElement('script')) {
+    scheduleDrain = function () {
+
+      // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
+      // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
+      var scriptEl = global.document.createElement('script');
+      scriptEl.onreadystatechange = function () {
+        nextTick();
+
+        scriptEl.onreadystatechange = null;
+        scriptEl.parentNode.removeChild(scriptEl);
+        scriptEl = null;
+      };
+      global.document.documentElement.appendChild(scriptEl);
+    };
+  } else {
+    scheduleDrain = function () {
+      setTimeout(nextTick, 0);
+    };
+  }
+}
+
+var draining;
+var queue = [];
+//named nextTick for less confusing stack traces
+function nextTick() {
+  draining = true;
+  var i, oldQueue;
+  var len = queue.length;
+  while (len) {
+    oldQueue = queue;
+    queue = [];
+    i = -1;
+    while (++i < len) {
+      oldQueue[i]();
+    }
+    len = queue.length;
+  }
+  draining = false;
+}
+
+module.exports = immediate;
+function immediate(task) {
+  if (queue.push(task) === 1 && !draining) {
+    scheduleDrain();
+  }
+}
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],46:[function(require,module,exports){
 'use strict';
 // private property
 var _keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
@@ -7202,7 +8759,7 @@ exports.decode = function(input, utf8) {
 
 };
 
-},{}],45:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 'use strict';
 function CompressedObject() {
     this.compressedSize = 0;
@@ -7232,7 +8789,7 @@ CompressedObject.prototype = {
 };
 module.exports = CompressedObject;
 
-},{}],46:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 'use strict';
 exports.STORE = {
     magic: "\x00\x00",
@@ -7247,7 +8804,7 @@ exports.STORE = {
 };
 exports.DEFLATE = require('./flate');
 
-},{"./flate":51}],47:[function(require,module,exports){
+},{"./flate":53}],49:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -7351,7 +8908,7 @@ module.exports = function crc32(input, crc) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./utils":64}],48:[function(require,module,exports){
+},{"./utils":66}],50:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -7460,7 +9017,7 @@ DataReader.prototype = {
 };
 module.exports = DataReader;
 
-},{"./utils":64}],49:[function(require,module,exports){
+},{"./utils":66}],51:[function(require,module,exports){
 'use strict';
 exports.base64 = false;
 exports.binary = false;
@@ -7473,7 +9030,7 @@ exports.comment = null;
 exports.unixPermissions = null;
 exports.dosPermissions = null;
 
-},{}],50:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -7580,7 +9137,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./utils":64}],51:[function(require,module,exports){
+},{"./utils":66}],53:[function(require,module,exports){
 'use strict';
 var USE_TYPEDARRAY = (typeof Uint8Array !== 'undefined') && (typeof Uint16Array !== 'undefined') && (typeof Uint32Array !== 'undefined');
 
@@ -7598,7 +9155,7 @@ exports.uncompress =  function(input) {
     return pako.inflateRaw(input);
 };
 
-},{"pako":67}],52:[function(require,module,exports){
+},{"pako":72}],54:[function(require,module,exports){
 'use strict';
 
 var base64 = require('./base64');
@@ -7679,7 +9236,7 @@ JSZip.base64 = {
 JSZip.compressions = require('./compressions');
 module.exports = JSZip;
 
-},{"./base64":44,"./compressions":46,"./defaults":49,"./deprecatedPublicUtils":50,"./load":53,"./object":56,"./support":60}],53:[function(require,module,exports){
+},{"./base64":46,"./compressions":48,"./defaults":51,"./deprecatedPublicUtils":52,"./load":55,"./object":58,"./support":62}],55:[function(require,module,exports){
 'use strict';
 var base64 = require('./base64');
 var ZipEntries = require('./zipEntries');
@@ -7712,7 +9269,7 @@ module.exports = function(data, options) {
     return this;
 };
 
-},{"./base64":44,"./zipEntries":65}],54:[function(require,module,exports){
+},{"./base64":46,"./zipEntries":67}],56:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 module.exports = function(data, encoding){
@@ -7723,7 +9280,7 @@ module.exports.test = function(b){
 };
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":7}],55:[function(require,module,exports){
+},{"buffer":8}],57:[function(require,module,exports){
 'use strict';
 var Uint8ArrayReader = require('./uint8ArrayReader');
 
@@ -7745,7 +9302,7 @@ NodeBufferReader.prototype.readData = function(size) {
 };
 module.exports = NodeBufferReader;
 
-},{"./uint8ArrayReader":61}],56:[function(require,module,exports){
+},{"./uint8ArrayReader":63}],58:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var utils = require('./utils');
@@ -8630,7 +10187,7 @@ var out = {
 };
 module.exports = out;
 
-},{"./base64":44,"./compressedObject":45,"./compressions":46,"./crc32":47,"./defaults":49,"./nodeBuffer":54,"./signature":57,"./stringWriter":59,"./support":60,"./uint8ArrayWriter":62,"./utf8":63,"./utils":64}],57:[function(require,module,exports){
+},{"./base64":46,"./compressedObject":47,"./compressions":48,"./crc32":49,"./defaults":51,"./nodeBuffer":56,"./signature":59,"./stringWriter":61,"./support":62,"./uint8ArrayWriter":64,"./utf8":65,"./utils":66}],59:[function(require,module,exports){
 'use strict';
 exports.LOCAL_FILE_HEADER = "PK\x03\x04";
 exports.CENTRAL_FILE_HEADER = "PK\x01\x02";
@@ -8639,7 +10196,7 @@ exports.ZIP64_CENTRAL_DIRECTORY_LOCATOR = "PK\x06\x07";
 exports.ZIP64_CENTRAL_DIRECTORY_END = "PK\x06\x06";
 exports.DATA_DESCRIPTOR = "PK\x07\x08";
 
-},{}],58:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 var utils = require('./utils');
@@ -8677,7 +10234,7 @@ StringReader.prototype.readData = function(size) {
 };
 module.exports = StringReader;
 
-},{"./dataReader":48,"./utils":64}],59:[function(require,module,exports){
+},{"./dataReader":50,"./utils":66}],61:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -8709,7 +10266,7 @@ StringWriter.prototype = {
 
 module.exports = StringWriter;
 
-},{"./utils":64}],60:[function(require,module,exports){
+},{"./utils":66}],62:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 exports.base64 = true;
@@ -8747,7 +10304,7 @@ else {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":7}],61:[function(require,module,exports){
+},{"buffer":8}],63:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 
@@ -8796,7 +10353,7 @@ Uint8ArrayReader.prototype.readData = function(size) {
 };
 module.exports = Uint8ArrayReader;
 
-},{"./dataReader":48}],62:[function(require,module,exports){
+},{"./dataReader":50}],64:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -8834,7 +10391,7 @@ Uint8ArrayWriter.prototype = {
 
 module.exports = Uint8ArrayWriter;
 
-},{"./utils":64}],63:[function(require,module,exports){
+},{"./utils":66}],65:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -9043,7 +10600,7 @@ exports.utf8decode = function utf8decode(buf) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./nodeBuffer":54,"./support":60,"./utils":64}],64:[function(require,module,exports){
+},{"./nodeBuffer":56,"./support":62,"./utils":66}],66:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var compressions = require('./compressions');
@@ -9371,7 +10928,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./compressions":46,"./nodeBuffer":54,"./support":60}],65:[function(require,module,exports){
+},{"./compressions":48,"./nodeBuffer":56,"./support":62}],67:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var NodeBufferReader = require('./nodeBufferReader');
@@ -9594,7 +11151,7 @@ ZipEntries.prototype = {
 // }}} end of ZipEntries
 module.exports = ZipEntries;
 
-},{"./nodeBufferReader":55,"./object":56,"./signature":57,"./stringReader":58,"./support":60,"./uint8ArrayReader":61,"./utils":64,"./zipEntry":66}],66:[function(require,module,exports){
+},{"./nodeBufferReader":57,"./object":58,"./signature":59,"./stringReader":60,"./support":62,"./uint8ArrayReader":63,"./utils":66,"./zipEntry":68}],68:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var utils = require('./utils');
@@ -9906,7 +11463,1342 @@ ZipEntry.prototype = {
 };
 module.exports = ZipEntry;
 
-},{"./compressedObject":45,"./object":56,"./stringReader":58,"./utils":64}],67:[function(require,module,exports){
+},{"./compressedObject":47,"./object":58,"./stringReader":60,"./utils":66}],69:[function(require,module,exports){
+'use strict';
+var immediate = require('immediate');
+
+/* istanbul ignore next */
+function INTERNAL() {}
+
+var handlers = {};
+
+var REJECTED = ['REJECTED'];
+var FULFILLED = ['FULFILLED'];
+var PENDING = ['PENDING'];
+
+module.exports = exports = Promise;
+
+function Promise(resolver) {
+  if (typeof resolver !== 'function') {
+    throw new TypeError('resolver must be a function');
+  }
+  this.state = PENDING;
+  this.queue = [];
+  this.outcome = void 0;
+  if (resolver !== INTERNAL) {
+    safelyResolveThenable(this, resolver);
+  }
+}
+
+Promise.prototype["catch"] = function (onRejected) {
+  return this.then(null, onRejected);
+};
+Promise.prototype.then = function (onFulfilled, onRejected) {
+  if (typeof onFulfilled !== 'function' && this.state === FULFILLED ||
+    typeof onRejected !== 'function' && this.state === REJECTED) {
+    return this;
+  }
+  var promise = new this.constructor(INTERNAL);
+  if (this.state !== PENDING) {
+    var resolver = this.state === FULFILLED ? onFulfilled : onRejected;
+    unwrap(promise, resolver, this.outcome);
+  } else {
+    this.queue.push(new QueueItem(promise, onFulfilled, onRejected));
+  }
+
+  return promise;
+};
+function QueueItem(promise, onFulfilled, onRejected) {
+  this.promise = promise;
+  if (typeof onFulfilled === 'function') {
+    this.onFulfilled = onFulfilled;
+    this.callFulfilled = this.otherCallFulfilled;
+  }
+  if (typeof onRejected === 'function') {
+    this.onRejected = onRejected;
+    this.callRejected = this.otherCallRejected;
+  }
+}
+QueueItem.prototype.callFulfilled = function (value) {
+  handlers.resolve(this.promise, value);
+};
+QueueItem.prototype.otherCallFulfilled = function (value) {
+  unwrap(this.promise, this.onFulfilled, value);
+};
+QueueItem.prototype.callRejected = function (value) {
+  handlers.reject(this.promise, value);
+};
+QueueItem.prototype.otherCallRejected = function (value) {
+  unwrap(this.promise, this.onRejected, value);
+};
+
+function unwrap(promise, func, value) {
+  immediate(function () {
+    var returnValue;
+    try {
+      returnValue = func(value);
+    } catch (e) {
+      return handlers.reject(promise, e);
+    }
+    if (returnValue === promise) {
+      handlers.reject(promise, new TypeError('Cannot resolve promise with itself'));
+    } else {
+      handlers.resolve(promise, returnValue);
+    }
+  });
+}
+
+handlers.resolve = function (self, value) {
+  var result = tryCatch(getThen, value);
+  if (result.status === 'error') {
+    return handlers.reject(self, result.value);
+  }
+  var thenable = result.value;
+
+  if (thenable) {
+    safelyResolveThenable(self, thenable);
+  } else {
+    self.state = FULFILLED;
+    self.outcome = value;
+    var i = -1;
+    var len = self.queue.length;
+    while (++i < len) {
+      self.queue[i].callFulfilled(value);
+    }
+  }
+  return self;
+};
+handlers.reject = function (self, error) {
+  self.state = REJECTED;
+  self.outcome = error;
+  var i = -1;
+  var len = self.queue.length;
+  while (++i < len) {
+    self.queue[i].callRejected(error);
+  }
+  return self;
+};
+
+function getThen(obj) {
+  // Make sure we only access the accessor once as required by the spec
+  var then = obj && obj.then;
+  if (obj && typeof obj === 'object' && typeof then === 'function') {
+    return function appyThen() {
+      then.apply(obj, arguments);
+    };
+  }
+}
+
+function safelyResolveThenable(self, thenable) {
+  // Either fulfill, reject or reject with error
+  var called = false;
+  function onError(value) {
+    if (called) {
+      return;
+    }
+    called = true;
+    handlers.reject(self, value);
+  }
+
+  function onSuccess(value) {
+    if (called) {
+      return;
+    }
+    called = true;
+    handlers.resolve(self, value);
+  }
+
+  function tryToUnwrap() {
+    thenable(onSuccess, onError);
+  }
+
+  var result = tryCatch(tryToUnwrap);
+  if (result.status === 'error') {
+    onError(result.value);
+  }
+}
+
+function tryCatch(func, value) {
+  var out = {};
+  try {
+    out.value = func(value);
+    out.status = 'success';
+  } catch (e) {
+    out.status = 'error';
+    out.value = e;
+  }
+  return out;
+}
+
+exports.resolve = resolve;
+function resolve(value) {
+  if (value instanceof this) {
+    return value;
+  }
+  return handlers.resolve(new this(INTERNAL), value);
+}
+
+exports.reject = reject;
+function reject(reason) {
+  var promise = new this(INTERNAL);
+  return handlers.reject(promise, reason);
+}
+
+exports.all = all;
+function all(iterable) {
+  var self = this;
+  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
+    return this.reject(new TypeError('must be an array'));
+  }
+
+  var len = iterable.length;
+  var called = false;
+  if (!len) {
+    return this.resolve([]);
+  }
+
+  var values = new Array(len);
+  var resolved = 0;
+  var i = -1;
+  var promise = new this(INTERNAL);
+
+  while (++i < len) {
+    allResolver(iterable[i], i);
+  }
+  return promise;
+  function allResolver(value, i) {
+    self.resolve(value).then(resolveFromAll, function (error) {
+      if (!called) {
+        called = true;
+        handlers.reject(promise, error);
+      }
+    });
+    function resolveFromAll(outValue) {
+      values[i] = outValue;
+      if (++resolved === len && !called) {
+        called = true;
+        handlers.resolve(promise, values);
+      }
+    }
+  }
+}
+
+exports.race = race;
+function race(iterable) {
+  var self = this;
+  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
+    return this.reject(new TypeError('must be an array'));
+  }
+
+  var len = iterable.length;
+  var called = false;
+  if (!len) {
+    return this.resolve([]);
+  }
+
+  var i = -1;
+  var promise = new this(INTERNAL);
+
+  while (++i < len) {
+    resolver(iterable[i]);
+  }
+  return promise;
+  function resolver(value) {
+    self.resolve(value).then(function (response) {
+      if (!called) {
+        called = true;
+        handlers.resolve(promise, response);
+      }
+    }, function (error) {
+      if (!called) {
+        called = true;
+        handlers.reject(promise, error);
+      }
+    });
+  }
+}
+
+},{"immediate":45}],70:[function(require,module,exports){
+;(function () { // closure for web browsers
+
+if (typeof module === 'object' && module.exports) {
+  module.exports = LRUCache
+} else {
+  // just set the global for non-node platforms.
+  this.LRUCache = LRUCache
+}
+
+function hOP (obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key)
+}
+
+function naiveLength () { return 1 }
+
+var didTypeWarning = false
+function typeCheckKey(key) {
+  if (!didTypeWarning && typeof key !== 'string' && typeof key !== 'number') {
+    didTypeWarning = true
+    console.error(new TypeError("LRU: key must be a string or number. Almost certainly a bug! " + typeof key).stack)
+  }
+}
+
+function LRUCache (options) {
+  if (!(this instanceof LRUCache))
+    return new LRUCache(options)
+
+  if (typeof options === 'number')
+    options = { max: options }
+
+  if (!options)
+    options = {}
+
+  this._max = options.max
+  // Kind of weird to have a default max of Infinity, but oh well.
+  if (!this._max || !(typeof this._max === "number") || this._max <= 0 )
+    this._max = Infinity
+
+  this._lengthCalculator = options.length || naiveLength
+  if (typeof this._lengthCalculator !== "function")
+    this._lengthCalculator = naiveLength
+
+  this._allowStale = options.stale || false
+  this._maxAge = options.maxAge || null
+  this._dispose = options.dispose
+  this.reset()
+}
+
+// resize the cache when the max changes.
+Object.defineProperty(LRUCache.prototype, "max",
+  { set : function (mL) {
+      if (!mL || !(typeof mL === "number") || mL <= 0 ) mL = Infinity
+      this._max = mL
+      if (this._length > this._max) trim(this)
+    }
+  , get : function () { return this._max }
+  , enumerable : true
+  })
+
+// resize the cache when the lengthCalculator changes.
+Object.defineProperty(LRUCache.prototype, "lengthCalculator",
+  { set : function (lC) {
+      if (typeof lC !== "function") {
+        this._lengthCalculator = naiveLength
+        this._length = this._itemCount
+        for (var key in this._cache) {
+          this._cache[key].length = 1
+        }
+      } else {
+        this._lengthCalculator = lC
+        this._length = 0
+        for (var key in this._cache) {
+          this._cache[key].length = this._lengthCalculator(this._cache[key].value)
+          this._length += this._cache[key].length
+        }
+      }
+
+      if (this._length > this._max) trim(this)
+    }
+  , get : function () { return this._lengthCalculator }
+  , enumerable : true
+  })
+
+Object.defineProperty(LRUCache.prototype, "length",
+  { get : function () { return this._length }
+  , enumerable : true
+  })
+
+
+Object.defineProperty(LRUCache.prototype, "itemCount",
+  { get : function () { return this._itemCount }
+  , enumerable : true
+  })
+
+LRUCache.prototype.forEach = function (fn, thisp) {
+  thisp = thisp || this
+  var i = 0
+  var itemCount = this._itemCount
+
+  for (var k = this._mru - 1; k >= 0 && i < itemCount; k--) if (this._lruList[k]) {
+    i++
+    var hit = this._lruList[k]
+    if (isStale(this, hit)) {
+      del(this, hit)
+      if (!this._allowStale) hit = undefined
+    }
+    if (hit) {
+      fn.call(thisp, hit.value, hit.key, this)
+    }
+  }
+}
+
+LRUCache.prototype.keys = function () {
+  var keys = new Array(this._itemCount)
+  var i = 0
+  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
+    var hit = this._lruList[k]
+    keys[i++] = hit.key
+  }
+  return keys
+}
+
+LRUCache.prototype.values = function () {
+  var values = new Array(this._itemCount)
+  var i = 0
+  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
+    var hit = this._lruList[k]
+    values[i++] = hit.value
+  }
+  return values
+}
+
+LRUCache.prototype.reset = function () {
+  if (this._dispose && this._cache) {
+    for (var k in this._cache) {
+      this._dispose(k, this._cache[k].value)
+    }
+  }
+
+  this._cache = Object.create(null) // hash of items by key
+  this._lruList = Object.create(null) // list of items in order of use recency
+  this._mru = 0 // most recently used
+  this._lru = 0 // least recently used
+  this._length = 0 // number of items in the list
+  this._itemCount = 0
+}
+
+LRUCache.prototype.dump = function () {
+  var arr = []
+  var i = 0
+
+  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
+    var hit = this._lruList[k]
+    if (!isStale(this, hit)) {
+      //Do not store staled hits
+      ++i
+      arr.push({
+        k: hit.key,
+        v: hit.value,
+        e: hit.now + (hit.maxAge || 0)
+      });
+    }
+  }
+  //arr has the most read first
+  return arr
+}
+
+LRUCache.prototype.dumpLru = function () {
+  return this._lruList
+}
+
+LRUCache.prototype.set = function (key, value, maxAge) {
+  maxAge = maxAge || this._maxAge
+  typeCheckKey(key)
+
+  var now = maxAge ? Date.now() : 0
+  var len = this._lengthCalculator(value)
+
+  if (hOP(this._cache, key)) {
+    if (len > this._max) {
+      del(this, this._cache[key])
+      return false
+    }
+    // dispose of the old one before overwriting
+    if (this._dispose)
+      this._dispose(key, this._cache[key].value)
+
+    this._cache[key].now = now
+    this._cache[key].maxAge = maxAge
+    this._cache[key].value = value
+    this._length += (len - this._cache[key].length)
+    this._cache[key].length = len
+    this.get(key)
+
+    if (this._length > this._max)
+      trim(this)
+
+    return true
+  }
+
+  var hit = new Entry(key, value, this._mru++, len, now, maxAge)
+
+  // oversized objects fall out of cache automatically.
+  if (hit.length > this._max) {
+    if (this._dispose) this._dispose(key, value)
+    return false
+  }
+
+  this._length += hit.length
+  this._lruList[hit.lu] = this._cache[key] = hit
+  this._itemCount ++
+
+  if (this._length > this._max)
+    trim(this)
+
+  return true
+}
+
+LRUCache.prototype.has = function (key) {
+  typeCheckKey(key)
+  if (!hOP(this._cache, key)) return false
+  var hit = this._cache[key]
+  if (isStale(this, hit)) {
+    return false
+  }
+  return true
+}
+
+LRUCache.prototype.get = function (key) {
+  typeCheckKey(key)
+  return get(this, key, true)
+}
+
+LRUCache.prototype.peek = function (key) {
+  typeCheckKey(key)
+  return get(this, key, false)
+}
+
+LRUCache.prototype.pop = function () {
+  var hit = this._lruList[this._lru]
+  del(this, hit)
+  return hit || null
+}
+
+LRUCache.prototype.del = function (key) {
+  typeCheckKey(key)
+  del(this, this._cache[key])
+}
+
+LRUCache.prototype.load = function (arr) {
+  //reset the cache
+  this.reset();
+
+  var now = Date.now()
+  //A previous serialized cache has the most recent items first
+  for (var l = arr.length - 1; l >= 0; l-- ) {
+    var hit = arr[l]
+    typeCheckKey(hit.k)
+    var expiresAt = hit.e || 0
+    if (expiresAt === 0) {
+      //the item was created without expiration in a non aged cache
+      this.set(hit.k, hit.v)
+    } else {
+      var maxAge = expiresAt - now
+      //dont add already expired items
+      if (maxAge > 0) this.set(hit.k, hit.v, maxAge)
+    }
+  }
+}
+
+function get (self, key, doUse) {
+  typeCheckKey(key)
+  var hit = self._cache[key]
+  if (hit) {
+    if (isStale(self, hit)) {
+      del(self, hit)
+      if (!self._allowStale) hit = undefined
+    } else {
+      if (doUse) use(self, hit)
+    }
+    if (hit) hit = hit.value
+  }
+  return hit
+}
+
+function isStale(self, hit) {
+  if (!hit || (!hit.maxAge && !self._maxAge)) return false
+  var stale = false;
+  var diff = Date.now() - hit.now
+  if (hit.maxAge) {
+    stale = diff > hit.maxAge
+  } else {
+    stale = self._maxAge && (diff > self._maxAge)
+  }
+  return stale;
+}
+
+function use (self, hit) {
+  shiftLU(self, hit)
+  hit.lu = self._mru ++
+  self._lruList[hit.lu] = hit
+}
+
+function trim (self) {
+  while (self._lru < self._mru && self._length > self._max)
+    del(self, self._lruList[self._lru])
+}
+
+function shiftLU (self, hit) {
+  delete self._lruList[ hit.lu ]
+  while (self._lru < self._mru && !self._lruList[self._lru]) self._lru ++
+}
+
+function del (self, hit) {
+  if (hit) {
+    if (self._dispose) self._dispose(hit.key, hit.value)
+    self._length -= hit.length
+    self._itemCount --
+    delete self._cache[ hit.key ]
+    shiftLU(self, hit)
+  }
+}
+
+// classy, since V8 prefers predictable objects.
+function Entry (key, value, lu, length, now, maxAge) {
+  this.key = key
+  this.value = value
+  this.lu = lu
+  this.length = length
+  this.now = now
+  if (maxAge) this.maxAge = maxAge
+}
+
+})()
+
+},{}],71:[function(require,module,exports){
+
+
+
+/**
+ * UTM zones are grouped, and assigned to one of a group of 6
+ * sets.
+ *
+ * {int} @private
+ */
+var NUM_100K_SETS = 6;
+
+/**
+ * The column letters (for easting) of the lower left value, per
+ * set.
+ *
+ * {string} @private
+ */
+var SET_ORIGIN_COLUMN_LETTERS = 'AJSAJS';
+
+/**
+ * The row letters (for northing) of the lower left value, per
+ * set.
+ *
+ * {string} @private
+ */
+var SET_ORIGIN_ROW_LETTERS = 'AFAFAF';
+
+var A = 65; // A
+var I = 73; // I
+var O = 79; // O
+var V = 86; // V
+var Z = 90; // Z
+
+/**
+ * Conversion of lat/lon to MGRS.
+ *
+ * @param {object} ll Object literal with lat and lon properties on a
+ *     WGS84 ellipsoid.
+ * @param {int} accuracy Accuracy in digits (5 for 1 m, 4 for 10 m, 3 for
+ *      100 m, 2 for 1000 m or 1 for 10000 m). Optional, default is 5.
+ * @return {string} the MGRS string for the given location and accuracy.
+ */
+exports.forward = function(ll, accuracy) {
+  accuracy = accuracy || 5; // default accuracy 1m
+  return encode(LLtoUTM({
+    lat: ll[1],
+    lon: ll[0]
+  }), accuracy);
+};
+
+/**
+ * Conversion of MGRS to lat/lon.
+ *
+ * @param {string} mgrs MGRS string.
+ * @return {array} An array with left (longitude), bottom (latitude), right
+ *     (longitude) and top (latitude) values in WGS84, representing the
+ *     bounding box for the provided MGRS reference.
+ */
+exports.inverse = function(mgrs) {
+  var bbox = UTMtoLL(decode(mgrs.toUpperCase()));
+  if (bbox.lat && bbox.lon) {
+    return [bbox.lon, bbox.lat, bbox.lon, bbox.lat];
+  }
+  return [bbox.left, bbox.bottom, bbox.right, bbox.top];
+};
+
+exports.toPoint = function(mgrs) {
+  var bbox = UTMtoLL(decode(mgrs.toUpperCase()));
+  if (bbox.lat && bbox.lon) {
+    return [bbox.lon, bbox.lat];
+  }
+  return [(bbox.left + bbox.right) / 2, (bbox.top + bbox.bottom) / 2];
+};
+/**
+ * Conversion from degrees to radians.
+ *
+ * @private
+ * @param {number} deg the angle in degrees.
+ * @return {number} the angle in radians.
+ */
+function degToRad(deg) {
+  return (deg * (Math.PI / 180.0));
+}
+
+/**
+ * Conversion from radians to degrees.
+ *
+ * @private
+ * @param {number} rad the angle in radians.
+ * @return {number} the angle in degrees.
+ */
+function radToDeg(rad) {
+  return (180.0 * (rad / Math.PI));
+}
+
+/**
+ * Converts a set of Longitude and Latitude co-ordinates to UTM
+ * using the WGS84 ellipsoid.
+ *
+ * @private
+ * @param {object} ll Object literal with lat and lon properties
+ *     representing the WGS84 coordinate to be converted.
+ * @return {object} Object literal containing the UTM value with easting,
+ *     northing, zoneNumber and zoneLetter properties, and an optional
+ *     accuracy property in digits. Returns null if the conversion failed.
+ */
+function LLtoUTM(ll) {
+  var Lat = ll.lat;
+  var Long = ll.lon;
+  var a = 6378137.0; //ellip.radius;
+  var eccSquared = 0.00669438; //ellip.eccsq;
+  var k0 = 0.9996;
+  var LongOrigin;
+  var eccPrimeSquared;
+  var N, T, C, A, M;
+  var LatRad = degToRad(Lat);
+  var LongRad = degToRad(Long);
+  var LongOriginRad;
+  var ZoneNumber;
+  // (int)
+  ZoneNumber = Math.floor((Long + 180) / 6) + 1;
+
+  //Make sure the longitude 180.00 is in Zone 60
+  if (Long === 180) {
+    ZoneNumber = 60;
+  }
+
+  // Special zone for Norway
+  if (Lat >= 56.0 && Lat < 64.0 && Long >= 3.0 && Long < 12.0) {
+    ZoneNumber = 32;
+  }
+
+  // Special zones for Svalbard
+  if (Lat >= 72.0 && Lat < 84.0) {
+    if (Long >= 0.0 && Long < 9.0) {
+      ZoneNumber = 31;
+    }
+    else if (Long >= 9.0 && Long < 21.0) {
+      ZoneNumber = 33;
+    }
+    else if (Long >= 21.0 && Long < 33.0) {
+      ZoneNumber = 35;
+    }
+    else if (Long >= 33.0 && Long < 42.0) {
+      ZoneNumber = 37;
+    }
+  }
+
+  LongOrigin = (ZoneNumber - 1) * 6 - 180 + 3; //+3 puts origin
+  // in middle of
+  // zone
+  LongOriginRad = degToRad(LongOrigin);
+
+  eccPrimeSquared = (eccSquared) / (1 - eccSquared);
+
+  N = a / Math.sqrt(1 - eccSquared * Math.sin(LatRad) * Math.sin(LatRad));
+  T = Math.tan(LatRad) * Math.tan(LatRad);
+  C = eccPrimeSquared * Math.cos(LatRad) * Math.cos(LatRad);
+  A = Math.cos(LatRad) * (LongRad - LongOriginRad);
+
+  M = a * ((1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256) * LatRad - (3 * eccSquared / 8 + 3 * eccSquared * eccSquared / 32 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(2 * LatRad) + (15 * eccSquared * eccSquared / 256 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(4 * LatRad) - (35 * eccSquared * eccSquared * eccSquared / 3072) * Math.sin(6 * LatRad));
+
+  var UTMEasting = (k0 * N * (A + (1 - T + C) * A * A * A / 6.0 + (5 - 18 * T + T * T + 72 * C - 58 * eccPrimeSquared) * A * A * A * A * A / 120.0) + 500000.0);
+
+  var UTMNorthing = (k0 * (M + N * Math.tan(LatRad) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24.0 + (61 - 58 * T + T * T + 600 * C - 330 * eccPrimeSquared) * A * A * A * A * A * A / 720.0)));
+  if (Lat < 0.0) {
+    UTMNorthing += 10000000.0; //10000000 meter offset for
+    // southern hemisphere
+  }
+
+  return {
+    northing: Math.round(UTMNorthing),
+    easting: Math.round(UTMEasting),
+    zoneNumber: ZoneNumber,
+    zoneLetter: getLetterDesignator(Lat)
+  };
+}
+
+/**
+ * Converts UTM coords to lat/long, using the WGS84 ellipsoid. This is a convenience
+ * class where the Zone can be specified as a single string eg."60N" which
+ * is then broken down into the ZoneNumber and ZoneLetter.
+ *
+ * @private
+ * @param {object} utm An object literal with northing, easting, zoneNumber
+ *     and zoneLetter properties. If an optional accuracy property is
+ *     provided (in meters), a bounding box will be returned instead of
+ *     latitude and longitude.
+ * @return {object} An object literal containing either lat and lon values
+ *     (if no accuracy was provided), or top, right, bottom and left values
+ *     for the bounding box calculated according to the provided accuracy.
+ *     Returns null if the conversion failed.
+ */
+function UTMtoLL(utm) {
+
+  var UTMNorthing = utm.northing;
+  var UTMEasting = utm.easting;
+  var zoneLetter = utm.zoneLetter;
+  var zoneNumber = utm.zoneNumber;
+  // check the ZoneNummber is valid
+  if (zoneNumber < 0 || zoneNumber > 60) {
+    return null;
+  }
+
+  var k0 = 0.9996;
+  var a = 6378137.0; //ellip.radius;
+  var eccSquared = 0.00669438; //ellip.eccsq;
+  var eccPrimeSquared;
+  var e1 = (1 - Math.sqrt(1 - eccSquared)) / (1 + Math.sqrt(1 - eccSquared));
+  var N1, T1, C1, R1, D, M;
+  var LongOrigin;
+  var mu, phi1Rad;
+
+  // remove 500,000 meter offset for longitude
+  var x = UTMEasting - 500000.0;
+  var y = UTMNorthing;
+
+  // We must know somehow if we are in the Northern or Southern
+  // hemisphere, this is the only time we use the letter So even
+  // if the Zone letter isn't exactly correct it should indicate
+  // the hemisphere correctly
+  if (zoneLetter < 'N') {
+    y -= 10000000.0; // remove 10,000,000 meter offset used
+    // for southern hemisphere
+  }
+
+  // There are 60 zones with zone 1 being at West -180 to -174
+  LongOrigin = (zoneNumber - 1) * 6 - 180 + 3; // +3 puts origin
+  // in middle of
+  // zone
+
+  eccPrimeSquared = (eccSquared) / (1 - eccSquared);
+
+  M = y / k0;
+  mu = M / (a * (1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256));
+
+  phi1Rad = mu + (3 * e1 / 2 - 27 * e1 * e1 * e1 / 32) * Math.sin(2 * mu) + (21 * e1 * e1 / 16 - 55 * e1 * e1 * e1 * e1 / 32) * Math.sin(4 * mu) + (151 * e1 * e1 * e1 / 96) * Math.sin(6 * mu);
+  // double phi1 = ProjMath.radToDeg(phi1Rad);
+
+  N1 = a / Math.sqrt(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad));
+  T1 = Math.tan(phi1Rad) * Math.tan(phi1Rad);
+  C1 = eccPrimeSquared * Math.cos(phi1Rad) * Math.cos(phi1Rad);
+  R1 = a * (1 - eccSquared) / Math.pow(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad), 1.5);
+  D = x / (N1 * k0);
+
+  var lat = phi1Rad - (N1 * Math.tan(phi1Rad) / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * eccPrimeSquared) * D * D * D * D / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * eccPrimeSquared - 3 * C1 * C1) * D * D * D * D * D * D / 720);
+  lat = radToDeg(lat);
+
+  var lon = (D - (1 + 2 * T1 + C1) * D * D * D / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * eccPrimeSquared + 24 * T1 * T1) * D * D * D * D * D / 120) / Math.cos(phi1Rad);
+  lon = LongOrigin + radToDeg(lon);
+
+  var result;
+  if (utm.accuracy) {
+    var topRight = UTMtoLL({
+      northing: utm.northing + utm.accuracy,
+      easting: utm.easting + utm.accuracy,
+      zoneLetter: utm.zoneLetter,
+      zoneNumber: utm.zoneNumber
+    });
+    result = {
+      top: topRight.lat,
+      right: topRight.lon,
+      bottom: lat,
+      left: lon
+    };
+  }
+  else {
+    result = {
+      lat: lat,
+      lon: lon
+    };
+  }
+  return result;
+}
+
+/**
+ * Calculates the MGRS letter designator for the given latitude.
+ *
+ * @private
+ * @param {number} lat The latitude in WGS84 to get the letter designator
+ *     for.
+ * @return {char} The letter designator.
+ */
+function getLetterDesignator(lat) {
+  //This is here as an error flag to show that the Latitude is
+  //outside MGRS limits
+  var LetterDesignator = 'Z';
+
+  if ((84 >= lat) && (lat >= 72)) {
+    LetterDesignator = 'X';
+  }
+  else if ((72 > lat) && (lat >= 64)) {
+    LetterDesignator = 'W';
+  }
+  else if ((64 > lat) && (lat >= 56)) {
+    LetterDesignator = 'V';
+  }
+  else if ((56 > lat) && (lat >= 48)) {
+    LetterDesignator = 'U';
+  }
+  else if ((48 > lat) && (lat >= 40)) {
+    LetterDesignator = 'T';
+  }
+  else if ((40 > lat) && (lat >= 32)) {
+    LetterDesignator = 'S';
+  }
+  else if ((32 > lat) && (lat >= 24)) {
+    LetterDesignator = 'R';
+  }
+  else if ((24 > lat) && (lat >= 16)) {
+    LetterDesignator = 'Q';
+  }
+  else if ((16 > lat) && (lat >= 8)) {
+    LetterDesignator = 'P';
+  }
+  else if ((8 > lat) && (lat >= 0)) {
+    LetterDesignator = 'N';
+  }
+  else if ((0 > lat) && (lat >= -8)) {
+    LetterDesignator = 'M';
+  }
+  else if ((-8 > lat) && (lat >= -16)) {
+    LetterDesignator = 'L';
+  }
+  else if ((-16 > lat) && (lat >= -24)) {
+    LetterDesignator = 'K';
+  }
+  else if ((-24 > lat) && (lat >= -32)) {
+    LetterDesignator = 'J';
+  }
+  else if ((-32 > lat) && (lat >= -40)) {
+    LetterDesignator = 'H';
+  }
+  else if ((-40 > lat) && (lat >= -48)) {
+    LetterDesignator = 'G';
+  }
+  else if ((-48 > lat) && (lat >= -56)) {
+    LetterDesignator = 'F';
+  }
+  else if ((-56 > lat) && (lat >= -64)) {
+    LetterDesignator = 'E';
+  }
+  else if ((-64 > lat) && (lat >= -72)) {
+    LetterDesignator = 'D';
+  }
+  else if ((-72 > lat) && (lat >= -80)) {
+    LetterDesignator = 'C';
+  }
+  return LetterDesignator;
+}
+
+/**
+ * Encodes a UTM location as MGRS string.
+ *
+ * @private
+ * @param {object} utm An object literal with easting, northing,
+ *     zoneLetter, zoneNumber
+ * @param {number} accuracy Accuracy in digits (1-5).
+ * @return {string} MGRS string for the given UTM location.
+ */
+function encode(utm, accuracy) {
+  // prepend with leading zeroes
+  var seasting = "00000" + utm.easting,
+    snorthing = "00000" + utm.northing;
+
+  return utm.zoneNumber + utm.zoneLetter + get100kID(utm.easting, utm.northing, utm.zoneNumber) + seasting.substr(seasting.length - 5, accuracy) + snorthing.substr(snorthing.length - 5, accuracy);
+}
+
+/**
+ * Get the two letter 100k designator for a given UTM easting,
+ * northing and zone number value.
+ *
+ * @private
+ * @param {number} easting
+ * @param {number} northing
+ * @param {number} zoneNumber
+ * @return the two letter 100k designator for the given UTM location.
+ */
+function get100kID(easting, northing, zoneNumber) {
+  var setParm = get100kSetForZone(zoneNumber);
+  var setColumn = Math.floor(easting / 100000);
+  var setRow = Math.floor(northing / 100000) % 20;
+  return getLetter100kID(setColumn, setRow, setParm);
+}
+
+/**
+ * Given a UTM zone number, figure out the MGRS 100K set it is in.
+ *
+ * @private
+ * @param {number} i An UTM zone number.
+ * @return {number} the 100k set the UTM zone is in.
+ */
+function get100kSetForZone(i) {
+  var setParm = i % NUM_100K_SETS;
+  if (setParm === 0) {
+    setParm = NUM_100K_SETS;
+  }
+
+  return setParm;
+}
+
+/**
+ * Get the two-letter MGRS 100k designator given information
+ * translated from the UTM northing, easting and zone number.
+ *
+ * @private
+ * @param {number} column the column index as it relates to the MGRS
+ *        100k set spreadsheet, created from the UTM easting.
+ *        Values are 1-8.
+ * @param {number} row the row index as it relates to the MGRS 100k set
+ *        spreadsheet, created from the UTM northing value. Values
+ *        are from 0-19.
+ * @param {number} parm the set block, as it relates to the MGRS 100k set
+ *        spreadsheet, created from the UTM zone. Values are from
+ *        1-60.
+ * @return two letter MGRS 100k code.
+ */
+function getLetter100kID(column, row, parm) {
+  // colOrigin and rowOrigin are the letters at the origin of the set
+  var index = parm - 1;
+  var colOrigin = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(index);
+  var rowOrigin = SET_ORIGIN_ROW_LETTERS.charCodeAt(index);
+
+  // colInt and rowInt are the letters to build to return
+  var colInt = colOrigin + column - 1;
+  var rowInt = rowOrigin + row;
+  var rollover = false;
+
+  if (colInt > Z) {
+    colInt = colInt - Z + A - 1;
+    rollover = true;
+  }
+
+  if (colInt === I || (colOrigin < I && colInt > I) || ((colInt > I || colOrigin < I) && rollover)) {
+    colInt++;
+  }
+
+  if (colInt === O || (colOrigin < O && colInt > O) || ((colInt > O || colOrigin < O) && rollover)) {
+    colInt++;
+
+    if (colInt === I) {
+      colInt++;
+    }
+  }
+
+  if (colInt > Z) {
+    colInt = colInt - Z + A - 1;
+  }
+
+  if (rowInt > V) {
+    rowInt = rowInt - V + A - 1;
+    rollover = true;
+  }
+  else {
+    rollover = false;
+  }
+
+  if (((rowInt === I) || ((rowOrigin < I) && (rowInt > I))) || (((rowInt > I) || (rowOrigin < I)) && rollover)) {
+    rowInt++;
+  }
+
+  if (((rowInt === O) || ((rowOrigin < O) && (rowInt > O))) || (((rowInt > O) || (rowOrigin < O)) && rollover)) {
+    rowInt++;
+
+    if (rowInt === I) {
+      rowInt++;
+    }
+  }
+
+  if (rowInt > V) {
+    rowInt = rowInt - V + A - 1;
+  }
+
+  var twoLetter = String.fromCharCode(colInt) + String.fromCharCode(rowInt);
+  return twoLetter;
+}
+
+/**
+ * Decode the UTM parameters from a MGRS string.
+ *
+ * @private
+ * @param {string} mgrsString an UPPERCASE coordinate string is expected.
+ * @return {object} An object literal with easting, northing, zoneLetter,
+ *     zoneNumber and accuracy (in meters) properties.
+ */
+function decode(mgrsString) {
+
+  if (mgrsString && mgrsString.length === 0) {
+    throw ("MGRSPoint coverting from nothing");
+  }
+
+  var length = mgrsString.length;
+
+  var hunK = null;
+  var sb = "";
+  var testChar;
+  var i = 0;
+
+  // get Zone number
+  while (!(/[A-Z]/).test(testChar = mgrsString.charAt(i))) {
+    if (i >= 2) {
+      throw ("MGRSPoint bad conversion from: " + mgrsString);
+    }
+    sb += testChar;
+    i++;
+  }
+
+  var zoneNumber = parseInt(sb, 10);
+
+  if (i === 0 || i + 3 > length) {
+    // A good MGRS string has to be 4-5 digits long,
+    // ##AAA/#AAA at least.
+    throw ("MGRSPoint bad conversion from: " + mgrsString);
+  }
+
+  var zoneLetter = mgrsString.charAt(i++);
+
+  // Should we check the zone letter here? Why not.
+  if (zoneLetter <= 'A' || zoneLetter === 'B' || zoneLetter === 'Y' || zoneLetter >= 'Z' || zoneLetter === 'I' || zoneLetter === 'O') {
+    throw ("MGRSPoint zone letter " + zoneLetter + " not handled: " + mgrsString);
+  }
+
+  hunK = mgrsString.substring(i, i += 2);
+
+  var set = get100kSetForZone(zoneNumber);
+
+  var east100k = getEastingFromChar(hunK.charAt(0), set);
+  var north100k = getNorthingFromChar(hunK.charAt(1), set);
+
+  // We have a bug where the northing may be 2000000 too low.
+  // How
+  // do we know when to roll over?
+
+  while (north100k < getMinNorthing(zoneLetter)) {
+    north100k += 2000000;
+  }
+
+  // calculate the char index for easting/northing separator
+  var remainder = length - i;
+
+  if (remainder % 2 !== 0) {
+    throw ("MGRSPoint has to have an even number \nof digits after the zone letter and two 100km letters - front \nhalf for easting meters, second half for \nnorthing meters" + mgrsString);
+  }
+
+  var sep = remainder / 2;
+
+  var sepEasting = 0.0;
+  var sepNorthing = 0.0;
+  var accuracyBonus, sepEastingString, sepNorthingString, easting, northing;
+  if (sep > 0) {
+    accuracyBonus = 100000.0 / Math.pow(10, sep);
+    sepEastingString = mgrsString.substring(i, i + sep);
+    sepEasting = parseFloat(sepEastingString) * accuracyBonus;
+    sepNorthingString = mgrsString.substring(i + sep);
+    sepNorthing = parseFloat(sepNorthingString) * accuracyBonus;
+  }
+
+  easting = sepEasting + east100k;
+  northing = sepNorthing + north100k;
+
+  return {
+    easting: easting,
+    northing: northing,
+    zoneLetter: zoneLetter,
+    zoneNumber: zoneNumber,
+    accuracy: accuracyBonus
+  };
+}
+
+/**
+ * Given the first letter from a two-letter MGRS 100k zone, and given the
+ * MGRS table set for the zone number, figure out the easting value that
+ * should be added to the other, secondary easting value.
+ *
+ * @private
+ * @param {char} e The first letter from a two-letter MGRS 100´k zone.
+ * @param {number} set The MGRS table set for the zone number.
+ * @return {number} The easting value for the given letter and set.
+ */
+function getEastingFromChar(e, set) {
+  // colOrigin is the letter at the origin of the set for the
+  // column
+  var curCol = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(set - 1);
+  var eastingValue = 100000.0;
+  var rewindMarker = false;
+
+  while (curCol !== e.charCodeAt(0)) {
+    curCol++;
+    if (curCol === I) {
+      curCol++;
+    }
+    if (curCol === O) {
+      curCol++;
+    }
+    if (curCol > Z) {
+      if (rewindMarker) {
+        throw ("Bad character: " + e);
+      }
+      curCol = A;
+      rewindMarker = true;
+    }
+    eastingValue += 100000.0;
+  }
+
+  return eastingValue;
+}
+
+/**
+ * Given the second letter from a two-letter MGRS 100k zone, and given the
+ * MGRS table set for the zone number, figure out the northing value that
+ * should be added to the other, secondary northing value. You have to
+ * remember that Northings are determined from the equator, and the vertical
+ * cycle of letters mean a 2000000 additional northing meters. This happens
+ * approx. every 18 degrees of latitude. This method does *NOT* count any
+ * additional northings. You have to figure out how many 2000000 meters need
+ * to be added for the zone letter of the MGRS coordinate.
+ *
+ * @private
+ * @param {char} n Second letter of the MGRS 100k zone
+ * @param {number} set The MGRS table set number, which is dependent on the
+ *     UTM zone number.
+ * @return {number} The northing value for the given letter and set.
+ */
+function getNorthingFromChar(n, set) {
+
+  if (n > 'V') {
+    throw ("MGRSPoint given invalid Northing " + n);
+  }
+
+  // rowOrigin is the letter at the origin of the set for the
+  // column
+  var curRow = SET_ORIGIN_ROW_LETTERS.charCodeAt(set - 1);
+  var northingValue = 0.0;
+  var rewindMarker = false;
+
+  while (curRow !== n.charCodeAt(0)) {
+    curRow++;
+    if (curRow === I) {
+      curRow++;
+    }
+    if (curRow === O) {
+      curRow++;
+    }
+    // fixing a bug making whole application hang in this loop
+    // when 'n' is a wrong character
+    if (curRow > V) {
+      if (rewindMarker) { // making sure that this loop ends
+        throw ("Bad character: " + n);
+      }
+      curRow = A;
+      rewindMarker = true;
+    }
+    northingValue += 100000.0;
+  }
+
+  return northingValue;
+}
+
+/**
+ * The function getMinNorthing returns the minimum northing value of a MGRS
+ * zone.
+ *
+ * Ported from Geotrans' c Lattitude_Band_Value structure table.
+ *
+ * @private
+ * @param {char} zoneLetter The MGRS zone to get the min northing for.
+ * @return {number}
+ */
+function getMinNorthing(zoneLetter) {
+  var northing;
+  switch (zoneLetter) {
+  case 'C':
+    northing = 1100000.0;
+    break;
+  case 'D':
+    northing = 2000000.0;
+    break;
+  case 'E':
+    northing = 2800000.0;
+    break;
+  case 'F':
+    northing = 3700000.0;
+    break;
+  case 'G':
+    northing = 4600000.0;
+    break;
+  case 'H':
+    northing = 5500000.0;
+    break;
+  case 'J':
+    northing = 6400000.0;
+    break;
+  case 'K':
+    northing = 7300000.0;
+    break;
+  case 'L':
+    northing = 8200000.0;
+    break;
+  case 'M':
+    northing = 9100000.0;
+    break;
+  case 'N':
+    northing = 0.0;
+    break;
+  case 'P':
+    northing = 800000.0;
+    break;
+  case 'Q':
+    northing = 1700000.0;
+    break;
+  case 'R':
+    northing = 2600000.0;
+    break;
+  case 'S':
+    northing = 3500000.0;
+    break;
+  case 'T':
+    northing = 4400000.0;
+    break;
+  case 'U':
+    northing = 5300000.0;
+    break;
+  case 'V':
+    northing = 6200000.0;
+    break;
+  case 'W':
+    northing = 7000000.0;
+    break;
+  case 'X':
+    northing = 7900000.0;
+    break;
+  default:
+    northing = -1.0;
+  }
+  if (northing >= 0.0) {
+    return northing;
+  }
+  else {
+    throw ("Invalid zone letter: " + zoneLetter);
+  }
+
+}
+
+},{}],72:[function(require,module,exports){
 // Top level file is just a mixin of submodules & constants
 'use strict';
 
@@ -9922,7 +12814,7 @@ assign(pako, deflate, inflate, constants);
 
 module.exports = pako;
 
-},{"./lib/deflate":68,"./lib/inflate":69,"./lib/utils/common":70,"./lib/zlib/constants":73}],68:[function(require,module,exports){
+},{"./lib/deflate":73,"./lib/inflate":74,"./lib/utils/common":75,"./lib/zlib/constants":78}],73:[function(require,module,exports){
 'use strict';
 
 
@@ -10300,7 +13192,7 @@ exports.deflate = deflate;
 exports.deflateRaw = deflateRaw;
 exports.gzip = gzip;
 
-},{"./utils/common":70,"./utils/strings":71,"./zlib/deflate.js":75,"./zlib/messages":80,"./zlib/zstream":82}],69:[function(require,module,exports){
+},{"./utils/common":75,"./utils/strings":76,"./zlib/deflate.js":80,"./zlib/messages":85,"./zlib/zstream":87}],74:[function(require,module,exports){
 'use strict';
 
 
@@ -10481,6 +13373,10 @@ Inflate.prototype.push = function(data, mode) {
   var status, _mode;
   var next_out_utf8, tail, utf8str;
 
+  // Flag to properly process Z_BUF_ERROR on testing inflate call
+  // when we check that all output data was flushed.
+  var allowBufError = false;
+
   if (this.ended) { return false; }
   _mode = (mode === ~~mode) ? mode : ((mode === true) ? c.Z_FINISH : c.Z_NO_FLUSH);
 
@@ -10505,6 +13401,11 @@ Inflate.prototype.push = function(data, mode) {
     }
 
     status = zlib_inflate.inflate(strm, c.Z_NO_FLUSH);    /* no bad return value */
+
+    if (status === c.Z_BUF_ERROR && allowBufError === true) {
+      status = c.Z_OK;
+      allowBufError = false;
+    }
 
     if (status !== c.Z_STREAM_END && status !== c.Z_OK) {
       this.onEnd(status);
@@ -10534,7 +13435,19 @@ Inflate.prototype.push = function(data, mode) {
         }
       }
     }
-  } while ((strm.avail_in > 0) && status !== c.Z_STREAM_END);
+
+    // When no more input data, we should check that internal inflate buffers
+    // are flushed. The only way to do it when avail_out = 0 - run one more
+    // inflate pass. But if output data not exists, inflate return Z_BUF_ERROR.
+    // Here we set flag to process this error properly.
+    //
+    // NOTE. Deflate does not return error in this case and does not needs such
+    // logic.
+    if (strm.avail_in === 0 && strm.avail_out === 0) {
+      allowBufError = true;
+    }
+
+  } while ((strm.avail_in > 0 || strm.avail_out === 0) && status !== c.Z_STREAM_END);
 
   if (status === c.Z_STREAM_END) {
     _mode = c.Z_FINISH;
@@ -10681,7 +13594,7 @@ exports.inflate = inflate;
 exports.inflateRaw = inflateRaw;
 exports.ungzip  = inflate;
 
-},{"./utils/common":70,"./utils/strings":71,"./zlib/constants":73,"./zlib/gzheader":76,"./zlib/inflate.js":78,"./zlib/messages":80,"./zlib/zstream":82}],70:[function(require,module,exports){
+},{"./utils/common":75,"./utils/strings":76,"./zlib/constants":78,"./zlib/gzheader":81,"./zlib/inflate.js":83,"./zlib/messages":85,"./zlib/zstream":87}],75:[function(require,module,exports){
 'use strict';
 
 
@@ -10785,7 +13698,7 @@ exports.setTyped = function (on) {
 
 exports.setTyped(TYPED_OK);
 
-},{}],71:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 // String encode/decode helpers
 'use strict';
 
@@ -10972,7 +13885,7 @@ exports.utf8border = function(buf, max) {
   return (pos + _utf8len[buf[pos]] > max) ? pos : max;
 };
 
-},{"./common":70}],72:[function(require,module,exports){
+},{"./common":75}],77:[function(require,module,exports){
 'use strict';
 
 // Note: adler32 takes 12% for level 0 and 2% for level 6.
@@ -11006,7 +13919,7 @@ function adler32(adler, buf, len, pos) {
 
 module.exports = adler32;
 
-},{}],73:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 module.exports = {
 
   /* Allowed flush values; see deflate() and inflate() below for details */
@@ -11055,7 +13968,7 @@ module.exports = {
   //Z_NULL:                 null // Use -1 or null inline, depending on var type
 };
 
-},{}],74:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 'use strict';
 
 // Note: we can't get significant speed boost here.
@@ -11098,7 +14011,7 @@ function crc32(crc, buf, len, pos) {
 
 module.exports = crc32;
 
-},{}],75:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 'use strict';
 
 var utils   = require('../utils/common');
@@ -12865,7 +15778,7 @@ exports.deflatePrime = deflatePrime;
 exports.deflateTune = deflateTune;
 */
 
-},{"../utils/common":70,"./adler32":72,"./crc32":74,"./messages":80,"./trees":81}],76:[function(require,module,exports){
+},{"../utils/common":75,"./adler32":77,"./crc32":79,"./messages":85,"./trees":86}],81:[function(require,module,exports){
 'use strict';
 
 
@@ -12907,7 +15820,7 @@ function GZheader() {
 
 module.exports = GZheader;
 
-},{}],77:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 'use strict';
 
 // See state defs from inflate.js
@@ -12962,7 +15875,8 @@ module.exports = function inflate_fast(strm, start) {
   var wsize;                  /* window size or zero if not using window */
   var whave;                  /* valid bytes in the window */
   var wnext;                  /* window write index */
-  var window;                 /* allocated sliding window, if wsize != 0 */
+  // Use `s_window` instead `window`, avoid conflict with instrumentation tools
+  var s_window;               /* allocated sliding window, if wsize != 0 */
   var hold;                   /* local strm.hold */
   var bits;                   /* local strm.bits */
   var lcode;                  /* local strm.lencode */
@@ -12996,7 +15910,7 @@ module.exports = function inflate_fast(strm, start) {
   wsize = state.wsize;
   whave = state.whave;
   wnext = state.wnext;
-  window = state.window;
+  s_window = state.window;
   hold = state.hold;
   bits = state.bits;
   lcode = state.lencode;
@@ -13114,13 +16028,13 @@ module.exports = function inflate_fast(strm, start) {
 //#endif
               }
               from = 0; // window index
-              from_source = window;
+              from_source = s_window;
               if (wnext === 0) {           /* very common case */
                 from += wsize - op;
                 if (op < len) {         /* some from window */
                   len -= op;
                   do {
-                    output[_out++] = window[from++];
+                    output[_out++] = s_window[from++];
                   } while (--op);
                   from = _out - dist;  /* rest from output */
                   from_source = output;
@@ -13132,14 +16046,14 @@ module.exports = function inflate_fast(strm, start) {
                 if (op < len) {         /* some from end of window */
                   len -= op;
                   do {
-                    output[_out++] = window[from++];
+                    output[_out++] = s_window[from++];
                   } while (--op);
                   from = 0;
                   if (wnext < len) {  /* some from start of window */
                     op = wnext;
                     len -= op;
                     do {
-                      output[_out++] = window[from++];
+                      output[_out++] = s_window[from++];
                     } while (--op);
                     from = _out - dist;      /* rest from output */
                     from_source = output;
@@ -13151,7 +16065,7 @@ module.exports = function inflate_fast(strm, start) {
                 if (op < len) {         /* some from window */
                   len -= op;
                   do {
-                    output[_out++] = window[from++];
+                    output[_out++] = s_window[from++];
                   } while (--op);
                   from = _out - dist;  /* rest from output */
                   from_source = output;
@@ -13234,7 +16148,7 @@ module.exports = function inflate_fast(strm, start) {
   return;
 };
 
-},{}],78:[function(require,module,exports){
+},{}],83:[function(require,module,exports){
 'use strict';
 
 
@@ -14739,7 +17653,7 @@ exports.inflateSyncPoint = inflateSyncPoint;
 exports.inflateUndermine = inflateUndermine;
 */
 
-},{"../utils/common":70,"./adler32":72,"./crc32":74,"./inffast":77,"./inftrees":79}],79:[function(require,module,exports){
+},{"../utils/common":75,"./adler32":77,"./crc32":79,"./inffast":82,"./inftrees":84}],84:[function(require,module,exports){
 'use strict';
 
 
@@ -15068,7 +17982,7 @@ module.exports = function inflate_table(type, lens, lens_index, codes, table, ta
   return 0;
 };
 
-},{"../utils/common":70}],80:[function(require,module,exports){
+},{"../utils/common":75}],85:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -15083,7 +17997,7 @@ module.exports = {
   '-6':   'incompatible version' /* Z_VERSION_ERROR (-6) */
 };
 
-},{}],81:[function(require,module,exports){
+},{}],86:[function(require,module,exports){
 'use strict';
 
 
@@ -16284,7 +19198,7 @@ exports._tr_flush_block  = _tr_flush_block;
 exports._tr_tally = _tr_tally;
 exports._tr_align = _tr_align;
 
-},{"../utils/common":70}],82:[function(require,module,exports){
+},{"../utils/common":75}],87:[function(require,module,exports){
 'use strict';
 
 
@@ -16315,832 +19229,7 @@ function ZStream() {
 
 module.exports = ZStream;
 
-},{}],83:[function(require,module,exports){
-'use strict';
-
-module.exports = INTERNAL;
-
-function INTERNAL() {}
-},{}],84:[function(require,module,exports){
-'use strict';
-var Promise = require('./promise');
-var reject = require('./reject');
-var resolve = require('./resolve');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = all;
-function all(iterable) {
-  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
-    return reject(new TypeError('must be an array'));
-  }
-
-  var len = iterable.length;
-  var called = false;
-  if (!len) {
-    return resolve([]);
-  }
-
-  var values = new Array(len);
-  var resolved = 0;
-  var i = -1;
-  var promise = new Promise(INTERNAL);
-  
-  while (++i < len) {
-    allResolver(iterable[i], i);
-  }
-  return promise;
-  function allResolver(value, i) {
-    resolve(value).then(resolveFromAll, function (error) {
-      if (!called) {
-        called = true;
-        handlers.reject(promise, error);
-      }
-    });
-    function resolveFromAll(outValue) {
-      values[i] = outValue;
-      if (++resolved === len & !called) {
-        called = true;
-        handlers.resolve(promise, values);
-      }
-    }
-  }
-}
-},{"./INTERNAL":83,"./handlers":85,"./promise":87,"./reject":90,"./resolve":91}],85:[function(require,module,exports){
-'use strict';
-var tryCatch = require('./tryCatch');
-var resolveThenable = require('./resolveThenable');
-var states = require('./states');
-
-exports.resolve = function (self, value) {
-  var result = tryCatch(getThen, value);
-  if (result.status === 'error') {
-    return exports.reject(self, result.value);
-  }
-  var thenable = result.value;
-
-  if (thenable) {
-    resolveThenable.safely(self, thenable);
-  } else {
-    self.state = states.FULFILLED;
-    self.outcome = value;
-    var i = -1;
-    var len = self.queue.length;
-    while (++i < len) {
-      self.queue[i].callFulfilled(value);
-    }
-  }
-  return self;
-};
-exports.reject = function (self, error) {
-  self.state = states.REJECTED;
-  self.outcome = error;
-  var i = -1;
-  var len = self.queue.length;
-  while (++i < len) {
-    self.queue[i].callRejected(error);
-  }
-  return self;
-};
-
-function getThen(obj) {
-  // Make sure we only access the accessor once as required by the spec
-  var then = obj && obj.then;
-  if (obj && typeof obj === 'object' && typeof then === 'function') {
-    return function appyThen() {
-      then.apply(obj, arguments);
-    };
-  }
-}
-
-},{"./resolveThenable":92,"./states":93,"./tryCatch":94}],86:[function(require,module,exports){
-module.exports = exports = require('./promise');
-
-exports.resolve = require('./resolve');
-exports.reject = require('./reject');
-exports.all = require('./all');
-exports.race = require('./race');
-
-},{"./all":84,"./promise":87,"./race":89,"./reject":90,"./resolve":91}],87:[function(require,module,exports){
-'use strict';
-
-var unwrap = require('./unwrap');
-var INTERNAL = require('./INTERNAL');
-var resolveThenable = require('./resolveThenable');
-var states = require('./states');
-var QueueItem = require('./queueItem');
-
-module.exports = Promise;
-function Promise(resolver) {
-  if (!(this instanceof Promise)) {
-    return new Promise(resolver);
-  }
-  if (typeof resolver !== 'function') {
-    throw new TypeError('resolver must be a function');
-  }
-  this.state = states.PENDING;
-  this.queue = [];
-  this.outcome = void 0;
-  if (resolver !== INTERNAL) {
-    resolveThenable.safely(this, resolver);
-  }
-}
-
-Promise.prototype['catch'] = function (onRejected) {
-  return this.then(null, onRejected);
-};
-Promise.prototype.then = function (onFulfilled, onRejected) {
-  if (typeof onFulfilled !== 'function' && this.state === states.FULFILLED ||
-    typeof onRejected !== 'function' && this.state === states.REJECTED) {
-    return this;
-  }
-  var promise = new Promise(INTERNAL);
-  if (this.state !== states.PENDING) {
-    var resolver = this.state === states.FULFILLED ? onFulfilled : onRejected;
-    unwrap(promise, resolver, this.outcome);
-  } else {
-    this.queue.push(new QueueItem(promise, onFulfilled, onRejected));
-  }
-
-  return promise;
-};
-
-},{"./INTERNAL":83,"./queueItem":88,"./resolveThenable":92,"./states":93,"./unwrap":95}],88:[function(require,module,exports){
-'use strict';
-var handlers = require('./handlers');
-var unwrap = require('./unwrap');
-
-module.exports = QueueItem;
-function QueueItem(promise, onFulfilled, onRejected) {
-  this.promise = promise;
-  if (typeof onFulfilled === 'function') {
-    this.onFulfilled = onFulfilled;
-    this.callFulfilled = this.otherCallFulfilled;
-  }
-  if (typeof onRejected === 'function') {
-    this.onRejected = onRejected;
-    this.callRejected = this.otherCallRejected;
-  }
-}
-QueueItem.prototype.callFulfilled = function (value) {
-  handlers.resolve(this.promise, value);
-};
-QueueItem.prototype.otherCallFulfilled = function (value) {
-  unwrap(this.promise, this.onFulfilled, value);
-};
-QueueItem.prototype.callRejected = function (value) {
-  handlers.reject(this.promise, value);
-};
-QueueItem.prototype.otherCallRejected = function (value) {
-  unwrap(this.promise, this.onRejected, value);
-};
-
-},{"./handlers":85,"./unwrap":95}],89:[function(require,module,exports){
-'use strict';
-var Promise = require('./promise');
-var reject = require('./reject');
-var resolve = require('./resolve');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = race;
-function race(iterable) {
-  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
-    return reject(new TypeError('must be an array'));
-  }
-
-  var len = iterable.length;
-  var called = false;
-  if (!len) {
-    return resolve([]);
-  }
-
-  var i = -1;
-  var promise = new Promise(INTERNAL);
-
-  while (++i < len) {
-    resolver(iterable[i]);
-  }
-  return promise;
-  function resolver(value) {
-    resolve(value).then(function (response) {
-      if (!called) {
-        called = true;
-        handlers.resolve(promise, response);
-      }
-    }, function (error) {
-      if (!called) {
-        called = true;
-        handlers.reject(promise, error);
-      }
-    });
-  }
-}
-
-},{"./INTERNAL":83,"./handlers":85,"./promise":87,"./reject":90,"./resolve":91}],90:[function(require,module,exports){
-'use strict';
-
-var Promise = require('./promise');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = reject;
-
-function reject(reason) {
-	var promise = new Promise(INTERNAL);
-	return handlers.reject(promise, reason);
-}
-},{"./INTERNAL":83,"./handlers":85,"./promise":87}],91:[function(require,module,exports){
-'use strict';
-
-var Promise = require('./promise');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = resolve;
-
-var FALSE = handlers.resolve(new Promise(INTERNAL), false);
-var NULL = handlers.resolve(new Promise(INTERNAL), null);
-var UNDEFINED = handlers.resolve(new Promise(INTERNAL), void 0);
-var ZERO = handlers.resolve(new Promise(INTERNAL), 0);
-var EMPTYSTRING = handlers.resolve(new Promise(INTERNAL), '');
-
-function resolve(value) {
-  if (value) {
-    if (value instanceof Promise) {
-      return value;
-    }
-    return handlers.resolve(new Promise(INTERNAL), value);
-  }
-  var valueType = typeof value;
-  switch (valueType) {
-    case 'boolean':
-      return FALSE;
-    case 'undefined':
-      return UNDEFINED;
-    case 'object':
-      return NULL;
-    case 'number':
-      return ZERO;
-    case 'string':
-      return EMPTYSTRING;
-  }
-}
-},{"./INTERNAL":83,"./handlers":85,"./promise":87}],92:[function(require,module,exports){
-'use strict';
-var handlers = require('./handlers');
-var tryCatch = require('./tryCatch');
-function safelyResolveThenable(self, thenable) {
-  // Either fulfill, reject or reject with error
-  var called = false;
-  function onError(value) {
-    if (called) {
-      return;
-    }
-    called = true;
-    handlers.reject(self, value);
-  }
-
-  function onSuccess(value) {
-    if (called) {
-      return;
-    }
-    called = true;
-    handlers.resolve(self, value);
-  }
-
-  function tryToUnwrap() {
-    thenable(onSuccess, onError);
-  }
-  
-  var result = tryCatch(tryToUnwrap);
-  if (result.status === 'error') {
-    onError(result.value);
-  }
-}
-exports.safely = safelyResolveThenable;
-},{"./handlers":85,"./tryCatch":94}],93:[function(require,module,exports){
-// Lazy man's symbols for states
-
-exports.REJECTED = ['REJECTED'];
-exports.FULFILLED = ['FULFILLED'];
-exports.PENDING = ['PENDING'];
-
-},{}],94:[function(require,module,exports){
-'use strict';
-
-module.exports = tryCatch;
-
-function tryCatch(func, value) {
-  var out = {};
-  try {
-    out.value = func(value);
-    out.status = 'success';
-  } catch (e) {
-    out.status = 'error';
-    out.value = e;
-  }
-  return out;
-}
-},{}],95:[function(require,module,exports){
-'use strict';
-
-var immediate = require('immediate');
-var handlers = require('./handlers');
-module.exports = unwrap;
-
-function unwrap(promise, func, value) {
-  immediate(function () {
-    var returnValue;
-    try {
-      returnValue = func(value);
-    } catch (e) {
-      return handlers.reject(promise, e);
-    }
-    if (returnValue === promise) {
-      handlers.reject(promise, new TypeError('Cannot resolve promise with itself'));
-    } else {
-      handlers.resolve(promise, returnValue);
-    }
-  });
-}
-},{"./handlers":85,"immediate":96}],96:[function(require,module,exports){
-'use strict';
-var types = [
-  require('./nextTick'),
-  require('./mutation.js'),
-  require('./messageChannel'),
-  require('./stateChange'),
-  require('./timeout')
-];
-var draining;
-var queue = [];
-//named nextTick for less confusing stack traces
-function nextTick() {
-  draining = true;
-  var i, oldQueue;
-  var len = queue.length;
-  while (len) {
-    oldQueue = queue;
-    queue = [];
-    i = -1;
-    while (++i < len) {
-      oldQueue[i]();
-    }
-    len = queue.length;
-  }
-  draining = false;
-}
-var scheduleDrain;
-var i = -1;
-var len = types.length;
-while (++ i < len) {
-  if (types[i] && types[i].test && types[i].test()) {
-    scheduleDrain = types[i].install(nextTick);
-    break;
-  }
-}
-module.exports = immediate;
-function immediate(task) {
-  if (queue.push(task) === 1 && !draining) {
-    scheduleDrain();
-  }
-}
-},{"./messageChannel":97,"./mutation.js":98,"./nextTick":6,"./stateChange":99,"./timeout":100}],97:[function(require,module,exports){
-(function (global){
-'use strict';
-
-exports.test = function () {
-  if (global.setImmediate) {
-    // we can only get here in IE10
-    // which doesn't handel postMessage well
-    return false;
-  }
-  return typeof global.MessageChannel !== 'undefined';
-};
-
-exports.install = function (func) {
-  var channel = new global.MessageChannel();
-  channel.port1.onmessage = func;
-  return function () {
-    channel.port2.postMessage(0);
-  };
-};
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],98:[function(require,module,exports){
-(function (global){
-'use strict';
-//based off rsvp https://github.com/tildeio/rsvp.js
-//license https://github.com/tildeio/rsvp.js/blob/master/LICENSE
-//https://github.com/tildeio/rsvp.js/blob/master/lib/rsvp/asap.js
-
-var Mutation = global.MutationObserver || global.WebKitMutationObserver;
-
-exports.test = function () {
-  return Mutation;
-};
-
-exports.install = function (handle) {
-  var called = 0;
-  var observer = new Mutation(handle);
-  var element = global.document.createTextNode('');
-  observer.observe(element, {
-    characterData: true
-  });
-  return function () {
-    element.data = (called = ++called % 2);
-  };
-};
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],99:[function(require,module,exports){
-(function (global){
-'use strict';
-
-exports.test = function () {
-  return 'document' in global && 'onreadystatechange' in global.document.createElement('script');
-};
-
-exports.install = function (handle) {
-  return function () {
-
-    // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
-    // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
-    var scriptEl = global.document.createElement('script');
-    scriptEl.onreadystatechange = function () {
-      handle();
-
-      scriptEl.onreadystatechange = null;
-      scriptEl.parentNode.removeChild(scriptEl);
-      scriptEl = null;
-    };
-    global.document.documentElement.appendChild(scriptEl);
-
-    return handle;
-  };
-};
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],100:[function(require,module,exports){
-'use strict';
-exports.test = function () {
-  return true;
-};
-
-exports.install = function (t) {
-  return function () {
-    setTimeout(t, 0);
-  };
-};
-},{}],101:[function(require,module,exports){
-;(function () { // closure for web browsers
-
-if (typeof module === 'object' && module.exports) {
-  module.exports = LRUCache
-} else {
-  // just set the global for non-node platforms.
-  this.LRUCache = LRUCache
-}
-
-function hOP (obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key)
-}
-
-function naiveLength () { return 1 }
-
-function LRUCache (options) {
-  if (!(this instanceof LRUCache))
-    return new LRUCache(options)
-
-  if (typeof options === 'number')
-    options = { max: options }
-
-  if (!options)
-    options = {}
-
-  this._max = options.max
-  // Kind of weird to have a default max of Infinity, but oh well.
-  if (!this._max || !(typeof this._max === "number") || this._max <= 0 )
-    this._max = Infinity
-
-  this._lengthCalculator = options.length || naiveLength
-  if (typeof this._lengthCalculator !== "function")
-    this._lengthCalculator = naiveLength
-
-  this._allowStale = options.stale || false
-  this._maxAge = options.maxAge || null
-  this._dispose = options.dispose
-  this.reset()
-}
-
-// resize the cache when the max changes.
-Object.defineProperty(LRUCache.prototype, "max",
-  { set : function (mL) {
-      if (!mL || !(typeof mL === "number") || mL <= 0 ) mL = Infinity
-      this._max = mL
-      if (this._length > this._max) trim(this)
-    }
-  , get : function () { return this._max }
-  , enumerable : true
-  })
-
-// resize the cache when the lengthCalculator changes.
-Object.defineProperty(LRUCache.prototype, "lengthCalculator",
-  { set : function (lC) {
-      if (typeof lC !== "function") {
-        this._lengthCalculator = naiveLength
-        this._length = this._itemCount
-        for (var key in this._cache) {
-          this._cache[key].length = 1
-        }
-      } else {
-        this._lengthCalculator = lC
-        this._length = 0
-        for (var key in this._cache) {
-          this._cache[key].length = this._lengthCalculator(this._cache[key].value)
-          this._length += this._cache[key].length
-        }
-      }
-
-      if (this._length > this._max) trim(this)
-    }
-  , get : function () { return this._lengthCalculator }
-  , enumerable : true
-  })
-
-Object.defineProperty(LRUCache.prototype, "length",
-  { get : function () { return this._length }
-  , enumerable : true
-  })
-
-
-Object.defineProperty(LRUCache.prototype, "itemCount",
-  { get : function () { return this._itemCount }
-  , enumerable : true
-  })
-
-LRUCache.prototype.forEach = function (fn, thisp) {
-  thisp = thisp || this
-  var i = 0
-  var itemCount = this._itemCount
-
-  for (var k = this._mru - 1; k >= 0 && i < itemCount; k--) if (this._lruList[k]) {
-    i++
-    var hit = this._lruList[k]
-    if (isStale(this, hit)) {
-      del(this, hit)
-      if (!this._allowStale) hit = undefined
-    }
-    if (hit) {
-      fn.call(thisp, hit.value, hit.key, this)
-    }
-  }
-}
-
-LRUCache.prototype.keys = function () {
-  var keys = new Array(this._itemCount)
-  var i = 0
-  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
-    var hit = this._lruList[k]
-    keys[i++] = hit.key
-  }
-  return keys
-}
-
-LRUCache.prototype.values = function () {
-  var values = new Array(this._itemCount)
-  var i = 0
-  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
-    var hit = this._lruList[k]
-    values[i++] = hit.value
-  }
-  return values
-}
-
-LRUCache.prototype.reset = function () {
-  if (this._dispose && this._cache) {
-    for (var k in this._cache) {
-      this._dispose(k, this._cache[k].value)
-    }
-  }
-
-  this._cache = Object.create(null) // hash of items by key
-  this._lruList = Object.create(null) // list of items in order of use recency
-  this._mru = 0 // most recently used
-  this._lru = 0 // least recently used
-  this._length = 0 // number of items in the list
-  this._itemCount = 0
-}
-
-// Provided for debugging/dev purposes only. No promises whatsoever that
-// this API stays stable.
-LRUCache.prototype.dump = function () {
-  return this._cache
-}
-
-LRUCache.prototype.dumpLru = function () {
-  return this._lruList
-}
-
-LRUCache.prototype.set = function (key, value, maxAge) {
-  maxAge = maxAge || this._maxAge
-  var now = maxAge ? Date.now() : 0
-
-  if (hOP(this._cache, key)) {
-    // dispose of the old one before overwriting
-    if (this._dispose)
-      this._dispose(key, this._cache[key].value)
-
-    this._cache[key].now = now
-    this._cache[key].maxAge = maxAge
-    this._cache[key].value = value
-    this.get(key)
-    return true
-  }
-
-  var len = this._lengthCalculator(value)
-  var hit = new Entry(key, value, this._mru++, len, now, maxAge)
-
-  // oversized objects fall out of cache automatically.
-  if (hit.length > this._max) {
-    if (this._dispose) this._dispose(key, value)
-    return false
-  }
-
-  this._length += hit.length
-  this._lruList[hit.lu] = this._cache[key] = hit
-  this._itemCount ++
-
-  if (this._length > this._max)
-    trim(this)
-
-  return true
-}
-
-LRUCache.prototype.has = function (key) {
-  if (!hOP(this._cache, key)) return false
-  var hit = this._cache[key]
-  if (isStale(this, hit)) {
-    return false
-  }
-  return true
-}
-
-LRUCache.prototype.get = function (key) {
-  return get(this, key, true)
-}
-
-LRUCache.prototype.peek = function (key) {
-  return get(this, key, false)
-}
-
-LRUCache.prototype.pop = function () {
-  var hit = this._lruList[this._lru]
-  del(this, hit)
-  return hit || null
-}
-
-LRUCache.prototype.del = function (key) {
-  del(this, this._cache[key])
-}
-
-function get (self, key, doUse) {
-  var hit = self._cache[key]
-  if (hit) {
-    if (isStale(self, hit)) {
-      del(self, hit)
-      if (!self._allowStale) hit = undefined
-    } else {
-      if (doUse) use(self, hit)
-    }
-    if (hit) hit = hit.value
-  }
-  return hit
-}
-
-function isStale(self, hit) {
-  if (!hit || (!hit.maxAge && !self._maxAge)) return false
-  var stale = false;
-  var diff = Date.now() - hit.now
-  if (hit.maxAge) {
-    stale = diff > hit.maxAge
-  } else {
-    stale = self._maxAge && (diff > self._maxAge)
-  }
-  return stale;
-}
-
-function use (self, hit) {
-  shiftLU(self, hit)
-  hit.lu = self._mru ++
-  self._lruList[hit.lu] = hit
-}
-
-function trim (self) {
-  while (self._lru < self._mru && self._length > self._max)
-    del(self, self._lruList[self._lru])
-}
-
-function shiftLU (self, hit) {
-  delete self._lruList[ hit.lu ]
-  while (self._lru < self._mru && !self._lruList[self._lru]) self._lru ++
-}
-
-function del (self, hit) {
-  if (hit) {
-    if (self._dispose) self._dispose(hit.key, hit.value)
-    self._length -= hit.length
-    self._itemCount --
-    delete self._cache[ hit.key ]
-    shiftLU(self, hit)
-  }
-}
-
-// classy, since V8 prefers predictable objects.
-function Entry (key, value, lu, length, now, maxAge) {
-  this.key = key
-  this.value = value
-  this.lu = lu
-  this.length = length
-  this.now = now
-  if (maxAge) this.maxAge = maxAge
-}
-
-})()
-
-},{}],102:[function(require,module,exports){
-function dbfHeader(buffer){
-	var data = new DataView(buffer);
-	var out = {};
-	out.lastUpdated = new Date(data.getUint8(1,true)+1900,data.getUint8(2,true),data.getUint8(3,true));
-	out.records = data.getUint32(4,true);
-	out.headerLen = data.getUint16(8,true);
-	out.recLen = data.getUint16(10,true);
-	return out;
-}
-
-function dbfRowHeader(buffer){
-	var data = new DataView(buffer);
-	var out = [];
-	var offset = 32;
-	while(true){
-		out.push({
-			name : String.fromCharCode.apply(this,(new Uint8Array(buffer,offset,10))).replace(/\0|\s+$/g,''),
-			dataType : String.fromCharCode(data.getUint8(offset+11)),
-			len : data.getUint8(offset+16),
-			decimal : data.getUint8(offset+17)
-		});
-		if(data.getUint8(offset+32)===13){
-			break;
-		}else{
-			offset+=32;
-		}
-	}
-	return out;
-}
-function rowFuncs(buffer,offset,len,type){
-	var data = (new Uint8Array(buffer,offset,len));
-	var textData = String.fromCharCode.apply(this,data).replace(/\0|\s+$/g,'');
-	switch(type){
-		case 'N':
-		case 'F':
-		case 'O':
-			return parseFloat(textData,10);
-		case 'D':
-			return new Date(textData.slice(0,4), parseInt(textData.slice(4,6),10)-1, textData.slice(6,8));
-		case 'L':
-			return textData.toLowerCase() === 'y' || textData.toLowerCase() === 't';
-		default:
-			return textData;
-	}
-}
-function parseRow(buffer,offset,rowHeaders){
-	var out={};
-	var i = 0;
-	var len = rowHeaders.length;
-	var field;
-	var header;
-	while(i<len){
-		header = rowHeaders[i];
-		field = rowFuncs(buffer,offset,header.len,header.dataType);
-		offset += header.len;
-		if(typeof field !== 'undefined'){
-			out[header.name]=field;
-		}
-		i++;
-	}
-	return out;
-}
-module.exports = function(buffer){
-	var rowHeaders = dbfRowHeader(buffer);
-	var header = dbfHeader(buffer);
-	var offset = ((rowHeaders.length+1)<<5)+2;
-	var recLen = header.recLen;
-	var records = header.records;
-	var out = [];
-	while(records){
-		out.push(parseRow(buffer,offset,rowHeaders));
-		offset += recLen;
-		records--;
-	}
-	return out;
-};
-
-},{}],103:[function(require,module,exports){
+},{}],88:[function(require,module,exports){
 var mgrs = require('mgrs');
 
 function Point(x, y, z) {
@@ -17151,7 +19240,7 @@ function Point(x, y, z) {
     this.x = x[0];
     this.y = x[1];
     this.z = x[2] || 0.0;
-  }else if(typeof x === 'object'){
+  } else if(typeof x === 'object') {
     this.x = x.x;
     this.y = x.y;
     this.z = x.z || 0.0;
@@ -17160,8 +19249,7 @@ function Point(x, y, z) {
     this.x = parseFloat(coords[0], 10);
     this.y = parseFloat(coords[1], 10);
     this.z = parseFloat(coords[2], 10) || 0.0;
-  }
-  else {
+  } else {
     this.x = x;
     this.y = y;
     this.z = z || 0.0;
@@ -17176,7 +19264,8 @@ Point.prototype.toMGRS = function(accuracy) {
   return mgrs.forward([this.x, this.y], accuracy);
 };
 module.exports = Point;
-},{"mgrs":169}],104:[function(require,module,exports){
+
+},{"mgrs":71}],89:[function(require,module,exports){
 var parseCode = require("./parseCode");
 var extend = require('./extend');
 var projections = require('./projections');
@@ -17211,7 +19300,7 @@ Projection.projections = projections;
 Projection.projections.start();
 module.exports = Projection;
 
-},{"./deriveConstants":134,"./extend":135,"./parseCode":139,"./projections":141}],105:[function(require,module,exports){
+},{"./deriveConstants":120,"./extend":121,"./parseCode":125,"./projections":127}],90:[function(require,module,exports){
 module.exports = function(crs, denorm, point) {
   var xin = point.x,
     yin = point.y,
@@ -17264,49 +19353,54 @@ module.exports = function(crs, denorm, point) {
   return point;
 };
 
-},{}],106:[function(require,module,exports){
+},{}],91:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var sign = require('./sign');
 
 module.exports = function(x) {
   return (Math.abs(x) < HALF_PI) ? x : (x - (sign(x) * Math.PI));
 };
-},{"./sign":123}],107:[function(require,module,exports){
+},{"./sign":108}],92:[function(require,module,exports){
 var TWO_PI = Math.PI * 2;
+// SPI is slightly greater than Math.PI, so values that exceed the -180..180
+// degree range by a tiny amount don't get wrapped. This prevents points that
+// have drifted from their original location along the 180th meridian (due to
+// floating point error) from changing their sign.
+var SPI = 3.14159265359;
 var sign = require('./sign');
 
 module.exports = function(x) {
-  return (Math.abs(x) < Math.PI) ? x : (x - (sign(x) * TWO_PI));
+  return (Math.abs(x) <= SPI) ? x : (x - (sign(x) * TWO_PI));
 };
-},{"./sign":123}],108:[function(require,module,exports){
+},{"./sign":108}],93:[function(require,module,exports){
 module.exports = function(x) {
   if (Math.abs(x) > 1) {
     x = (x > 1) ? 1 : -1;
   }
   return Math.asin(x);
 };
-},{}],109:[function(require,module,exports){
+},{}],94:[function(require,module,exports){
 module.exports = function(x) {
   return (1 - 0.25 * x * (1 + x / 16 * (3 + 1.25 * x)));
 };
-},{}],110:[function(require,module,exports){
+},{}],95:[function(require,module,exports){
 module.exports = function(x) {
   return (0.375 * x * (1 + 0.25 * x * (1 + 0.46875 * x)));
 };
-},{}],111:[function(require,module,exports){
+},{}],96:[function(require,module,exports){
 module.exports = function(x) {
   return (0.05859375 * x * x * (1 + 0.75 * x));
 };
-},{}],112:[function(require,module,exports){
+},{}],97:[function(require,module,exports){
 module.exports = function(x) {
   return (x * x * x * (35 / 3072));
 };
-},{}],113:[function(require,module,exports){
+},{}],98:[function(require,module,exports){
 module.exports = function(a, e, sinphi) {
   var temp = e * sinphi;
   return a / Math.sqrt(1 - temp * temp);
 };
-},{}],114:[function(require,module,exports){
+},{}],99:[function(require,module,exports){
 module.exports = function(ml, e0, e1, e2, e3) {
   var phi;
   var dphi;
@@ -17323,7 +19417,7 @@ module.exports = function(ml, e0, e1, e2, e3) {
   //..reportError("IMLFN-CONV:Latitude failed to converge after 15 iterations");
   return NaN;
 };
-},{}],115:[function(require,module,exports){
+},{}],100:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 
 module.exports = function(eccent, q) {
@@ -17356,16 +19450,16 @@ module.exports = function(eccent, q) {
   //console.log("IQSFN-CONV:Latitude failed to converge after 30 iterations");
   return NaN;
 };
-},{}],116:[function(require,module,exports){
+},{}],101:[function(require,module,exports){
 module.exports = function(e0, e1, e2, e3, phi) {
   return (e0 * phi - e1 * Math.sin(2 * phi) + e2 * Math.sin(4 * phi) - e3 * Math.sin(6 * phi));
 };
-},{}],117:[function(require,module,exports){
+},{}],102:[function(require,module,exports){
 module.exports = function(eccent, sinphi, cosphi) {
   var con = eccent * sinphi;
   return cosphi / (Math.sqrt(1 - con * con));
 };
-},{}],118:[function(require,module,exports){
+},{}],103:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 module.exports = function(eccent, ts) {
   var eccnth = 0.5 * eccent;
@@ -17382,7 +19476,7 @@ module.exports = function(eccent, ts) {
   //console.log("phi2z has NoConvergence");
   return -9999;
 };
-},{}],119:[function(require,module,exports){
+},{}],104:[function(require,module,exports){
 var C00 = 1;
 var C02 = 0.25;
 var C04 = 0.046875;
@@ -17407,7 +19501,7 @@ module.exports = function(es) {
   en[4] = t * es * C88;
   return en;
 };
-},{}],120:[function(require,module,exports){
+},{}],105:[function(require,module,exports){
 var pj_mlfn = require("./pj_mlfn");
 var EPSLN = 1.0e-10;
 var MAX_ITER = 20;
@@ -17428,13 +19522,13 @@ module.exports = function(arg, es, en) {
   //..reportError("cass:pj_inv_mlfn: Convergence error");
   return phi;
 };
-},{"./pj_mlfn":121}],121:[function(require,module,exports){
+},{"./pj_mlfn":106}],106:[function(require,module,exports){
 module.exports = function(phi, sphi, cphi, en) {
   cphi *= sphi;
   sphi *= sphi;
   return (en[0] * phi - cphi * (en[1] + sphi * (en[2] + sphi * (en[3] + sphi * en[4]))));
 };
-},{}],122:[function(require,module,exports){
+},{}],107:[function(require,module,exports){
 module.exports = function(eccent, sinphi) {
   var con;
   if (eccent > 1.0e-7) {
@@ -17445,15 +19539,15 @@ module.exports = function(eccent, sinphi) {
     return (2 * sinphi);
   }
 };
-},{}],123:[function(require,module,exports){
+},{}],108:[function(require,module,exports){
 module.exports = function(x) {
   return x<0 ? -1 : 1;
 };
-},{}],124:[function(require,module,exports){
+},{}],109:[function(require,module,exports){
 module.exports = function(esinp, exp) {
   return (Math.pow((1 - esinp) / (1 + esinp), exp));
 };
-},{}],125:[function(require,module,exports){
+},{}],110:[function(require,module,exports){
 module.exports = function (array){
   var out = {
     x: array[0],
@@ -17467,7 +19561,7 @@ module.exports = function (array){
   }
   return out;
 };
-},{}],126:[function(require,module,exports){
+},{}],111:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 
 module.exports = function(eccent, phi, sinphi) {
@@ -17476,7 +19570,7 @@ module.exports = function(eccent, phi, sinphi) {
   con = Math.pow(((1 - con) / (1 + con)), com);
   return (Math.tan(0.5 * (HALF_PI - phi)) / con);
 };
-},{}],127:[function(require,module,exports){
+},{}],112:[function(require,module,exports){
 exports.wgs84 = {
   towgs84: "0,0,0",
   ellipse: "WGS84",
@@ -17557,7 +19651,7 @@ exports.rnb72 = {
   ellipse: "intl",
   datumName: "Reseau National Belge 1972"
 };
-},{}],128:[function(require,module,exports){
+},{}],113:[function(require,module,exports){
 exports.MERIT = {
   a: 6378137.0,
   rf: 298.257,
@@ -17773,7 +19867,7 @@ exports.sphere = {
   b: 6370997.0,
   ellipseName: "Normal Sphere (r=6370997)"
 };
-},{}],129:[function(require,module,exports){
+},{}],114:[function(require,module,exports){
 exports.greenwich = 0.0; //"0dE",
 exports.lisbon = -9.131906111111; //"9d07'54.862\"W",
 exports.paris = 2.337229166667; //"2d20'14.025\"E",
@@ -17787,7 +19881,11 @@ exports.brussels = 4.367975; //"4d22'4.71\"E",
 exports.stockholm = 18.058277777778; //"18d3'29.8\"E",
 exports.athens = 23.7163375; //"23d42'58.815\"E",
 exports.oslo = 10.722916666667; //"10d43'22.5\"E"
-},{}],130:[function(require,module,exports){
+},{}],115:[function(require,module,exports){
+exports.ft = {to_meter: 0.3048};
+exports['us-ft'] = {to_meter: 1200 / 3937};
+
+},{}],116:[function(require,module,exports){
 var proj = require('./Proj');
 var transform = require('./transform');
 var wgs84 = proj('WGS84');
@@ -17852,7 +19950,7 @@ function proj4(fromProj, toProj, coord) {
   }
 }
 module.exports = proj4;
-},{"./Proj":104,"./transform":167}],131:[function(require,module,exports){
+},{"./Proj":89,"./transform":153}],117:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var PJD_3PARAM = 1;
 var PJD_7PARAM = 2;
@@ -17873,23 +19971,23 @@ var datum = function(proj) {
   if (proj.datumCode && proj.datumCode === 'none') {
     this.datum_type = PJD_NODATUM;
   }
+
   if (proj.datum_params) {
-    for (var i = 0; i < proj.datum_params.length; i++) {
-      proj.datum_params[i] = parseFloat(proj.datum_params[i]);
-    }
-    if (proj.datum_params[0] !== 0 || proj.datum_params[1] !== 0 || proj.datum_params[2] !== 0) {
+    this.datum_params = proj.datum_params.map(parseFloat);
+    if (this.datum_params[0] !== 0 || this.datum_params[1] !== 0 || this.datum_params[2] !== 0) {
       this.datum_type = PJD_3PARAM;
     }
-    if (proj.datum_params.length > 3) {
-      if (proj.datum_params[3] !== 0 || proj.datum_params[4] !== 0 || proj.datum_params[5] !== 0 || proj.datum_params[6] !== 0) {
+    if (this.datum_params.length > 3) {
+      if (this.datum_params[3] !== 0 || this.datum_params[4] !== 0 || this.datum_params[5] !== 0 || this.datum_params[6] !== 0) {
         this.datum_type = PJD_7PARAM;
-        proj.datum_params[3] *= SEC_TO_RAD;
-        proj.datum_params[4] *= SEC_TO_RAD;
-        proj.datum_params[5] *= SEC_TO_RAD;
-        proj.datum_params[6] = (proj.datum_params[6] / 1000000.0) + 1.0;
+        this.datum_params[3] *= SEC_TO_RAD;
+        this.datum_params[4] *= SEC_TO_RAD;
+        this.datum_params[5] *= SEC_TO_RAD;
+        this.datum_params[6] = (this.datum_params[6] / 1000000.0) + 1.0;
       }
     }
   }
+
   // DGR 2011-03-21 : nadgrids support
   this.datum_type = proj.grids ? PJD_GRIDSHIFT : this.datum_type;
 
@@ -17897,7 +19995,6 @@ var datum = function(proj) {
   this.b = proj.b;
   this.es = proj.es;
   this.ep2 = proj.ep2;
-  this.datum_params = proj.datum_params;
   if (this.datum_type === PJD_GRIDSHIFT) {
     this.grids = proj.grids;
   }
@@ -18258,7 +20355,7 @@ datum.prototype = {
 */
 module.exports = datum;
 
-},{}],132:[function(require,module,exports){
+},{}],118:[function(require,module,exports){
 var PJD_3PARAM = 1;
 var PJD_7PARAM = 2;
 var PJD_GRIDSHIFT = 3;
@@ -18359,7 +20456,7 @@ module.exports = function(source, dest, point) {
 };
 
 
-},{}],133:[function(require,module,exports){
+},{}],119:[function(require,module,exports){
 var globals = require('./global');
 var parseProj = require('./projString');
 var wkt = require('./wkt');
@@ -18368,11 +20465,16 @@ function defs(name) {
   /*global console*/
   var that = this;
   if (arguments.length === 2) {
-    if (arguments[1][0] === '+') {
-      defs[name] = parseProj(arguments[1]);
-    }
-    else {
-      defs[name] = wkt(arguments[1]);
+    var def = arguments[1];
+    if (typeof def === 'string') {
+      if (def.charAt(0) === '+') {
+        defs[name] = parseProj(arguments[1]);
+      }
+      else {
+        defs[name] = wkt(arguments[1]);
+      }
+    } else {
+      defs[name] = def;
     }
   }
   else if (arguments.length === 1) {
@@ -18387,7 +20489,9 @@ function defs(name) {
       });
     }
     else if (typeof name === 'string') {
-
+      if (name in defs) {
+        return defs[name];
+      }
     }
     else if ('EPSG' in name) {
       defs['EPSG:' + name.EPSG] = name;
@@ -18409,7 +20513,7 @@ function defs(name) {
 globals(defs);
 module.exports = defs;
 
-},{"./global":136,"./projString":140,"./wkt":168}],134:[function(require,module,exports){
+},{"./global":122,"./projString":126,"./wkt":154}],120:[function(require,module,exports){
 var Datum = require('./constants/Datum');
 var Ellipsoid = require('./constants/Ellipsoid');
 var extend = require('./extend');
@@ -18461,10 +20565,13 @@ module.exports = function(json) {
     json.axis = "enu";
   }
 
-  json.datum = datum(json);
+  if (!json.datum) {
+    json.datum = datum(json);
+  }
   return json;
 };
-},{"./constants/Datum":127,"./constants/Ellipsoid":128,"./datum":131,"./extend":135}],135:[function(require,module,exports){
+
+},{"./constants/Datum":112,"./constants/Ellipsoid":113,"./datum":117,"./extend":121}],121:[function(require,module,exports){
 module.exports = function(destination, source) {
   destination = destination || {};
   var value, property;
@@ -18480,20 +20587,20 @@ module.exports = function(destination, source) {
   return destination;
 };
 
-},{}],136:[function(require,module,exports){
+},{}],122:[function(require,module,exports){
 module.exports = function(defs) {
-  defs('WGS84', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
   defs('EPSG:4326', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
   defs('EPSG:4269', "+title=NAD83 (long/lat) +proj=longlat +a=6378137.0 +b=6356752.31414036 +ellps=GRS80 +datum=NAD83 +units=degrees");
   defs('EPSG:3857', "+title=WGS 84 / Pseudo-Mercator +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +no_defs");
 
+  defs.WGS84 = defs['EPSG:4326'];
   defs['EPSG:3785'] = defs['EPSG:3857']; // maintain backward compat, official code is 3857
   defs.GOOGLE = defs['EPSG:3857'];
   defs['EPSG:900913'] = defs['EPSG:3857'];
   defs['EPSG:102113'] = defs['EPSG:3857'];
 };
 
-},{}],137:[function(require,module,exports){
+},{}],123:[function(require,module,exports){
 var projs = [
   require('./projections/tmerc'),
   require('./projections/utm'),
@@ -18523,7 +20630,7 @@ module.exports = function(proj4){
     proj4.Proj.projections.add(proj);
   });
 };
-},{"./projections/aea":142,"./projections/aeqd":143,"./projections/cass":144,"./projections/cea":145,"./projections/eqc":146,"./projections/eqdc":147,"./projections/gnom":149,"./projections/krovak":150,"./projections/laea":151,"./projections/lcc":152,"./projections/mill":155,"./projections/moll":156,"./projections/nzmg":157,"./projections/omerc":158,"./projections/poly":159,"./projections/sinu":160,"./projections/somerc":161,"./projections/stere":162,"./projections/sterea":163,"./projections/tmerc":164,"./projections/utm":165,"./projections/vandg":166}],138:[function(require,module,exports){
+},{"./projections/aea":128,"./projections/aeqd":129,"./projections/cass":130,"./projections/cea":131,"./projections/eqc":132,"./projections/eqdc":133,"./projections/gnom":135,"./projections/krovak":136,"./projections/laea":137,"./projections/lcc":138,"./projections/mill":141,"./projections/moll":142,"./projections/nzmg":143,"./projections/omerc":144,"./projections/poly":145,"./projections/sinu":146,"./projections/somerc":147,"./projections/stere":148,"./projections/sterea":149,"./projections/tmerc":150,"./projections/utm":151,"./projections/vandg":152}],124:[function(require,module,exports){
 var proj4 = require('./core');
 proj4.defaultDatum = 'WGS84'; //default datum
 proj4.Proj = require('./Proj');
@@ -18536,7 +20643,7 @@ proj4.mgrs = require('mgrs');
 proj4.version = require('../package.json').version;
 require('./includedProjections')(proj4);
 module.exports = proj4;
-},{"../package.json":170,"./Point":103,"./Proj":104,"./common/toPoint":125,"./core":130,"./defs":133,"./includedProjections":137,"./transform":167,"mgrs":169}],139:[function(require,module,exports){
+},{"../package.json":155,"./Point":88,"./Proj":89,"./common/toPoint":110,"./core":116,"./defs":119,"./includedProjections":123,"./transform":153,"mgrs":71}],125:[function(require,module,exports){
 var defs = require('./defs');
 var wkt = require('./wkt');
 var projStr = require('./projString');
@@ -18573,12 +20680,13 @@ function parse(code){
 }
 
 module.exports = parse;
-},{"./defs":133,"./projString":140,"./wkt":168}],140:[function(require,module,exports){
+},{"./defs":119,"./projString":126,"./wkt":154}],126:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var PrimeMeridian = require('./constants/PrimeMeridian');
+var units = require('./constants/units');
+
 module.exports = function(defData) {
   var self = {};
-
   var paramObj = {};
   defData.split("+").map(function(v) {
     return v.trim();
@@ -18594,7 +20702,7 @@ module.exports = function(defData) {
     proj: 'projName',
     datum: 'datumCode',
     rf: function(v) {
-      self.rf = parseFloat(v, 10);
+      self.rf = parseFloat(v);
     },
     lat_0: function(v) {
       self.lat0 = v * D2R;
@@ -18624,16 +20732,22 @@ module.exports = function(defData) {
       self.longc = v * D2R;
     },
     x_0: function(v) {
-      self.x0 = parseFloat(v, 10);
+      self.x0 = parseFloat(v);
     },
     y_0: function(v) {
-      self.y0 = parseFloat(v, 10);
+      self.y0 = parseFloat(v);
     },
     k_0: function(v) {
-      self.k0 = parseFloat(v, 10);
+      self.k0 = parseFloat(v);
     },
     k: function(v) {
-      self.k0 = parseFloat(v, 10);
+      self.k0 = parseFloat(v);
+    },
+    a: function(v) {
+      self.a = parseFloat(v);
+    },
+    b: function(v) {
+      self.b = parseFloat(v);
     },
     r_a: function() {
       self.R_A = true;
@@ -18646,17 +20760,23 @@ module.exports = function(defData) {
     },
     towgs84: function(v) {
       self.datum_params = v.split(",").map(function(a) {
-        return parseFloat(a, 10);
+        return parseFloat(a);
       });
     },
     to_meter: function(v) {
-      self.to_meter = parseFloat(v, 10);
+      self.to_meter = parseFloat(v);
+    },
+    units: function(v) {
+      self.units = v;
+      if (units[v]) {
+        self.to_meter = units[v].to_meter;
+      }
     },
     from_greenwich: function(v) {
       self.from_greenwich = v * D2R;
     },
     pm: function(v) {
-      self.from_greenwich = (PrimeMeridian[v] ? PrimeMeridian[v] : parseFloat(v, 10)) * D2R;
+      self.from_greenwich = (PrimeMeridian[v] ? PrimeMeridian[v] : parseFloat(v)) * D2R;
     },
     nadgrids: function(v) {
       if (v === '@null') {
@@ -18694,7 +20814,7 @@ module.exports = function(defData) {
   return self;
 };
 
-},{"./constants/PrimeMeridian":129}],141:[function(require,module,exports){
+},{"./constants/PrimeMeridian":114,"./constants/units":115}],127:[function(require,module,exports){
 var projs = [
   require('./projections/merc'),
   require('./projections/longlat')
@@ -18730,7 +20850,7 @@ exports.start = function() {
   projs.forEach(add);
 };
 
-},{"./projections/longlat":153,"./projections/merc":154}],142:[function(require,module,exports){
+},{"./projections/longlat":139,"./projections/merc":140}],128:[function(require,module,exports){
 var EPSLN = 1.0e-10;
 var msfnz = require('../common/msfnz');
 var qsfnz = require('../common/qsfnz');
@@ -18853,7 +20973,7 @@ exports.phi1z = function(eccent, qs) {
 };
 exports.names = ["Albers_Conic_Equal_Area", "Albers", "aea"];
 
-},{"../common/adjust_lon":107,"../common/asinz":108,"../common/msfnz":117,"../common/qsfnz":122}],143:[function(require,module,exports){
+},{"../common/adjust_lon":92,"../common/asinz":93,"../common/msfnz":102,"../common/qsfnz":107}],129:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
@@ -19052,7 +21172,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Azimuthal_Equidistant", "aeqd"];
 
-},{"../common/adjust_lon":107,"../common/asinz":108,"../common/e0fn":109,"../common/e1fn":110,"../common/e2fn":111,"../common/e3fn":112,"../common/gN":113,"../common/imlfn":114,"../common/mlfn":116}],144:[function(require,module,exports){
+},{"../common/adjust_lon":92,"../common/asinz":93,"../common/e0fn":94,"../common/e1fn":95,"../common/e2fn":96,"../common/e3fn":97,"../common/gN":98,"../common/imlfn":99,"../common/mlfn":101}],130:[function(require,module,exports){
 var mlfn = require('../common/mlfn');
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
@@ -19156,7 +21276,7 @@ exports.inverse = function(p) {
 
 };
 exports.names = ["Cassini", "Cassini_Soldner", "cass"];
-},{"../common/adjust_lat":106,"../common/adjust_lon":107,"../common/e0fn":109,"../common/e1fn":110,"../common/e2fn":111,"../common/e3fn":112,"../common/gN":113,"../common/imlfn":114,"../common/mlfn":116}],145:[function(require,module,exports){
+},{"../common/adjust_lat":91,"../common/adjust_lon":92,"../common/e0fn":94,"../common/e1fn":95,"../common/e2fn":96,"../common/e3fn":97,"../common/gN":98,"../common/imlfn":99,"../common/mlfn":101}],131:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var qsfnz = require('../common/qsfnz');
 var msfnz = require('../common/msfnz');
@@ -19221,7 +21341,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["cea"];
 
-},{"../common/adjust_lon":107,"../common/iqsfnz":115,"../common/msfnz":117,"../common/qsfnz":122}],146:[function(require,module,exports){
+},{"../common/adjust_lon":92,"../common/iqsfnz":100,"../common/msfnz":102,"../common/qsfnz":107}],132:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var adjust_lat = require('../common/adjust_lat');
 exports.init = function() {
@@ -19264,7 +21384,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Equirectangular", "Equidistant_Cylindrical", "eqc"];
 
-},{"../common/adjust_lat":106,"../common/adjust_lon":107}],147:[function(require,module,exports){
+},{"../common/adjust_lat":91,"../common/adjust_lon":92}],133:[function(require,module,exports){
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
 var e2fn = require('../common/e2fn');
@@ -19376,7 +21496,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Equidistant_Conic", "eqdc"];
 
-},{"../common/adjust_lat":106,"../common/adjust_lon":107,"../common/e0fn":109,"../common/e1fn":110,"../common/e2fn":111,"../common/e3fn":112,"../common/imlfn":114,"../common/mlfn":116,"../common/msfnz":117}],148:[function(require,module,exports){
+},{"../common/adjust_lat":91,"../common/adjust_lon":92,"../common/e0fn":94,"../common/e1fn":95,"../common/e2fn":96,"../common/e3fn":97,"../common/imlfn":99,"../common/mlfn":101,"../common/msfnz":102}],134:[function(require,module,exports){
 var FORTPI = Math.PI/4;
 var srat = require('../common/srat');
 var HALF_PI = Math.PI/2;
@@ -19423,7 +21543,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["gauss"];
 
-},{"../common/srat":124}],149:[function(require,module,exports){
+},{"../common/srat":109}],135:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var EPSLN = 1.0e-10;
 var asinz = require('../common/asinz');
@@ -19524,7 +21644,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["gnom"];
 
-},{"../common/adjust_lon":107,"../common/asinz":108}],150:[function(require,module,exports){
+},{"../common/adjust_lon":92,"../common/asinz":93}],136:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 exports.init = function() {
   this.a = 6377397.155;
@@ -19624,7 +21744,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Krovak", "krovak"];
 
-},{"../common/adjust_lon":107}],151:[function(require,module,exports){
+},{"../common/adjust_lon":92}],137:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var FORTPI = Math.PI/4;
 var EPSLN = 1.0e-10;
@@ -19914,7 +22034,7 @@ exports.authlat = function(beta, APA) {
 };
 exports.names = ["Lambert Azimuthal Equal Area", "Lambert_Azimuthal_Equal_Area", "laea"];
 
-},{"../common/adjust_lon":107,"../common/qsfnz":122}],152:[function(require,module,exports){
+},{"../common/adjust_lon":92,"../common/qsfnz":107}],138:[function(require,module,exports){
 var EPSLN = 1.0e-10;
 var msfnz = require('../common/msfnz');
 var tsfnz = require('../common/tsfnz');
@@ -20051,7 +22171,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Lambert Tangential Conformal Conic Projection", "Lambert_Conformal_Conic", "Lambert_Conformal_Conic_2SP", "lcc"];
 
-},{"../common/adjust_lon":107,"../common/msfnz":117,"../common/phi2z":118,"../common/sign":123,"../common/tsfnz":126}],153:[function(require,module,exports){
+},{"../common/adjust_lon":92,"../common/msfnz":102,"../common/phi2z":103,"../common/sign":108,"../common/tsfnz":111}],139:[function(require,module,exports){
 exports.init = function() {
   //no-op for longlat
 };
@@ -20063,7 +22183,7 @@ exports.forward = identity;
 exports.inverse = identity;
 exports.names = ["longlat", "identity"];
 
-},{}],154:[function(require,module,exports){
+},{}],140:[function(require,module,exports){
 var msfnz = require('../common/msfnz');
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
@@ -20162,7 +22282,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Mercator", "Popular Visualisation Pseudo Mercator", "Mercator_1SP", "Mercator_Auxiliary_Sphere", "merc"];
 
-},{"../common/adjust_lon":107,"../common/msfnz":117,"../common/phi2z":118,"../common/tsfnz":126}],155:[function(require,module,exports){
+},{"../common/adjust_lon":92,"../common/msfnz":102,"../common/phi2z":103,"../common/tsfnz":111}],141:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 /*
   reference
@@ -20209,7 +22329,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Miller_Cylindrical", "mill"];
 
-},{"../common/adjust_lon":107}],156:[function(require,module,exports){
+},{"../common/adjust_lon":92}],142:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var EPSLN = 1.0e-10;
 exports.init = function() {};
@@ -20288,7 +22408,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Mollweide", "moll"];
 
-},{"../common/adjust_lon":107}],157:[function(require,module,exports){
+},{"../common/adjust_lon":92}],143:[function(require,module,exports){
 var SEC_TO_RAD = 4.84813681109535993589914102357e-6;
 /*
   reference
@@ -20508,7 +22628,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["New_Zealand_Map_Grid", "nzmg"];
-},{}],158:[function(require,module,exports){
+},{}],144:[function(require,module,exports){
 var tsfnz = require('../common/tsfnz');
 var adjust_lon = require('../common/adjust_lon');
 var phi2z = require('../common/phi2z');
@@ -20677,7 +22797,7 @@ exports.inverse = function(p) {
 };
 
 exports.names = ["Hotine_Oblique_Mercator", "Hotine Oblique Mercator", "Hotine_Oblique_Mercator_Azimuth_Natural_Origin", "Hotine_Oblique_Mercator_Azimuth_Center", "omerc"];
-},{"../common/adjust_lon":107,"../common/phi2z":118,"../common/tsfnz":126}],159:[function(require,module,exports){
+},{"../common/adjust_lon":92,"../common/phi2z":103,"../common/tsfnz":111}],145:[function(require,module,exports){
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
 var e2fn = require('../common/e2fn');
@@ -20806,7 +22926,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Polyconic", "poly"];
-},{"../common/adjust_lat":106,"../common/adjust_lon":107,"../common/e0fn":109,"../common/e1fn":110,"../common/e2fn":111,"../common/e3fn":112,"../common/gN":113,"../common/mlfn":116}],160:[function(require,module,exports){
+},{"../common/adjust_lat":91,"../common/adjust_lon":92,"../common/e0fn":94,"../common/e1fn":95,"../common/e2fn":96,"../common/e3fn":97,"../common/gN":98,"../common/mlfn":101}],146:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var adjust_lat = require('../common/adjust_lat');
 var pj_enfn = require('../common/pj_enfn');
@@ -20913,7 +23033,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Sinusoidal", "sinu"];
-},{"../common/adjust_lat":106,"../common/adjust_lon":107,"../common/asinz":108,"../common/pj_enfn":119,"../common/pj_inv_mlfn":120,"../common/pj_mlfn":121}],161:[function(require,module,exports){
+},{"../common/adjust_lat":91,"../common/adjust_lon":92,"../common/asinz":93,"../common/pj_enfn":104,"../common/pj_inv_mlfn":105,"../common/pj_mlfn":106}],147:[function(require,module,exports){
 /*
   references:
     Formules et constantes pour le Calcul pour la
@@ -20995,7 +23115,7 @@ exports.inverse = function(p) {
 
 exports.names = ["somerc"];
 
-},{}],162:[function(require,module,exports){
+},{}],148:[function(require,module,exports){
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
 var sign = require('../common/sign');
@@ -21161,8 +23281,9 @@ exports.inverse = function(p) {
   return p;
 
 };
-exports.names = ["stere"];
-},{"../common/adjust_lon":107,"../common/msfnz":117,"../common/phi2z":118,"../common/sign":123,"../common/tsfnz":126}],163:[function(require,module,exports){
+exports.names = ["stere", "Stereographic_South_Pole", "Polar Stereographic (variant B)"];
+
+},{"../common/adjust_lon":92,"../common/msfnz":102,"../common/phi2z":103,"../common/sign":108,"../common/tsfnz":111}],149:[function(require,module,exports){
 var gauss = require('./gauss');
 var adjust_lon = require('../common/adjust_lon');
 exports.init = function() {
@@ -21221,7 +23342,7 @@ exports.inverse = function(p) {
 
 exports.names = ["Stereographic_North_Pole", "Oblique_Stereographic", "Polar_Stereographic", "sterea","Oblique Stereographic Alternative"];
 
-},{"../common/adjust_lon":107,"./gauss":148}],164:[function(require,module,exports){
+},{"../common/adjust_lon":92,"./gauss":134}],150:[function(require,module,exports){
 var e0fn = require('../common/e0fn');
 var e1fn = require('../common/e1fn');
 var e2fn = require('../common/e2fn');
@@ -21358,7 +23479,7 @@ exports.inverse = function(p) {
 };
 exports.names = ["Transverse_Mercator", "Transverse Mercator", "tmerc"];
 
-},{"../common/adjust_lon":107,"../common/asinz":108,"../common/e0fn":109,"../common/e1fn":110,"../common/e2fn":111,"../common/e3fn":112,"../common/mlfn":116,"../common/sign":123}],165:[function(require,module,exports){
+},{"../common/adjust_lon":92,"../common/asinz":93,"../common/e0fn":94,"../common/e1fn":95,"../common/e2fn":96,"../common/e3fn":97,"../common/mlfn":101,"../common/sign":108}],151:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var tmerc = require('./tmerc');
 exports.dependsOn = 'tmerc';
@@ -21378,7 +23499,7 @@ exports.init = function() {
 };
 exports.names = ["Universal Transverse Mercator System", "utm"];
 
-},{"./tmerc":164}],166:[function(require,module,exports){
+},{"./tmerc":150}],152:[function(require,module,exports){
 var adjust_lon = require('../common/adjust_lon');
 var HALF_PI = Math.PI/2;
 var EPSLN = 1.0e-10;
@@ -21499,7 +23620,7 @@ exports.inverse = function(p) {
   return p;
 };
 exports.names = ["Van_der_Grinten_I", "VanDerGrinten", "vandg"];
-},{"../common/adjust_lon":107,"../common/asinz":108}],167:[function(require,module,exports){
+},{"../common/adjust_lon":92,"../common/asinz":93}],153:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var R2D = 57.29577951308232088;
 var PJD_3PARAM = 1;
@@ -21572,7 +23693,7 @@ module.exports = function transform(source, dest, point) {
 
   return point;
 };
-},{"./Proj":104,"./adjust_axis":105,"./common/toPoint":125,"./datum_transform":132}],168:[function(require,module,exports){
+},{"./Proj":89,"./adjust_axis":90,"./common/toPoint":110,"./datum_transform":118}],154:[function(require,module,exports){
 var D2R = 0.01745329251994329577;
 var extend = require('./extend');
 
@@ -21686,7 +23807,13 @@ function cleanWKT(wkt) {
       wkt.units = 'meter';
     }
     if (wkt.UNIT.convert) {
-      wkt.to_meter = parseFloat(wkt.UNIT.convert, 10);
+      if (wkt.type === 'GEOGCS') {
+        if (wkt.DATUM && wkt.DATUM.SPHEROID) {
+          wkt.to_meter = parseFloat(wkt.UNIT.convert, 10)*wkt.DATUM.SPHEROID.a;
+        }
+      } else {
+        wkt.to_meter = parseFloat(wkt.UNIT.convert, 10);
+      }
     }
   }
 
@@ -21730,6 +23857,9 @@ function cleanWKT(wkt) {
       wkt.a = wkt.GEOGCS.DATUM.SPHEROID.a;
       wkt.rf = parseFloat(wkt.GEOGCS.DATUM.SPHEROID.rf, 10);
     }
+    if (~wkt.datumCode.indexOf('osgb_1936')) {
+      wkt.datumCode = "osgb36";
+    }
   }
   if (wkt.b && !isFinite(wkt.b)) {
     wkt.b = wkt.a;
@@ -21749,6 +23879,7 @@ function cleanWKT(wkt) {
     ['false_northing', 'False_Northing'],
     ['central_meridian', 'Central_Meridian'],
     ['latitude_of_origin', 'Latitude_Of_Origin'],
+    ['latitude_of_origin', 'Central_Parallel'],
     ['scale_factor', 'Scale_Factor'],
     ['k0', 'scale_factor'],
     ['latitude_of_center', 'Latitude_of_center'],
@@ -21766,12 +23897,16 @@ function cleanWKT(wkt) {
     ['srsCode', 'name']
   ];
   list.forEach(renamer);
-  if (!wkt.long0 && wkt.longc && (wkt.PROJECTION === 'Albers_Conic_Equal_Area' || wkt.PROJECTION === "Lambert_Azimuthal_Equal_Area")) {
+  if (!wkt.long0 && wkt.longc && (wkt.projName === 'Albers_Conic_Equal_Area' || wkt.projName === "Lambert_Azimuthal_Equal_Area")) {
     wkt.long0 = wkt.longc;
+  }
+  if (!wkt.lat_ts && wkt.lat1 && (wkt.projName === 'Stereographic_South_Pole' || wkt.projName === 'Polar Stereographic (variant B)')) {
+    wkt.lat0 = d2r(wkt.lat1 > 0 ? 90 : -90);
+    wkt.lat_ts = wkt.lat1;
   }
 }
 module.exports = function(wkt, self) {
-  var lisp = JSON.parse(("," + wkt).replace(/\s*\,\s*([A-Z_0-9]+?)(\[)/g, ',["$1",').slice(1).replace(/\s*\,\s*([A-Z_0-9]+?)\]/g, ',"$1"]'));
+  var lisp = JSON.parse(("," + wkt).replace(/\s*\,\s*([A-Z_0-9]+?)(\[)/g, ',["$1",').slice(1).replace(/\s*\,\s*([A-Z_0-9]+?)\]/g, ',"$1"]').replace(/,\["VERTCS".+/,''));
   var type = lisp.shift();
   var name = lisp.shift();
   lisp.unshift(['name', name]);
@@ -21783,788 +23918,49 @@ module.exports = function(wkt, self) {
   return extend(self, obj.output);
 };
 
-},{"./extend":135}],169:[function(require,module,exports){
-
-
-
-/**
- * UTM zones are grouped, and assigned to one of a group of 6
- * sets.
- *
- * {int} @private
- */
-var NUM_100K_SETS = 6;
-
-/**
- * The column letters (for easting) of the lower left value, per
- * set.
- *
- * {string} @private
- */
-var SET_ORIGIN_COLUMN_LETTERS = 'AJSAJS';
-
-/**
- * The row letters (for northing) of the lower left value, per
- * set.
- *
- * {string} @private
- */
-var SET_ORIGIN_ROW_LETTERS = 'AFAFAF';
-
-var A = 65; // A
-var I = 73; // I
-var O = 79; // O
-var V = 86; // V
-var Z = 90; // Z
-
-/**
- * Conversion of lat/lon to MGRS.
- *
- * @param {object} ll Object literal with lat and lon properties on a
- *     WGS84 ellipsoid.
- * @param {int} accuracy Accuracy in digits (5 for 1 m, 4 for 10 m, 3 for
- *      100 m, 4 for 1000 m or 5 for 10000 m). Optional, default is 5.
- * @return {string} the MGRS string for the given location and accuracy.
- */
-exports.forward = function(ll, accuracy) {
-  accuracy = accuracy || 5; // default accuracy 1m
-  return encode(LLtoUTM({
-    lat: ll[1],
-    lon: ll[0]
-  }), accuracy);
-};
-
-/**
- * Conversion of MGRS to lat/lon.
- *
- * @param {string} mgrs MGRS string.
- * @return {array} An array with left (longitude), bottom (latitude), right
- *     (longitude) and top (latitude) values in WGS84, representing the
- *     bounding box for the provided MGRS reference.
- */
-exports.inverse = function(mgrs) {
-  var bbox = UTMtoLL(decode(mgrs.toUpperCase()));
-  return [bbox.left, bbox.bottom, bbox.right, bbox.top];
-};
-
-exports.toPoint = function(mgrsStr) {
-  var llbbox = exports.inverse(mgrsStr);
-  return [(llbbox[2] + llbbox[0]) / 2, (llbbox[3] + llbbox[1]) / 2];
-};
-/**
- * Conversion from degrees to radians.
- *
- * @private
- * @param {number} deg the angle in degrees.
- * @return {number} the angle in radians.
- */
-function degToRad(deg) {
-  return (deg * (Math.PI / 180.0));
-}
-
-/**
- * Conversion from radians to degrees.
- *
- * @private
- * @param {number} rad the angle in radians.
- * @return {number} the angle in degrees.
- */
-function radToDeg(rad) {
-  return (180.0 * (rad / Math.PI));
-}
-
-/**
- * Converts a set of Longitude and Latitude co-ordinates to UTM
- * using the WGS84 ellipsoid.
- *
- * @private
- * @param {object} ll Object literal with lat and lon properties
- *     representing the WGS84 coordinate to be converted.
- * @return {object} Object literal containing the UTM value with easting,
- *     northing, zoneNumber and zoneLetter properties, and an optional
- *     accuracy property in digits. Returns null if the conversion failed.
- */
-function LLtoUTM(ll) {
-  var Lat = ll.lat;
-  var Long = ll.lon;
-  var a = 6378137.0; //ellip.radius;
-  var eccSquared = 0.00669438; //ellip.eccsq;
-  var k0 = 0.9996;
-  var LongOrigin;
-  var eccPrimeSquared;
-  var N, T, C, A, M;
-  var LatRad = degToRad(Lat);
-  var LongRad = degToRad(Long);
-  var LongOriginRad;
-  var ZoneNumber;
-  // (int)
-  ZoneNumber = Math.floor((Long + 180) / 6) + 1;
-
-  //Make sure the longitude 180.00 is in Zone 60
-  if (Long === 180) {
-    ZoneNumber = 60;
-  }
-
-  // Special zone for Norway
-  if (Lat >= 56.0 && Lat < 64.0 && Long >= 3.0 && Long < 12.0) {
-    ZoneNumber = 32;
-  }
-
-  // Special zones for Svalbard
-  if (Lat >= 72.0 && Lat < 84.0) {
-    if (Long >= 0.0 && Long < 9.0) {
-      ZoneNumber = 31;
-    }
-    else if (Long >= 9.0 && Long < 21.0) {
-      ZoneNumber = 33;
-    }
-    else if (Long >= 21.0 && Long < 33.0) {
-      ZoneNumber = 35;
-    }
-    else if (Long >= 33.0 && Long < 42.0) {
-      ZoneNumber = 37;
-    }
-  }
-
-  LongOrigin = (ZoneNumber - 1) * 6 - 180 + 3; //+3 puts origin
-  // in middle of
-  // zone
-  LongOriginRad = degToRad(LongOrigin);
-
-  eccPrimeSquared = (eccSquared) / (1 - eccSquared);
-
-  N = a / Math.sqrt(1 - eccSquared * Math.sin(LatRad) * Math.sin(LatRad));
-  T = Math.tan(LatRad) * Math.tan(LatRad);
-  C = eccPrimeSquared * Math.cos(LatRad) * Math.cos(LatRad);
-  A = Math.cos(LatRad) * (LongRad - LongOriginRad);
-
-  M = a * ((1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256) * LatRad - (3 * eccSquared / 8 + 3 * eccSquared * eccSquared / 32 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(2 * LatRad) + (15 * eccSquared * eccSquared / 256 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(4 * LatRad) - (35 * eccSquared * eccSquared * eccSquared / 3072) * Math.sin(6 * LatRad));
-
-  var UTMEasting = (k0 * N * (A + (1 - T + C) * A * A * A / 6.0 + (5 - 18 * T + T * T + 72 * C - 58 * eccPrimeSquared) * A * A * A * A * A / 120.0) + 500000.0);
-
-  var UTMNorthing = (k0 * (M + N * Math.tan(LatRad) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24.0 + (61 - 58 * T + T * T + 600 * C - 330 * eccPrimeSquared) * A * A * A * A * A * A / 720.0)));
-  if (Lat < 0.0) {
-    UTMNorthing += 10000000.0; //10000000 meter offset for
-    // southern hemisphere
-  }
-
-  return {
-    northing: Math.round(UTMNorthing),
-    easting: Math.round(UTMEasting),
-    zoneNumber: ZoneNumber,
-    zoneLetter: getLetterDesignator(Lat)
-  };
-}
-
-/**
- * Converts UTM coords to lat/long, using the WGS84 ellipsoid. This is a convenience
- * class where the Zone can be specified as a single string eg."60N" which
- * is then broken down into the ZoneNumber and ZoneLetter.
- *
- * @private
- * @param {object} utm An object literal with northing, easting, zoneNumber
- *     and zoneLetter properties. If an optional accuracy property is
- *     provided (in meters), a bounding box will be returned instead of
- *     latitude and longitude.
- * @return {object} An object literal containing either lat and lon values
- *     (if no accuracy was provided), or top, right, bottom and left values
- *     for the bounding box calculated according to the provided accuracy.
- *     Returns null if the conversion failed.
- */
-function UTMtoLL(utm) {
-
-  var UTMNorthing = utm.northing;
-  var UTMEasting = utm.easting;
-  var zoneLetter = utm.zoneLetter;
-  var zoneNumber = utm.zoneNumber;
-  // check the ZoneNummber is valid
-  if (zoneNumber < 0 || zoneNumber > 60) {
-    return null;
-  }
-
-  var k0 = 0.9996;
-  var a = 6378137.0; //ellip.radius;
-  var eccSquared = 0.00669438; //ellip.eccsq;
-  var eccPrimeSquared;
-  var e1 = (1 - Math.sqrt(1 - eccSquared)) / (1 + Math.sqrt(1 - eccSquared));
-  var N1, T1, C1, R1, D, M;
-  var LongOrigin;
-  var mu, phi1Rad;
-
-  // remove 500,000 meter offset for longitude
-  var x = UTMEasting - 500000.0;
-  var y = UTMNorthing;
-
-  // We must know somehow if we are in the Northern or Southern
-  // hemisphere, this is the only time we use the letter So even
-  // if the Zone letter isn't exactly correct it should indicate
-  // the hemisphere correctly
-  if (zoneLetter < 'N') {
-    y -= 10000000.0; // remove 10,000,000 meter offset used
-    // for southern hemisphere
-  }
-
-  // There are 60 zones with zone 1 being at West -180 to -174
-  LongOrigin = (zoneNumber - 1) * 6 - 180 + 3; // +3 puts origin
-  // in middle of
-  // zone
-
-  eccPrimeSquared = (eccSquared) / (1 - eccSquared);
-
-  M = y / k0;
-  mu = M / (a * (1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256));
-
-  phi1Rad = mu + (3 * e1 / 2 - 27 * e1 * e1 * e1 / 32) * Math.sin(2 * mu) + (21 * e1 * e1 / 16 - 55 * e1 * e1 * e1 * e1 / 32) * Math.sin(4 * mu) + (151 * e1 * e1 * e1 / 96) * Math.sin(6 * mu);
-  // double phi1 = ProjMath.radToDeg(phi1Rad);
-
-  N1 = a / Math.sqrt(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad));
-  T1 = Math.tan(phi1Rad) * Math.tan(phi1Rad);
-  C1 = eccPrimeSquared * Math.cos(phi1Rad) * Math.cos(phi1Rad);
-  R1 = a * (1 - eccSquared) / Math.pow(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad), 1.5);
-  D = x / (N1 * k0);
-
-  var lat = phi1Rad - (N1 * Math.tan(phi1Rad) / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * eccPrimeSquared) * D * D * D * D / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * eccPrimeSquared - 3 * C1 * C1) * D * D * D * D * D * D / 720);
-  lat = radToDeg(lat);
-
-  var lon = (D - (1 + 2 * T1 + C1) * D * D * D / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * eccPrimeSquared + 24 * T1 * T1) * D * D * D * D * D / 120) / Math.cos(phi1Rad);
-  lon = LongOrigin + radToDeg(lon);
-
-  var result;
-  if (utm.accuracy) {
-    var topRight = UTMtoLL({
-      northing: utm.northing + utm.accuracy,
-      easting: utm.easting + utm.accuracy,
-      zoneLetter: utm.zoneLetter,
-      zoneNumber: utm.zoneNumber
-    });
-    result = {
-      top: topRight.lat,
-      right: topRight.lon,
-      bottom: lat,
-      left: lon
-    };
-  }
-  else {
-    result = {
-      lat: lat,
-      lon: lon
-    };
-  }
-  return result;
-}
-
-/**
- * Calculates the MGRS letter designator for the given latitude.
- *
- * @private
- * @param {number} lat The latitude in WGS84 to get the letter designator
- *     for.
- * @return {char} The letter designator.
- */
-function getLetterDesignator(lat) {
-  //This is here as an error flag to show that the Latitude is
-  //outside MGRS limits
-  var LetterDesignator = 'Z';
-
-  if ((84 >= lat) && (lat >= 72)) {
-    LetterDesignator = 'X';
-  }
-  else if ((72 > lat) && (lat >= 64)) {
-    LetterDesignator = 'W';
-  }
-  else if ((64 > lat) && (lat >= 56)) {
-    LetterDesignator = 'V';
-  }
-  else if ((56 > lat) && (lat >= 48)) {
-    LetterDesignator = 'U';
-  }
-  else if ((48 > lat) && (lat >= 40)) {
-    LetterDesignator = 'T';
-  }
-  else if ((40 > lat) && (lat >= 32)) {
-    LetterDesignator = 'S';
-  }
-  else if ((32 > lat) && (lat >= 24)) {
-    LetterDesignator = 'R';
-  }
-  else if ((24 > lat) && (lat >= 16)) {
-    LetterDesignator = 'Q';
-  }
-  else if ((16 > lat) && (lat >= 8)) {
-    LetterDesignator = 'P';
-  }
-  else if ((8 > lat) && (lat >= 0)) {
-    LetterDesignator = 'N';
-  }
-  else if ((0 > lat) && (lat >= -8)) {
-    LetterDesignator = 'M';
-  }
-  else if ((-8 > lat) && (lat >= -16)) {
-    LetterDesignator = 'L';
-  }
-  else if ((-16 > lat) && (lat >= -24)) {
-    LetterDesignator = 'K';
-  }
-  else if ((-24 > lat) && (lat >= -32)) {
-    LetterDesignator = 'J';
-  }
-  else if ((-32 > lat) && (lat >= -40)) {
-    LetterDesignator = 'H';
-  }
-  else if ((-40 > lat) && (lat >= -48)) {
-    LetterDesignator = 'G';
-  }
-  else if ((-48 > lat) && (lat >= -56)) {
-    LetterDesignator = 'F';
-  }
-  else if ((-56 > lat) && (lat >= -64)) {
-    LetterDesignator = 'E';
-  }
-  else if ((-64 > lat) && (lat >= -72)) {
-    LetterDesignator = 'D';
-  }
-  else if ((-72 > lat) && (lat >= -80)) {
-    LetterDesignator = 'C';
-  }
-  return LetterDesignator;
-}
-
-/**
- * Encodes a UTM location as MGRS string.
- *
- * @private
- * @param {object} utm An object literal with easting, northing,
- *     zoneLetter, zoneNumber
- * @param {number} accuracy Accuracy in digits (1-5).
- * @return {string} MGRS string for the given UTM location.
- */
-function encode(utm, accuracy) {
-  var seasting = "" + utm.easting,
-    snorthing = "" + utm.northing;
-
-  return utm.zoneNumber + utm.zoneLetter + get100kID(utm.easting, utm.northing, utm.zoneNumber) + seasting.substr(seasting.length - 5, accuracy) + snorthing.substr(snorthing.length - 5, accuracy);
-}
-
-/**
- * Get the two letter 100k designator for a given UTM easting,
- * northing and zone number value.
- *
- * @private
- * @param {number} easting
- * @param {number} northing
- * @param {number} zoneNumber
- * @return the two letter 100k designator for the given UTM location.
- */
-function get100kID(easting, northing, zoneNumber) {
-  var setParm = get100kSetForZone(zoneNumber);
-  var setColumn = Math.floor(easting / 100000);
-  var setRow = Math.floor(northing / 100000) % 20;
-  return getLetter100kID(setColumn, setRow, setParm);
-}
-
-/**
- * Given a UTM zone number, figure out the MGRS 100K set it is in.
- *
- * @private
- * @param {number} i An UTM zone number.
- * @return {number} the 100k set the UTM zone is in.
- */
-function get100kSetForZone(i) {
-  var setParm = i % NUM_100K_SETS;
-  if (setParm === 0) {
-    setParm = NUM_100K_SETS;
-  }
-
-  return setParm;
-}
-
-/**
- * Get the two-letter MGRS 100k designator given information
- * translated from the UTM northing, easting and zone number.
- *
- * @private
- * @param {number} column the column index as it relates to the MGRS
- *        100k set spreadsheet, created from the UTM easting.
- *        Values are 1-8.
- * @param {number} row the row index as it relates to the MGRS 100k set
- *        spreadsheet, created from the UTM northing value. Values
- *        are from 0-19.
- * @param {number} parm the set block, as it relates to the MGRS 100k set
- *        spreadsheet, created from the UTM zone. Values are from
- *        1-60.
- * @return two letter MGRS 100k code.
- */
-function getLetter100kID(column, row, parm) {
-  // colOrigin and rowOrigin are the letters at the origin of the set
-  var index = parm - 1;
-  var colOrigin = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(index);
-  var rowOrigin = SET_ORIGIN_ROW_LETTERS.charCodeAt(index);
-
-  // colInt and rowInt are the letters to build to return
-  var colInt = colOrigin + column - 1;
-  var rowInt = rowOrigin + row;
-  var rollover = false;
-
-  if (colInt > Z) {
-    colInt = colInt - Z + A - 1;
-    rollover = true;
-  }
-
-  if (colInt === I || (colOrigin < I && colInt > I) || ((colInt > I || colOrigin < I) && rollover)) {
-    colInt++;
-  }
-
-  if (colInt === O || (colOrigin < O && colInt > O) || ((colInt > O || colOrigin < O) && rollover)) {
-    colInt++;
-
-    if (colInt === I) {
-      colInt++;
-    }
-  }
-
-  if (colInt > Z) {
-    colInt = colInt - Z + A - 1;
-  }
-
-  if (rowInt > V) {
-    rowInt = rowInt - V + A - 1;
-    rollover = true;
-  }
-  else {
-    rollover = false;
-  }
-
-  if (((rowInt === I) || ((rowOrigin < I) && (rowInt > I))) || (((rowInt > I) || (rowOrigin < I)) && rollover)) {
-    rowInt++;
-  }
-
-  if (((rowInt === O) || ((rowOrigin < O) && (rowInt > O))) || (((rowInt > O) || (rowOrigin < O)) && rollover)) {
-    rowInt++;
-
-    if (rowInt === I) {
-      rowInt++;
-    }
-  }
-
-  if (rowInt > V) {
-    rowInt = rowInt - V + A - 1;
-  }
-
-  var twoLetter = String.fromCharCode(colInt) + String.fromCharCode(rowInt);
-  return twoLetter;
-}
-
-/**
- * Decode the UTM parameters from a MGRS string.
- *
- * @private
- * @param {string} mgrsString an UPPERCASE coordinate string is expected.
- * @return {object} An object literal with easting, northing, zoneLetter,
- *     zoneNumber and accuracy (in meters) properties.
- */
-function decode(mgrsString) {
-
-  if (mgrsString && mgrsString.length === 0) {
-    throw ("MGRSPoint coverting from nothing");
-  }
-
-  var length = mgrsString.length;
-
-  var hunK = null;
-  var sb = "";
-  var testChar;
-  var i = 0;
-
-  // get Zone number
-  while (!(/[A-Z]/).test(testChar = mgrsString.charAt(i))) {
-    if (i >= 2) {
-      throw ("MGRSPoint bad conversion from: " + mgrsString);
-    }
-    sb += testChar;
-    i++;
-  }
-
-  var zoneNumber = parseInt(sb, 10);
-
-  if (i === 0 || i + 3 > length) {
-    // A good MGRS string has to be 4-5 digits long,
-    // ##AAA/#AAA at least.
-    throw ("MGRSPoint bad conversion from: " + mgrsString);
-  }
-
-  var zoneLetter = mgrsString.charAt(i++);
-
-  // Should we check the zone letter here? Why not.
-  if (zoneLetter <= 'A' || zoneLetter === 'B' || zoneLetter === 'Y' || zoneLetter >= 'Z' || zoneLetter === 'I' || zoneLetter === 'O') {
-    throw ("MGRSPoint zone letter " + zoneLetter + " not handled: " + mgrsString);
-  }
-
-  hunK = mgrsString.substring(i, i += 2);
-
-  var set = get100kSetForZone(zoneNumber);
-
-  var east100k = getEastingFromChar(hunK.charAt(0), set);
-  var north100k = getNorthingFromChar(hunK.charAt(1), set);
-
-  // We have a bug where the northing may be 2000000 too low.
-  // How
-  // do we know when to roll over?
-
-  while (north100k < getMinNorthing(zoneLetter)) {
-    north100k += 2000000;
-  }
-
-  // calculate the char index for easting/northing separator
-  var remainder = length - i;
-
-  if (remainder % 2 !== 0) {
-    throw ("MGRSPoint has to have an even number \nof digits after the zone letter and two 100km letters - front \nhalf for easting meters, second half for \nnorthing meters" + mgrsString);
-  }
-
-  var sep = remainder / 2;
-
-  var sepEasting = 0.0;
-  var sepNorthing = 0.0;
-  var accuracyBonus, sepEastingString, sepNorthingString, easting, northing;
-  if (sep > 0) {
-    accuracyBonus = 100000.0 / Math.pow(10, sep);
-    sepEastingString = mgrsString.substring(i, i + sep);
-    sepEasting = parseFloat(sepEastingString) * accuracyBonus;
-    sepNorthingString = mgrsString.substring(i + sep);
-    sepNorthing = parseFloat(sepNorthingString) * accuracyBonus;
-  }
-
-  easting = sepEasting + east100k;
-  northing = sepNorthing + north100k;
-
-  return {
-    easting: easting,
-    northing: northing,
-    zoneLetter: zoneLetter,
-    zoneNumber: zoneNumber,
-    accuracy: accuracyBonus
-  };
-}
-
-/**
- * Given the first letter from a two-letter MGRS 100k zone, and given the
- * MGRS table set for the zone number, figure out the easting value that
- * should be added to the other, secondary easting value.
- *
- * @private
- * @param {char} e The first letter from a two-letter MGRS 100´k zone.
- * @param {number} set The MGRS table set for the zone number.
- * @return {number} The easting value for the given letter and set.
- */
-function getEastingFromChar(e, set) {
-  // colOrigin is the letter at the origin of the set for the
-  // column
-  var curCol = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(set - 1);
-  var eastingValue = 100000.0;
-  var rewindMarker = false;
-
-  while (curCol !== e.charCodeAt(0)) {
-    curCol++;
-    if (curCol === I) {
-      curCol++;
-    }
-    if (curCol === O) {
-      curCol++;
-    }
-    if (curCol > Z) {
-      if (rewindMarker) {
-        throw ("Bad character: " + e);
-      }
-      curCol = A;
-      rewindMarker = true;
-    }
-    eastingValue += 100000.0;
-  }
-
-  return eastingValue;
-}
-
-/**
- * Given the second letter from a two-letter MGRS 100k zone, and given the
- * MGRS table set for the zone number, figure out the northing value that
- * should be added to the other, secondary northing value. You have to
- * remember that Northings are determined from the equator, and the vertical
- * cycle of letters mean a 2000000 additional northing meters. This happens
- * approx. every 18 degrees of latitude. This method does *NOT* count any
- * additional northings. You have to figure out how many 2000000 meters need
- * to be added for the zone letter of the MGRS coordinate.
- *
- * @private
- * @param {char} n Second letter of the MGRS 100k zone
- * @param {number} set The MGRS table set number, which is dependent on the
- *     UTM zone number.
- * @return {number} The northing value for the given letter and set.
- */
-function getNorthingFromChar(n, set) {
-
-  if (n > 'V') {
-    throw ("MGRSPoint given invalid Northing " + n);
-  }
-
-  // rowOrigin is the letter at the origin of the set for the
-  // column
-  var curRow = SET_ORIGIN_ROW_LETTERS.charCodeAt(set - 1);
-  var northingValue = 0.0;
-  var rewindMarker = false;
-
-  while (curRow !== n.charCodeAt(0)) {
-    curRow++;
-    if (curRow === I) {
-      curRow++;
-    }
-    if (curRow === O) {
-      curRow++;
-    }
-    // fixing a bug making whole application hang in this loop
-    // when 'n' is a wrong character
-    if (curRow > V) {
-      if (rewindMarker) { // making sure that this loop ends
-        throw ("Bad character: " + n);
-      }
-      curRow = A;
-      rewindMarker = true;
-    }
-    northingValue += 100000.0;
-  }
-
-  return northingValue;
-}
-
-/**
- * The function getMinNorthing returns the minimum northing value of a MGRS
- * zone.
- *
- * Ported from Geotrans' c Lattitude_Band_Value structure table.
- *
- * @private
- * @param {char} zoneLetter The MGRS zone to get the min northing for.
- * @return {number}
- */
-function getMinNorthing(zoneLetter) {
-  var northing;
-  switch (zoneLetter) {
-  case 'C':
-    northing = 1100000.0;
-    break;
-  case 'D':
-    northing = 2000000.0;
-    break;
-  case 'E':
-    northing = 2800000.0;
-    break;
-  case 'F':
-    northing = 3700000.0;
-    break;
-  case 'G':
-    northing = 4600000.0;
-    break;
-  case 'H':
-    northing = 5500000.0;
-    break;
-  case 'J':
-    northing = 6400000.0;
-    break;
-  case 'K':
-    northing = 7300000.0;
-    break;
-  case 'L':
-    northing = 8200000.0;
-    break;
-  case 'M':
-    northing = 9100000.0;
-    break;
-  case 'N':
-    northing = 0.0;
-    break;
-  case 'P':
-    northing = 800000.0;
-    break;
-  case 'Q':
-    northing = 1700000.0;
-    break;
-  case 'R':
-    northing = 2600000.0;
-    break;
-  case 'S':
-    northing = 3500000.0;
-    break;
-  case 'T':
-    northing = 4400000.0;
-    break;
-  case 'U':
-    northing = 5300000.0;
-    break;
-  case 'V':
-    northing = 6200000.0;
-    break;
-  case 'W':
-    northing = 7000000.0;
-    break;
-  case 'X':
-    northing = 7900000.0;
-    break;
-  default:
-    northing = -1.0;
-  }
-  if (northing >= 0.0) {
-    return northing;
-  }
-  else {
-    throw ("Invalid zone letter: " + zoneLetter);
-  }
-
-}
-
-},{}],170:[function(require,module,exports){
+},{"./extend":121}],155:[function(require,module,exports){
 module.exports={
-  "name": "proj4",
-  "version": "2.1.4",
-  "description": "Proj4js is a JavaScript library to transform point coordinates from one coordinate system to another, including datum transformations.",
-  "main": "lib/index.js",
-  "directories": {
-    "test": "test",
-    "doc": "docs"
-  },
-  "scripts": {
-    "test": "./node_modules/istanbul/lib/cli.js test ./node_modules/mocha/bin/_mocha test/test.js"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/proj4js/proj4js.git"
-  },
-  "author": "",
-  "license": "MIT",
-  "jam": {
-    "main": "dist/proj4.js",
-    "include": [
-      "dist/proj4.js",
-      "README.md",
-      "AUTHORS",
-      "LICENSE.md"
+  "_args": [
+    [
+      "proj4@^2.1.4",
+      "/Users/cmetcalf/projects/shapefile-js"
     ]
+  ],
+  "_from": "proj4@>=2.1.4 <3.0.0",
+  "_id": "proj4@2.3.14",
+  "_inCache": true,
+  "_installable": true,
+  "_location": "/proj4",
+  "_nodeVersion": "4.2.6",
+  "_npmOperationalInternal": {
+    "host": "packages-13-west.internal.npmjs.com",
+    "tmp": "tmp/proj4-2.3.14.tgz_1457689264880_0.9409773757215589"
   },
-  "devDependencies": {
-    "grunt-cli": "~0.1.13",
-    "grunt": "~0.4.2",
-    "grunt-contrib-connect": "~0.6.0",
-    "grunt-contrib-jshint": "~0.8.0",
-    "chai": "~1.8.1",
-    "mocha": "~1.17.1",
-    "grunt-mocha-phantomjs": "~0.4.0",
-    "browserify": "~3.24.5",
-    "grunt-browserify": "~1.3.0",
-    "grunt-contrib-uglify": "~0.3.2",
-    "curl": "git://github.com/cujojs/curl.git",
-    "istanbul": "~0.2.4",
-    "tin": "~0.4.0"
+  "_npmUser": {
+    "email": "andreas.hocevar@gmail.com",
+    "name": "ahocevar"
   },
-  "dependencies": {
-    "mgrs": "0.0.0"
+  "_npmVersion": "2.14.12",
+  "_phantomChildren": {},
+  "_requested": {
+    "name": "proj4",
+    "raw": "proj4@^2.1.4",
+    "rawSpec": "^2.1.4",
+    "scope": null,
+    "spec": ">=2.1.4 <3.0.0",
+    "type": "range"
+  },
+  "_requiredBy": [
+    "/"
+  ],
+  "_resolved": "https://registry.npmjs.org/proj4/-/proj4-2.3.14.tgz",
+  "_shasum": "928906144388980c914c5a357fc493aba59a747a",
+  "_shrinkwrap": null,
+  "_spec": "proj4@^2.1.4",
+  "_where": "/Users/cmetcalf/projects/shapefile-js",
+  "author": "",
+  "bugs": {
+    "url": "https://github.com/proj4js/proj4js/issues"
   },
   "contributors": [
     {
@@ -22593,21 +23989,46 @@ module.exports={
       "name": "S. Nelson"
     }
   ],
-  "bugs": {
-    "url": "https://github.com/proj4js/proj4js/issues"
+  "dependencies": {
+    "mgrs": "~0.0.2"
   },
-  "homepage": "https://github.com/proj4js/proj4js",
-  "_id": "proj4@2.1.4",
+  "description": "Proj4js is a JavaScript library to transform point coordinates from one coordinate system to another, including datum transformations.",
+  "devDependencies": {
+    "browserify": "~12.0.1",
+    "chai": "~1.8.1",
+    "curl": "git://github.com/cujojs/curl.git",
+    "grunt": "~0.4.2",
+    "grunt-browserify": "~4.0.1",
+    "grunt-cli": "~0.1.13",
+    "grunt-contrib-connect": "~0.6.0",
+    "grunt-contrib-jshint": "~0.8.0",
+    "grunt-contrib-uglify": "~0.11.1",
+    "grunt-mocha-phantomjs": "~0.4.0",
+    "istanbul": "~0.2.4",
+    "mocha": "~1.17.1",
+    "tin": "~0.4.0"
+  },
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
   "dist": {
-    "shasum": "d57b39ae1ed47b207d0fc7b0010498dc35fd6d09",
-    "tarball": "http://registry.npmjs.org/proj4/-/proj4-2.1.4.tgz"
+    "shasum": "928906144388980c914c5a357fc493aba59a747a",
+    "tarball": "http://registry.npmjs.org/proj4/-/proj4-2.3.14.tgz"
   },
-  "_from": "proj4@>=2.1.0 <2.2.0",
-  "_npmVersion": "1.4.3",
-  "_npmUser": {
-    "name": "cwmma",
-    "email": "calvin.metcalf@gmail.com"
+  "gitHead": "7619c8a63df1eae5bad0b9ad31ca1d87b0549243",
+  "homepage": "https://github.com/proj4js/proj4js#readme",
+  "jam": {
+    "include": [
+      "AUTHORS",
+      "LICENSE.md",
+      "README.md",
+      "dist/proj4.js"
+    ],
+    "main": "dist/proj4.js"
   },
+  "license": "MIT",
+  "main": "lib/index.js",
   "maintainers": [
     {
       "name": "cwmma",
@@ -22618,12 +24039,158 @@ module.exports={
       "email": "andreas.hocevar@gmail.com"
     }
   ],
-  "_shasum": "d57b39ae1ed47b207d0fc7b0010498dc35fd6d09",
-  "_resolved": "https://registry.npmjs.org/proj4/-/proj4-2.1.4.tgz",
-  "readme": "ERROR: No README data found!"
+  "name": "proj4",
+  "optionalDependencies": {},
+  "readme": "ERROR: No README data found!",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/proj4js/proj4js.git"
+  },
+  "scripts": {
+    "test": "./node_modules/istanbul/lib/cli.js test ./node_modules/mocha/bin/_mocha test/test.js"
+  },
+  "version": "2.3.14"
 }
 
-},{}],171:[function(require,module,exports){
+},{}],156:[function(require,module,exports){
+arguments[4][42][0].apply(exports,arguments)
+},{"./lib/type":157,"dup":42}],157:[function(require,module,exports){
+/*!
+ * type-detect
+ * Copyright(c) 2013 jake luer <jake@alogicalparadox.com>
+ * MIT Licensed
+ */
+
+/*!
+ * Primary Exports
+ */
+
+var exports = module.exports = getType;
+
+/**
+ * ### typeOf (obj)
+ *
+ * Use several different techniques to determine
+ * the type of object being tested.
+ *
+ *
+ * @param {Mixed} object
+ * @return {String} object type
+ * @api public
+ */
+var objectTypeRegexp = /^\[object (.*)\]$/;
+
+function getType(obj) {
+  var type = Object.prototype.toString.call(obj).match(objectTypeRegexp)[1].toLowerCase();
+  // Let "new String('')" return 'object'
+  if (typeof Promise === 'function' && obj instanceof Promise) return 'promise';
+  // PhantomJS has type "DOMWindow" for null
+  if (obj === null) return 'null';
+  // PhantomJS has type "DOMWindow" for undefined
+  if (obj === undefined) return 'undefined';
+  return type;
+}
+
+exports.Library = Library;
+
+/**
+ * ### Library
+ *
+ * Create a repository for custom type detection.
+ *
+ * ```js
+ * var lib = new type.Library;
+ * ```
+ *
+ */
+
+function Library() {
+  if (!(this instanceof Library)) return new Library();
+  this.tests = {};
+}
+
+/**
+ * #### .of (obj)
+ *
+ * Expose replacement `typeof` detection to the library.
+ *
+ * ```js
+ * if ('string' === lib.of('hello world')) {
+ *   // ...
+ * }
+ * ```
+ *
+ * @param {Mixed} object to test
+ * @return {String} type
+ */
+
+Library.prototype.of = getType;
+
+/**
+ * #### .define (type, test)
+ *
+ * Add a test to for the `.test()` assertion.
+ *
+ * Can be defined as a regular expression:
+ *
+ * ```js
+ * lib.define('int', /^[0-9]+$/);
+ * ```
+ *
+ * ... or as a function:
+ *
+ * ```js
+ * lib.define('bln', function (obj) {
+ *   if ('boolean' === lib.of(obj)) return true;
+ *   var blns = [ 'yes', 'no', 'true', 'false', 1, 0 ];
+ *   if ('string' === lib.of(obj)) obj = obj.toLowerCase();
+ *   return !! ~blns.indexOf(obj);
+ * });
+ * ```
+ *
+ * @param {String} type
+ * @param {RegExp|Function} test
+ * @api public
+ */
+
+Library.prototype.define = function(type, test) {
+  if (arguments.length === 1) return this.tests[type];
+  this.tests[type] = test;
+  return this;
+};
+
+/**
+ * #### .test (obj, test)
+ *
+ * Assert that an object is of type. Will first
+ * check natives, and if that does not pass it will
+ * use the user defined custom tests.
+ *
+ * ```js
+ * assert(lib.test('1', 'int'));
+ * assert(lib.test('yes', 'bln'));
+ * ```
+ *
+ * @param {Mixed} object
+ * @param {String} type
+ * @return {Boolean} result
+ * @api public
+ */
+
+Library.prototype.test = function(obj, type) {
+  if (type === getType(obj)) return true;
+  var test = this.tests[type];
+
+  if (test && 'regexp' === getType(test)) {
+    return test.test(obj);
+  } else if (test && 'function' === getType(test)) {
+    return test(obj);
+  } else {
+    throw new ReferenceError('Type test "' + type + '" not defined or invalid.');
+  }
+};
+
+},{}],158:[function(require,module,exports){
 var shp = require('../');
 var chai = require('chai');
 chai.should();
@@ -22728,6 +24295,18 @@ describe('Shp', function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(361);
     });
   });
+  describe('empty attributes table', function(){
+      var pandr =  shp('http://localhost:3000/files/empty-shp.zip');
+    it('should have the right keys', function(){
+      return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type',function(){
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features',function(){
+      return pandr.then(function(a){return a.features}).should.eventually.have.length(2);
+    });
+  });
   describe('errors', function(){
     it('bad file should be rejected', function(){
       return shp('http://localhost:3000/test/data/bad').should.be.rejected;
@@ -22746,6 +24325,6 @@ describe('Shp', function(){
       return shp('http://localhost:3000/test/data/noshp.zip').should.be.rejected;
     });
   });
-
 });
-},{"../":2,"chai":12,"chai-as-promised":11}]},{},[171]);
+
+},{"../":3,"chai":11,"chai-as-promised":10}]},{},[158]);
