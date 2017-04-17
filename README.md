@@ -6,7 +6,7 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 - [ESRI white paper](http://www.esri.com/library/whitepapers/pdfs/shapefile.pdf)
 - [This page on Xbase](http://www.clicketyclick.dk/databases/xbase/format/dbf.html)
 
-##Demos
+## Demos
 
 - [Countries/zipfile](http://calvinmetcalf.github.io/shapefile-js)
 - [Google maps](http://calvinmetcalf.github.io/shapefile-js/site/map.html)
@@ -14,7 +14,7 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 - [Projected big with web workers](http://calvinmetcalf.github.io/shapefile-js/site/proj.html)
 - [Projected small](http://calvinmetcalf.github.io/shapefile-js/site/proj-small.html)
 
-##API
+## API
 
 Has a function `shp` which accepts a string which is the path the she shapefile minus the extension and returns a promise which resolves into geojson.
 
@@ -49,7 +49,7 @@ You could also load the arraybuffers seperately:
 shp.combine([shp.parseShp(shpBuffer, /*optional prj str*/),shp.parseDbf(dbfBuffer)]);
 ```
 
-##Stick it in a worker
+## Stick it in a worker
 
 I used my library [catiline](http://catilinejs.com/) to parallelize the demos to do so I changed
 
@@ -91,7 +91,7 @@ worker.data(reader.result,[reader.result]).then(function(data){
 });
 ```
 
-##Done
+## Done
 
 - Binary Ajax
 - parsing the shp
@@ -102,13 +102,13 @@ worker.data(reader.result,[reader.result]).then(function(data){
 - Some Projections
 - More Projections
 
-##to do
+## to do
 
 - check for geometry validity.
 - Tests
 
 
-##LICENSE
+## LICENSE
 Main library MIT license, original version was less permissive but there is 0 code shared. Included libraries are under their respective lisenses which are:
 - [JSZip](https://github.com/Stuk/jszip/) by @Stuk MIT or GPLv3
 - [lie](https://github.com/calvinmetcalf/lie) by me and @RubenVerborgh MIT 
