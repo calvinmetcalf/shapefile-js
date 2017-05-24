@@ -14,6 +14,16 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 - [Projected big with web workers](http://calvinmetcalf.github.io/shapefile-js/site/proj.html)
 - [Projected small](http://calvinmetcalf.github.io/shapefile-js/site/proj-small.html)
 
+## Usage
+
+For use with browserify, webpack etc:
+
+    npm install shpjs --save
+    
+Or include directly in your webpage from:
+
+    https://unpkg.com/shpjs@latest/dist/shp.js
+
 ## API
 
 Has a function `shp` which accepts a string which is the path the she shapefile minus the extension and returns a promise which resolves into geojson.
