@@ -16,7 +16,7 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 
 ## Usage
 
-For use with browserify, webpack etc:
+For use with [browserify](http://browserify.org/), [webpack](https://webpack.github.io/):
 
     npm install shpjs --save
     
