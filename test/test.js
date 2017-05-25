@@ -132,4 +132,50 @@ describe('Shp', function(){
       return shp('http://localhost:3000/test/data/noshp.zip').should.be.rejected;
     });
   });
+  describe('encoding', function () {
+    it('should work for utf.zip', function(){
+      return shp('http://localhost:3000/test/data/utf.zip').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.map(function (feature) {
+          return feature.properties.field;
+        });
+      }).should.eventually.deep.equal([
+        '💩',
+        'Hněvošický háj'
+      ]);
+    });
+    it('should work for utf', function(){
+      return shp('http://localhost:3000/test/data/utf').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.map(function (feature) {
+          return feature.properties.field;
+        });
+      }).should.eventually.deep.equal([
+        '💩',
+        'Hněvošický háj'
+      ]);
+    });
+    it('should work for codepage.zip', function(){
+      return shp('http://localhost:3000/test/data/codepage.zip').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.map(function (feature) {
+          return feature.properties.field;
+        });
+      }).should.eventually.deep.equal([
+        '??',
+        'Hněvošický háj'
+      ]);
+    });
+    it('should work for codepage', function(){
+      return shp('http://localhost:3000/test/data/codepage').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.map(function (feature) {
+          return feature.properties.field;
+        });
+      }).should.eventually.deep.equal([
+        '??',
+        'Hněvošický háj'
+      ]);
+    });
+  });
 });
