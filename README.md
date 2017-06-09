@@ -1,5 +1,7 @@
 # Shapefile.js
 
+If you are having encoding issues in internet explorer please include [this script](https://cdn.rawgit.com/calvinmetcalf/text-encoding/4aff951959085f74a5872aeed8d79ec95b6c74c3/lib/encoding-indexes.js) as well.
+
 Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, I wouldn't say it's based on [RandomEtc's version](https://github.com/RandomEtc/shapefile-js) as much as inspired by it as there is 0 code shared and I really only read the binary ajax part of his (hence why my function has the same name, they are otherwise not related). My sources were:
 
 - [wikipedia article](https://en.wikipedia.org/wiki/Shapefile)
@@ -50,7 +52,7 @@ shp(buffer).then(function(geojson){});
 //or
 shp.parseZip(buffer)->returns zip
 ```
-If there is only one shp in the zipefile it returns geojson, if there are multiple then it will be an array.  All of the geojson objects have an extra key `fileName` the value of which is the 
+If there is only one shp in the zipefile it returns geojson, if there are multiple then it will be an array.  All of the geojson objects have an extra key `fileName` the value of which is the
 name of the shapefile minus the extension (I.E. the part of the name that's the same for all of them)
 
 You could also load the arraybuffers seperately:
@@ -72,7 +74,7 @@ I used my library [catiline](http://catilinejs.com/) to parallelize the demos to
 </script>
 ```
 
-to 
+to
 
 ```html
 <script src='website/catiline.js'> </script>
@@ -121,7 +123,7 @@ worker.data(reader.result,[reader.result]).then(function(data){
 ## LICENSE
 Main library MIT license, original version was less permissive but there is 0 code shared. Included libraries are under their respective lisenses which are:
 - [JSZip](https://github.com/Stuk/jszip/) by @Stuk MIT or GPLv3
-- [lie](https://github.com/calvinmetcalf/lie) by me and @RubenVerborgh MIT 
+- [lie](https://github.com/calvinmetcalf/lie) by me and @RubenVerborgh MIT
 - [setImmediate](https://github.com/NobleJS/setImmediate) by @NobleJS et al MIT
 - [World Borders shapefile](http://thematicmapping.org/downloads/world_borders.php) is CC-BY-SA 3.0.
 - Park and Ride shapefile is from [MassDOT](http://mass.gov/massdot) and is public domain.

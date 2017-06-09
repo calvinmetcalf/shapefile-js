@@ -1,4 +1,5 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function (Buffer){
 'use strict';
 var Promise = require('lie');
 module.exports = binaryAjax;
@@ -7,445 +8,460 @@ function binaryAjax(url){
 		var type = url.slice(-3);
 		var ajax = new XMLHttpRequest();
 		ajax.open('GET',url,true);
-		if(type !== 'prj'){
+		if(type !== 'prj' && type !== 'cpg'){
 			ajax.responseType='arraybuffer';
 		}
 		ajax.addEventListener('load', function (){
 			if(ajax.status>399){
-				if(type==='prj'){
+				if(type==='prj' || type === 'cpg'){
 					return resolve(false);
 				}else{
 					return reject(new Error(ajax.status));
 				}
 			}
-			resolve(ajax.response);
+			if(type !== 'prj' && type !== 'cpg'){
+				return resolve(new Buffer(ajax.response));
+			} else {
+				return resolve(ajax.response);
+			}
 		}, false);
 		ajax.send();
 	});
 }
-},{"lie":86}],2:[function(require,module,exports){
-(function (Buffer){
+
+}).call(this,require("buffer").Buffer)
+},{"buffer":8,"lie":70}],2:[function(require,module,exports){
+(function (global,Buffer){
 'use strict';
 var proj4 = require('proj4');
 var unzip = require('./unzip');
 var binaryAjax = require('./binaryajax');
 var parseShp = require('./parseShp');
-var toArrayBuffer = require('./toArrayBuffer');
 var parseDbf = require('parsedbf');
 var Promise = require('lie');
 var Cache = require('lru-cache');
 var cache = new Cache({
-	max: 20
+  max: 20
 });
+
+function toBuffer(b) {
+  if (!b) {
+    throw new Error('forgot to pass buffer');
+  }
+  if (Buffer.isBuffer(b)) {
+    return b;
+  }
+  if (b instanceof global.ArrayBuffer) {
+    return new Buffer(b);
+  }
+  if (b.buffer instanceof global.ArrayBuffer) {
+    if (b.BYTES_PER_ELEMENT === 1) {
+      return new Buffer(b);
+    }
+    return new Buffer(b.buffer);
+  }
+}
+
 function shp(base, whiteList) {
-	if (typeof base === 'string' && cache.has(base)) {
-		return Promise.resolve(cache.get(base));
-	}
-	return shp.getShapefile(base, whiteList).then(function (resp) {
-		if (typeof base === 'string') {
-			cache.set(base, resp);
-		}
-		return resp;
-	});
+  if (typeof base === 'string' && cache.has(base)) {
+    return Promise.resolve(cache.get(base));
+  }
+  return shp.getShapefile(base, whiteList).then(function(resp) {
+    if (typeof base === 'string') {
+      cache.set(base, resp);
+    }
+    return resp;
+  });
 }
 shp.combine = function(arr) {
-	var out = {};
-	out.type = 'FeatureCollection';
-	out.features = [];
-	var i = 0;
-	var len = arr[0].length;
-	while (i < len) {
-		out.features.push({
-			'type': 'Feature',
-			'geometry': arr[0][i],
-			'properties': arr[1][i]
-		});
-		i++;
-	}
-	return out;
+  var out = {};
+  out.type = 'FeatureCollection';
+  out.features = [];
+  var i = 0;
+  var len = arr[0].length;
+  while (i < len) {
+    out.features.push({
+      'type': 'Feature',
+      'geometry': arr[0][i],
+      'properties': arr[1][i]
+    });
+    i++;
+  }
+  return out;
 };
 shp.parseZip = function(buffer, whiteList) {
-	var key;
-	var zip = unzip(buffer);
-	var names = [];
-	whiteList = whiteList || [];
-	for (key in zip) {
-		if (key.indexOf('__MACOSX') !== -1) {
-			continue;
-		}
-		if (key.slice(-3).toLowerCase() === 'shp') {
-			names.push(key.slice(0, - 4));
-		}
-		else if (key.slice(-3).toLowerCase() === 'dbf') {
-			zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = parseDbf(zip[key]);
-		}
-		else if (key.slice(-3).toLowerCase() === 'prj') {
-			zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = proj4(zip[key]);
-		}
-		else if (key.slice(-4).toLowerCase() === 'json' || whiteList.indexOf(key.split('.').pop()) > -1) {
-			names.push(key.slice(0, -3) + key.slice(-3).toLowerCase());
-		}
-	}
-	if (!names.length) {
-		throw new Error('no layers founds');
-	}
-	var geojson = names.map(function(name) {
-		var parsed;
-		if (name.slice(-4).toLowerCase() === 'json') {
-			parsed = JSON.parse(zip[name]);
-			parsed.fileName = name.slice(0, name.lastIndexOf('.'));
-		}
-		else if (whiteList.indexOf(name.slice(name.lastIndexOf('.') + 1)) > -1) {
-			parsed = zip[name];
-			parsed.fileName = name;
-		}
-		else {
-			parsed = shp.combine([parseShp(zip[name + '.shp'], zip[name + '.prj']), zip[name + '.dbf']]);
-			parsed.fileName = name;
-		}
-		return parsed;
-	});
-	if (geojson.length === 1) {
-		return geojson[0];
-	}
-	else {
-		return geojson;
-	}
+  var key;
+  buffer = toBuffer(buffer);
+  var zip = unzip(buffer);
+  var names = [];
+  whiteList = whiteList || [];
+  for (key in zip) {
+    if (key.indexOf('__MACOSX') !== -1) {
+      continue;
+    }
+    if (key.slice(-3).toLowerCase() === 'shp') {
+      names.push(key.slice(0, -4));
+      zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = zip[key];
+    } else if (key.slice(-3).toLowerCase() === 'prj') {
+      zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = proj4(zip[key]);
+    } else if (key.slice(-4).toLowerCase() === 'json' || whiteList.indexOf(key.split('.').pop()) > -1) {
+      names.push(key.slice(0, -3) + key.slice(-3).toLowerCase());
+    } else if (key.slice(-3).toLowerCase() === 'dbf' || key.slice(-3).toLowerCase() === 'cpg') {
+      zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = zip[key];
+    }
+  }
+  if (!names.length) {
+    throw new Error('no layers founds');
+  }
+  var geojson = names.map(function(name) {
+    var parsed, dbf;
+    var lastDotIdx = name.lastIndexOf('.');
+    if (lastDotIdx > -1 && name.slice(lastDotIdx).indexOf('json') > -1) {
+      parsed = JSON.parse(zip[name]);
+      parsed.fileName = name.slice(0, lastDotIdx);
+    } else if (whiteList.indexOf(name.slice(lastDotIdx + 1)) > -1) {
+      parsed = zip[name];
+      parsed.fileName = name;
+    } else {
+      if (zip[name + '.dbf']) {
+        dbf = parseDbf(zip[name + '.dbf'], zip[name + '.cpg']);
+      }
+      parsed = shp.combine([parseShp(zip[name + '.shp'], zip[name + '.prj']), dbf]);
+      parsed.fileName = name;
+    }
+    return parsed;
+  });
+  if (geojson.length === 1) {
+    return geojson[0];
+  } else {
+    return geojson;
+  }
 };
 
 function getZip(base, whiteList) {
-	return binaryAjax(base).then(function(a) {
-		return shp.parseZip(a, whiteList);
-	});
+  return binaryAjax(base).then(function(a) {
+    return shp.parseZip(a, whiteList);
+  });
 }
 shp.getShapefile = function(base, whiteList) {
-	if (typeof base === 'string') {
-		if (base.slice(-4) === '.zip') {
-			return getZip(base, whiteList);
-		}
-		else {
-			return Promise.all([
-				Promise.all([
-					binaryAjax(base + '.shp'),
-					binaryAjax(base + '.prj')
-				]).then(function(args) {
-					return parseShp(args[0], args[1] ? proj4(args[1]) : false);
-				}),
-				binaryAjax(base + '.dbf').then(parseDbf)
-			]).then(shp.combine);
-		}
-	}
-	else {
-		return new Promise(function(resolve) {
-			resolve(shp.parseZip(base));
-		});
-	}
+  if (typeof base === 'string') {
+    if (base.slice(-4).toLowerCase() === '.zip') {
+      return getZip(base, whiteList);
+    } else {
+      return Promise.all([
+        Promise.all([
+          binaryAjax(base + '.shp'),
+          binaryAjax(base + '.prj')
+        ]).then(function(args) {
+          return parseShp(args[0], args[1] ? proj4(args[1]) : false);
+        }),
+        Promise.all([
+          binaryAjax(base + '.dbf'),
+          binaryAjax(base + '.cpg')
+        ]).then(function(args) {
+          return parseDbf(args[0], args[1])
+        })
+      ]).then(shp.combine);
+    }
+  } else {
+    return new Promise(function(resolve) {
+      resolve(shp.parseZip(base));
+    });
+  }
 };
-shp.parseShp = function (shp, prj) {
-	if (Buffer.isBuffer(shp)) {
-		shp = toArrayBuffer(shp);
-	}
-	if (Buffer.isBuffer(prj)) {
-		prj = prj.toString();
-	}
-	if (typeof prj === 'string') {
-		prj = proj4(prj);
-		return parseShp(shp, prj);
-	} else {
-		return parseShp(shp);
-	}
+shp.parseShp = function(shp, prj) {
+  shp = toBuffer(shp);
+  if (Buffer.isBuffer(prj)) {
+    prj = prj.toString();
+  }
+  if (typeof prj === 'string') {
+    prj = proj4(prj);
+    return parseShp(shp, prj);
+  } else {
+    return parseShp(shp);
+  }
 };
-shp.parseDbf = function (dbf) {
-	if (Buffer.isBuffer(dbf)) {
-		dbf = toArrayBuffer(dbf);
-	}
-	return parseDbf(dbf);
+shp.parseDbf = function(dbf, cpg) {
+  dbf = toBuffer(dbf);
+  return parseDbf(dbf, cpg);
 };
 module.exports = shp;
 
-}).call(this,require("buffer").Buffer)
-},{"./binaryajax":1,"./parseShp":3,"./toArrayBuffer":4,"./unzip":5,"buffer":7,"lie":86,"lru-cache":101,"parsedbf":102,"proj4":138}],3:[function(require,module,exports){
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
+},{"./binaryajax":1,"./parseShp":3,"./unzip":4,"buffer":8,"lie":70,"lru-cache":71,"parsedbf":89,"proj4":90}],3:[function(require,module,exports){
 'use strict';
-function isClockWise(array){
-	var sum = 0;
-	var i = 1;
-	var len = array.length;
-	var prev,cur;
-	while(i<len){
-		prev = cur||array[0];
-		cur = array[i];
-		sum += ((cur[0]-prev[0])*(cur[1]+prev[1]));
-		i++;
-	}
-	return sum > 0;
+
+function isClockWise(array) {
+  var sum = 0;
+  var i = 1;
+  var len = array.length;
+  var prev, cur;
+  while (i < len) {
+    prev = cur || array[0];
+    cur = array[i];
+    sum += ((cur[0] - prev[0]) * (cur[1] + prev[1]));
+    i++;
+  }
+  return sum > 0;
 }
-function polyReduce(a,b){
-	if(isClockWise(b)||!a.length){
-		a.push([b]);
-	}else{
-		a[a.length-1].push(b);
-	}
-	return a;
+
+function polyReduce(a, b) {
+  if (isClockWise(b) || !a.length) {
+    a.push([b]);
+  } else {
+    a[a.length - 1].push(b);
+  }
+  return a;
 }
-ParseShp.prototype.parsePoint = function (data){
-	return {
-		'type': 'Point',
-		'coordinates': this.parseCoord(data,0)
-	};
+ParseShp.prototype.parsePoint = function(data) {
+  return {
+    'type': 'Point',
+    'coordinates': this.parseCoord(data, 0)
+  };
 };
-ParseShp.prototype.parseZPoint = function (data){
-	var pointXY = this.parsePoint(data);
-	pointXY.coordinates.push(this.parseCoord(data,16));
-	return pointXY;
+ParseShp.prototype.parseZPoint = function(data) {
+  var pointXY = this.parsePoint(data);
+  pointXY.coordinates.push(this.parseCoord(data, 16));
+  return pointXY;
 };
-ParseShp.prototype.parsePointArray = function (data,offset,num){
-	var out = [];
-	var done = 0;
-	while(done<num){
-		out.push(this.parseCoord(data,offset));
-		offset += 16;
-		done++;
-	}
-	return out;
+ParseShp.prototype.parsePointArray = function(data, offset, num) {
+  var out = [];
+  var done = 0;
+  while (done < num) {
+    out.push(this.parseCoord(data, offset));
+    offset += 16;
+    done++;
+  }
+  return out;
 };
-ParseShp.prototype.parseZPointArray = function (data,zOffset,num,coordinates){
-	var i = 0;
-	while(i<num){
-		coordinates[i].push(data.getFloat64(zOffset,true));
-		i++;
-		zOffset += 8;
-	}
-	return coordinates;
+ParseShp.prototype.parseZPointArray = function(data, zOffset, num, coordinates) {
+  var i = 0;
+  while (i < num) {
+    coordinates[i].push(data.readDoubleLE(zOffset));
+    i++;
+    zOffset += 8;
+  }
+  return coordinates;
 };
-ParseShp.prototype.parseArrayGroup = function (data,offset,partOffset,num,tot){
-	var out = [];
-	var done = 0;
-	var curNum,nextNum=0,pointNumber;
-	while(done<num){
-		done++;
-		partOffset += 4;
-		curNum = nextNum;
-		if(done===num){
-			nextNum = tot;
-		}else{
-			nextNum = data.getInt32(partOffset,true);
-		}
-		pointNumber = nextNum - curNum;
-		if(!pointNumber){
-			continue;
-		}
-		out.push(this.parsePointArray(data,offset,pointNumber));
-		offset += (pointNumber<<4);
-	}
-	return out;
+ParseShp.prototype.parseArrayGroup = function(data, offset, partOffset, num, tot) {
+  var out = [];
+  var done = 0;
+  var curNum, nextNum = 0,
+    pointNumber;
+  while (done < num) {
+    done++;
+    partOffset += 4;
+    curNum = nextNum;
+    if (done === num) {
+      nextNum = tot;
+    } else {
+      nextNum = data.readInt32LE(partOffset);
+    }
+    pointNumber = nextNum - curNum;
+    if (!pointNumber) {
+      continue;
+    }
+    out.push(this.parsePointArray(data, offset, pointNumber));
+    offset += (pointNumber << 4);
+  }
+  return out;
 };
-ParseShp.prototype.parseZArrayGroup = function(data,zOffset,num,coordinates){
-	var i = 0;
-	while(i<num){
-		coordinates[i] = this.parseZPointArray(data,zOffset,coordinates[i].length,coordinates[i]);
-		zOffset += (coordinates[i].length<<3);
-		i++;
-	}
-	return coordinates;
+ParseShp.prototype.parseZArrayGroup = function(data, zOffset, num, coordinates) {
+  var i = 0;
+  while (i < num) {
+    coordinates[i] = this.parseZPointArray(data, zOffset, coordinates[i].length, coordinates[i]);
+    zOffset += (coordinates[i].length << 3);
+    i++;
+  }
+  return coordinates;
 };
-ParseShp.prototype.parseMultiPoint = function (data){
-	var out = {};
-	var mins = this.parseCoord(data,0);
-	var maxs = this.parseCoord(data,16);
-	out.bbox = [
-		mins[0],
-		mins[1],
-		maxs[0],
-		maxs[1]
-	];
-	var num = data.getInt32(32,true);
-	var offset = 36;
-	if(num===1){
-		out.type = 'Point';
-		out.coordinates = this.parseCoord(data,offset);
-	}else{
-		out.type = 'MultiPoint';
-		out.coordinates = this.parsePointArray(data,offset,num);
-	}
-	return out;
+ParseShp.prototype.parseMultiPoint = function(data) {
+  var out = {};
+  var mins = this.parseCoord(data, 0);
+  var maxs = this.parseCoord(data, 16);
+  out.bbox = [
+    mins[0],
+    mins[1],
+    maxs[0],
+    maxs[1]
+  ];
+  var num = data.readInt32(32, true);
+  var offset = 36;
+  if (num === 1) {
+    out.type = 'Point';
+    out.coordinates = this.parseCoord(data, offset);
+  } else {
+    out.type = 'MultiPoint';
+    out.coordinates = this.parsePointArray(data, offset, num);
+  }
+  return out;
 };
-ParseShp.prototype.parseZMultiPoint = function(data){
-	var geoJson = this.parseMultiPoint(data);
-	var num;
-	if(geoJson.type === 'Point'){
-		geoJson.coordinates.push(data.getFloat64(72,true));
-		return geoJson;
-	}else{
-		num = geoJson.coordinates.length;
-	}
-	var zOffset = 56 + (num<<4);
-	geoJson.coordinates =  this.parseZPointArray(data,zOffset,num,geoJson.coordinates);
-	return geoJson;
+ParseShp.prototype.parseZMultiPoint = function(data) {
+  var geoJson = this.parseMultiPoint(data);
+  var num;
+  if (geoJson.type === 'Point') {
+    geoJson.coordinates.push(data.readDoubleLE(72));
+    return geoJson;
+  } else {
+    num = geoJson.coordinates.length;
+  }
+  var zOffset = 56 + (num << 4);
+  geoJson.coordinates = this.parseZPointArray(data, zOffset, num, geoJson.coordinates);
+  return geoJson;
 };
-ParseShp.prototype.parsePolyline = function (data){
-	var out = {};
-	var mins = this.parseCoord(data,0);
-	var maxs = this.parseCoord(data,16);
-	out.bbox = [
-		mins[0],
-		mins[1],
-		maxs[0],
-		maxs[1]
-	];
-	var numParts = data.getInt32(32,true);
-	var num = data.getInt32(36,true);
-	var offset,partOffset;
-	if(numParts === 1){
-		out.type = 'LineString';
-		offset = 44;
-		out.coordinates = this.parsePointArray(data,offset,num);
-	}else{
-		out.type = 'MultiLineString';
-		offset = 40 + (numParts<<2);
-		partOffset = 40;
-		out.coordinates = this.parseArrayGroup(data,offset,partOffset,numParts,num);
-	}
-	return out;
+ParseShp.prototype.parsePolyline = function(data) {
+  var out = {};
+  var mins = this.parseCoord(data, 0);
+  var maxs = this.parseCoord(data, 16);
+  out.bbox = [
+    mins[0],
+    mins[1],
+    maxs[0],
+    maxs[1]
+  ];
+  var numParts = data.readInt32LE(32);
+  var num = data.readInt32LE(36);
+  var offset, partOffset;
+  if (numParts === 1) {
+    out.type = 'LineString';
+    offset = 44;
+    out.coordinates = this.parsePointArray(data, offset, num);
+  } else {
+    out.type = 'MultiLineString';
+    offset = 40 + (numParts << 2);
+    partOffset = 40;
+    out.coordinates = this.parseArrayGroup(data, offset, partOffset, numParts, num);
+  }
+  return out;
 };
-ParseShp.prototype.parseZPolyline = function(data){
-	var geoJson = this.parsePolyline(data);
-	var num = geoJson.coordinates.length;
-	var zOffset = 60 + (num<<4);
-	if(geoJson.type === 'LineString'){
-		geoJson.coordinates =  this.parseZPointArray(data,zOffset,num,geoJson.coordinates);
-		return geoJson;
-	}else{
-		geoJson.coordinates =  this.parseZArrayGroup(data,zOffset,num,geoJson.coordinates);
-		return geoJson;
-	}
+ParseShp.prototype.parseZPolyline = function(data) {
+  var geoJson = this.parsePolyline(data);
+  var num = geoJson.coordinates.length;
+  var zOffset = 60 + (num << 4);
+  if (geoJson.type === 'LineString') {
+    geoJson.coordinates = this.parseZPointArray(data, zOffset, num, geoJson.coordinates);
+    return geoJson;
+  } else {
+    geoJson.coordinates = this.parseZArrayGroup(data, zOffset, num, geoJson.coordinates);
+    return geoJson;
+  }
 };
-ParseShp.prototype.polyFuncs = function (out){
-	if(out.type === 'LineString'){
-		out.type = 'Polygon';
-		out.coordinates = [out.coordinates];
-		return out;
-	}else{
-		out.coordinates = out.coordinates.reduce(polyReduce,[]);
-		if(out.coordinates.length === 1){
-			out.type = 'Polygon';
-			out.coordinates = out.coordinates[0];
-			return out;
-		}else{
-			out.type = 'MultiPolygon';
-			return out;
-		}
-	}
+ParseShp.prototype.polyFuncs = function(out) {
+  if (out.type === 'LineString') {
+    out.type = 'Polygon';
+    out.coordinates = [out.coordinates];
+    return out;
+  } else {
+    out.coordinates = out.coordinates.reduce(polyReduce, []);
+    if (out.coordinates.length === 1) {
+      out.type = 'Polygon';
+      out.coordinates = out.coordinates[0];
+      return out;
+    } else {
+      out.type = 'MultiPolygon';
+      return out;
+    }
+  }
 };
-ParseShp.prototype.parsePolygon = function (data){
-	return this.polyFuncs(this.parsePolyline(data));
+ParseShp.prototype.parsePolygon = function(data) {
+  return this.polyFuncs(this.parsePolyline(data));
 };
-ParseShp.prototype.parseZPolygon = function(data){
-	return this.polyFuncs(this.parseZPolyline(data));
+ParseShp.prototype.parseZPolygon = function(data) {
+  return this.polyFuncs(this.parseZPolyline(data));
 };
 var shpFuncObj = {
-	1:'parsePoint',
-	3:'parsePolyline',
-	5:'parsePolygon',
-	8:'parseMultiPoint',
-	11:'parseZPoint',
-	13:'parseZPolyline',
-	15:'parseZPolygon',
-	18:'parseZMultiPoint'
+  1: 'parsePoint',
+  3: 'parsePolyline',
+  5: 'parsePolygon',
+  8: 'parseMultiPoint',
+  11: 'parseZPoint',
+  13: 'parseZPolyline',
+  15: 'parseZPolygon',
+  18: 'parseZMultiPoint'
 };
 
 
 
-function makeParseCoord(trans){
-	if(trans){
-		return function(data,offset){
-			return trans.inverse([data.getFloat64(offset,true),data.getFloat64(offset+8,true)]);
-		};
-	}else{
-		return function(data,offset){
-			return [data.getFloat64(offset,true),data.getFloat64(offset+8,true)];
-		};
-	}
+function makeParseCoord(trans) {
+  if (trans) {
+    return function(data, offset) {
+      return trans.inverse([data.readDoubleLE(offset), data.readDoubleLE(offset + 8)]);
+    };
+  } else {
+    return function(data, offset) {
+      return [data.readDoubleLE(offset), data.readDoubleLE(offset + 8)];
+    };
+  }
 }
-function ParseShp(buffer,trans){
-	if(!(this instanceof ParseShp)){
-		return new ParseShp(buffer,trans);
-	}
-	this.buffer = buffer;
-	this.shpFuncs(trans);
-	this.rows = this.getRows();
+
+function ParseShp(buffer, trans) {
+  if (!(this instanceof ParseShp)) {
+    return new ParseShp(buffer, trans);
+  }
+  this.buffer = buffer;
+  this.shpFuncs(trans);
+  this.rows = this.getRows();
 }
-ParseShp.prototype.shpFuncs = function (tran){
-	var num = this.getShpCode();
-	if(num>20){
-		num -= 20;
-	}
-	if(!(num in shpFuncObj)){
-		throw new Error('I don\'t know that shp type');
-	}
-	this.parseFunc = this[shpFuncObj[num]];
-	this.parseCoord = makeParseCoord(tran);
+ParseShp.prototype.shpFuncs = function(tran) {
+  var num = this.getShpCode();
+  if (num > 20) {
+    num -= 20;
+  }
+  if (!(num in shpFuncObj)) {
+    throw new Error('I don\'t know that shp type');
+  }
+  this.parseFunc = this[shpFuncObj[num]];
+  this.parseCoord = makeParseCoord(tran);
 };
-ParseShp.prototype.getShpCode = function(){
-	return this.parseHeader().shpCode;
+ParseShp.prototype.getShpCode = function() {
+  return this.parseHeader().shpCode;
 };
-ParseShp.prototype.parseHeader = function (){
-	var view = new DataView(this.buffer,0,100) ;
-	return {
-		length : view.getInt32(6<<2,false),
-		version : view.getInt32(7<<2,true),
-		shpCode : view.getInt32(8<<2,true),
-		bbox : [
-			view.getFloat64(9<<2,true),
-			view.getFloat64(11<<2,true),
-			view.getFloat64(13<<2,true),
-			view.getFloat64(13<<2,true)
-		]
-	};
+ParseShp.prototype.parseHeader = function() {
+  var view = this.buffer.slice(0, 100);
+  return {
+    length: view.readInt32BE(6 << 2),
+    version: view.readInt32LE(7 << 2),
+    shpCode: view.readInt32LE(8 << 2),
+    bbox: [
+      view.readDoubleLE(9 << 2),
+      view.readDoubleLE(11 << 2),
+      view.readDoubleLE(13 << 2),
+      view.readDoubleLE(13 << 2)
+    ]
+  };
 };
-ParseShp.prototype.getRows = function(){
-	var offset=100;
-	var len = this.buffer.byteLength;
-	var out = [];
-	var current;
-	while(offset<len){
-		current = this.getRow(offset);
-		offset += 8;
-		offset += current.len;
-		if(current.type){
-			out.push(this.parseFunc(current.data));
-		}
-	}
-	return out;
-};
-ParseShp.prototype.getRow = function(offset){
-	var view = new DataView(this.buffer,offset,12);
-	var len = view.getInt32(4,false) << 1;
-	var data = new DataView(this.buffer,offset+12,len - 4);
-	
-	return {
-		id:view.getInt32(0,false),
-		len:len,
-		data:data,
-		type:view.getInt32(8,true)
-	};
-};
-module.exports = function(buffer, trans){
-	return new ParseShp(buffer, trans).rows;
-};
-},{}],4:[function(require,module,exports){
-'use strict';
-module.exports = toArrayBuffer;
-function toArrayBuffer(buffer) {
-    var arrayBuffer = new ArrayBuffer(buffer.length);
-    var view = new Uint8Array(arrayBuffer);
-    var i = -1;
-    var len = buffer.length;
-    while (++i < len) {
-        view[i] = buffer[i];
+ParseShp.prototype.getRows = function() {
+  var offset = 100;
+  var len = this.buffer.byteLength;
+  var out = [];
+  var current;
+  while (offset < len) {
+    current = this.getRow(offset);
+    offset += 8;
+    offset += current.len;
+    if (current.type) {
+      out.push(this.parseFunc(current.data));
     }
-    return arrayBuffer;
-}
-},{}],5:[function(require,module,exports){
+  }
+  return out;
+};
+ParseShp.prototype.getRow = function(offset) {
+  var view = this.buffer.slice(offset, offset + 12);
+  var len = view.readInt32BE(4) << 1;
+  var data = this.buffer.slice(offset + 12, offset + len + 8);
+
+  return {
+    id: view.readInt32BE(0),
+    len: len,
+    data: data,
+    type: view.readInt32LE(8)
+  };
+};
+module.exports = function(buffer, trans) {
+  return new ParseShp(buffer, trans).rows;
+};
+
+},{}],4:[function(require,module,exports){
 'use strict';
 
 var JSZip = require('jszip');
@@ -455,8 +471,7 @@ module.exports = function(buffer) {
 	var out = {};
 	files.forEach(function(a) {
 		if (a.name.slice(-3).toLowerCase() === 'shp' || a.name.slice(-3).toLowerCase() === 'dbf') {
-			out[a.name] = a.asText();
-			out[a.name] = a.asArrayBuffer();
+			out[a.name] = a.asNodeBuffer();
 		}
 		else {
 			out[a.name] = a.asText();
@@ -465,26 +480,261 @@ module.exports = function(buffer) {
 	return out;
 };
 
-},{"jszip":52}],6:[function(require,module,exports){
+},{"jszip":55}],5:[function(require,module,exports){
+/*!
+ * assertion-error
+ * Copyright(c) 2013 Jake Luer <jake@qualiancy.com>
+ * MIT Licensed
+ */
+
+/*!
+ * Return a function that will copy properties from
+ * one object to another excluding any originally
+ * listed. Returned function will create a new `{}`.
+ *
+ * @param {String} excluded properties ...
+ * @return {Function}
+ */
+
+function exclude () {
+  var excludes = [].slice.call(arguments);
+
+  function excludeProps (res, obj) {
+    Object.keys(obj).forEach(function (key) {
+      if (!~excludes.indexOf(key)) res[key] = obj[key];
+    });
+  }
+
+  return function extendExclude () {
+    var args = [].slice.call(arguments)
+      , i = 0
+      , res = {};
+
+    for (; i < args.length; i++) {
+      excludeProps(res, args[i]);
+    }
+
+    return res;
+  };
+};
+
+/*!
+ * Primary Exports
+ */
+
+module.exports = AssertionError;
+
+/**
+ * ### AssertionError
+ *
+ * An extension of the JavaScript `Error` constructor for
+ * assertion and validation scenarios.
+ *
+ * @param {String} message
+ * @param {Object} properties to include (optional)
+ * @param {callee} start stack function (optional)
+ */
+
+function AssertionError (message, _props, ssf) {
+  var extend = exclude('name', 'message', 'stack', 'constructor', 'toJSON')
+    , props = extend(_props || {});
+
+  // default values
+  this.message = message || 'Unspecified AssertionError';
+  this.showDiff = false;
+
+  // copy from properties
+  for (var key in props) {
+    this[key] = props[key];
+  }
+
+  // capture stack trace
+  ssf = ssf || arguments.callee;
+  if (ssf && Error.captureStackTrace) {
+    Error.captureStackTrace(this, ssf);
+  } else {
+    try {
+      throw new Error();
+    } catch(e) {
+      this.stack = e.stack;
+    }
+  }
+}
+
+/*!
+ * Inherit from Error.prototype
+ */
+
+AssertionError.prototype = Object.create(Error.prototype);
+
+/*!
+ * Statically set name
+ */
+
+AssertionError.prototype.name = 'AssertionError';
+
+/*!
+ * Ensure correct constructor
+ */
+
+AssertionError.prototype.constructor = AssertionError;
+
+/**
+ * Allow errors to be converted to JSON for static transfer.
+ *
+ * @param {Boolean} include stack (default: `true`)
+ * @return {Object} object that can be `JSON.stringify`
+ */
+
+AssertionError.prototype.toJSON = function (stack) {
+  var extend = exclude('constructor', 'toJSON', 'stack')
+    , props = extend({ name: this.name }, this);
+
+  // include stack if exists and not turned off
+  if (false !== stack && this.stack) {
+    props.stack = this.stack;
+  }
+
+  return props;
+};
+
+},{}],6:[function(require,module,exports){
+'use strict'
+
+exports.byteLength = byteLength
+exports.toByteArray = toByteArray
+exports.fromByteArray = fromByteArray
+
+var lookup = []
+var revLookup = []
+var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
+
+var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+for (var i = 0, len = code.length; i < len; ++i) {
+  lookup[i] = code[i]
+  revLookup[code.charCodeAt(i)] = i
+}
+
+revLookup['-'.charCodeAt(0)] = 62
+revLookup['_'.charCodeAt(0)] = 63
+
+function placeHoldersCount (b64) {
+  var len = b64.length
+  if (len % 4 > 0) {
+    throw new Error('Invalid string. Length must be a multiple of 4')
+  }
+
+  // the number of equal signs (place holders)
+  // if there are two placeholders, than the two characters before it
+  // represent one byte
+  // if there is only one, then the three characters before it represent 2 bytes
+  // this is just a cheap hack to not do indexOf twice
+  return b64[len - 2] === '=' ? 2 : b64[len - 1] === '=' ? 1 : 0
+}
+
+function byteLength (b64) {
+  // base64 is 4/3 + up to two characters of the original data
+  return b64.length * 3 / 4 - placeHoldersCount(b64)
+}
+
+function toByteArray (b64) {
+  var i, j, l, tmp, placeHolders, arr
+  var len = b64.length
+  placeHolders = placeHoldersCount(b64)
+
+  arr = new Arr(len * 3 / 4 - placeHolders)
+
+  // if there are placeholders, only get up to the last complete 4 chars
+  l = placeHolders > 0 ? len - 4 : len
+
+  var L = 0
+
+  for (i = 0, j = 0; i < l; i += 4, j += 3) {
+    tmp = (revLookup[b64.charCodeAt(i)] << 18) | (revLookup[b64.charCodeAt(i + 1)] << 12) | (revLookup[b64.charCodeAt(i + 2)] << 6) | revLookup[b64.charCodeAt(i + 3)]
+    arr[L++] = (tmp >> 16) & 0xFF
+    arr[L++] = (tmp >> 8) & 0xFF
+    arr[L++] = tmp & 0xFF
+  }
+
+  if (placeHolders === 2) {
+    tmp = (revLookup[b64.charCodeAt(i)] << 2) | (revLookup[b64.charCodeAt(i + 1)] >> 4)
+    arr[L++] = tmp & 0xFF
+  } else if (placeHolders === 1) {
+    tmp = (revLookup[b64.charCodeAt(i)] << 10) | (revLookup[b64.charCodeAt(i + 1)] << 4) | (revLookup[b64.charCodeAt(i + 2)] >> 2)
+    arr[L++] = (tmp >> 8) & 0xFF
+    arr[L++] = tmp & 0xFF
+  }
+
+  return arr
+}
+
+function tripletToBase64 (num) {
+  return lookup[num >> 18 & 0x3F] + lookup[num >> 12 & 0x3F] + lookup[num >> 6 & 0x3F] + lookup[num & 0x3F]
+}
+
+function encodeChunk (uint8, start, end) {
+  var tmp
+  var output = []
+  for (var i = start; i < end; i += 3) {
+    tmp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
+    output.push(tripletToBase64(tmp))
+  }
+  return output.join('')
+}
+
+function fromByteArray (uint8) {
+  var tmp
+  var len = uint8.length
+  var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
+  var output = ''
+  var parts = []
+  var maxChunkLength = 16383 // must be multiple of 3
+
+  // go through the array every three bytes, we'll deal with trailing stuff later
+  for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
+    parts.push(encodeChunk(uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)))
+  }
+
+  // pad the end with zeros, but make sure to not forget the extra bytes
+  if (extraBytes === 1) {
+    tmp = uint8[len - 1]
+    output += lookup[tmp >> 2]
+    output += lookup[(tmp << 4) & 0x3F]
+    output += '=='
+  } else if (extraBytes === 2) {
+    tmp = (uint8[len - 2] << 8) + (uint8[len - 1])
+    output += lookup[tmp >> 10]
+    output += lookup[(tmp >> 4) & 0x3F]
+    output += lookup[(tmp << 2) & 0x3F]
+    output += '='
+  }
+
+  parts.push(output)
+
+  return parts.join('')
+}
 
 },{}],7:[function(require,module,exports){
+
+},{}],8:[function(require,module,exports){
+(function (global){
 /*!
  * The buffer module from node.js, for the browser.
  *
  * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
  * @license  MIT
  */
+/* eslint-disable no-proto */
+
+'use strict'
 
 var base64 = require('base64-js')
 var ieee754 = require('ieee754')
-var isArray = require('is-array')
+var isArray = require('isarray')
 
 exports.Buffer = Buffer
 exports.SlowBuffer = SlowBuffer
 exports.INSPECT_MAX_BYTES = 50
-Buffer.poolSize = 8192 // not used by this implementation
-
-var rootParent = {}
 
 /**
  * If `Buffer.TYPED_ARRAY_SUPPORT`:
@@ -494,35 +744,42 @@ var rootParent = {}
  * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
  * Opera 11.6+, iOS 4.2+.
  *
+ * Due to various browser bugs, sometimes the Object implementation will be used even
+ * when the browser supports typed arrays.
+ *
  * Note:
  *
- * - Implementation must support adding new properties to `Uint8Array` instances.
- *   Firefox 4-29 lacked support, fixed in Firefox 30+.
- *   See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
+ *   - Firefox 4-29 lacks support for adding new properties to `Uint8Array` instances,
+ *     See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
  *
- *  - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
+ *   - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
  *
- *  - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
- *    incorrect length in some situations.
- *
- * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they will
- * get the Object implementation, which is slower but will work correctly.
+ *   - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
+ *     incorrect length in some situations.
+
+ * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they
+ * get the Object implementation, which is slower but behaves correctly.
  */
-Buffer.TYPED_ARRAY_SUPPORT = (function () {
-  function Foo () {}
+Buffer.TYPED_ARRAY_SUPPORT = global.TYPED_ARRAY_SUPPORT !== undefined
+  ? global.TYPED_ARRAY_SUPPORT
+  : typedArraySupport()
+
+/*
+ * Export kMaxLength after typed array support is determined.
+ */
+exports.kMaxLength = kMaxLength()
+
+function typedArraySupport () {
   try {
-    var buf = new ArrayBuffer(0)
-    var arr = new Uint8Array(buf)
-    arr.foo = function () { return 42 }
-    arr.constructor = Foo
+    var arr = new Uint8Array(1)
+    arr.__proto__ = {__proto__: Uint8Array.prototype, foo: function () { return 42 }}
     return arr.foo() === 42 && // typed array instances can be augmented
-        arr.constructor === Foo && // constructor can be set
         typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
-        new Uint8Array(1).subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
+        arr.subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
   } catch (e) {
     return false
   }
-})()
+}
 
 function kMaxLength () {
   return Buffer.TYPED_ARRAY_SUPPORT
@@ -530,155 +787,252 @@ function kMaxLength () {
     : 0x3fffffff
 }
 
-/**
- * Class: Buffer
- * =============
- *
- * The Buffer constructor returns instances of `Uint8Array` that are augmented
- * with function properties for all the node `Buffer` API functions. We use
- * `Uint8Array` so that square bracket notation works as expected -- it returns
- * a single octet.
- *
- * By augmenting the instances, we can avoid modifying the `Uint8Array`
- * prototype.
- */
-function Buffer (arg) {
-  if (!(this instanceof Buffer)) {
-    // Avoid going through an ArgumentsAdaptorTrampoline in the common case.
-    if (arguments.length > 1) return new Buffer(arg, arguments[1])
-    return new Buffer(arg)
+function createBuffer (that, length) {
+  if (kMaxLength() < length) {
+    throw new RangeError('Invalid typed array length')
+  }
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    // Return an augmented `Uint8Array` instance, for best performance
+    that = new Uint8Array(length)
+    that.__proto__ = Buffer.prototype
+  } else {
+    // Fallback: Return an object instance of the Buffer class
+    if (that === null) {
+      that = new Buffer(length)
+    }
+    that.length = length
   }
 
-  this.length = 0
-  this.parent = undefined
+  return that
+}
+
+/**
+ * The Buffer constructor returns instances of `Uint8Array` that have their
+ * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
+ * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
+ * and the `Uint8Array` methods. Square bracket notation works as expected -- it
+ * returns a single octet.
+ *
+ * The `Uint8Array` prototype remains unmodified.
+ */
+
+function Buffer (arg, encodingOrOffset, length) {
+  if (!Buffer.TYPED_ARRAY_SUPPORT && !(this instanceof Buffer)) {
+    return new Buffer(arg, encodingOrOffset, length)
+  }
 
   // Common case.
   if (typeof arg === 'number') {
-    return fromNumber(this, arg)
+    if (typeof encodingOrOffset === 'string') {
+      throw new Error(
+        'If encoding is specified then the first argument must be a string'
+      )
+    }
+    return allocUnsafe(this, arg)
   }
-
-  // Slightly less common case.
-  if (typeof arg === 'string') {
-    return fromString(this, arg, arguments.length > 1 ? arguments[1] : 'utf8')
-  }
-
-  // Unusual.
-  return fromObject(this, arg)
+  return from(this, arg, encodingOrOffset, length)
 }
 
-function fromNumber (that, length) {
-  that = allocate(that, length < 0 ? 0 : checked(length) | 0)
+Buffer.poolSize = 8192 // not used by this implementation
+
+// TODO: Legacy, not needed anymore. Remove in next major version.
+Buffer._augment = function (arr) {
+  arr.__proto__ = Buffer.prototype
+  return arr
+}
+
+function from (that, value, encodingOrOffset, length) {
+  if (typeof value === 'number') {
+    throw new TypeError('"value" argument must not be a number')
+  }
+
+  if (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer) {
+    return fromArrayBuffer(that, value, encodingOrOffset, length)
+  }
+
+  if (typeof value === 'string') {
+    return fromString(that, value, encodingOrOffset)
+  }
+
+  return fromObject(that, value)
+}
+
+/**
+ * Functionally equivalent to Buffer(arg, encoding) but throws a TypeError
+ * if value is a number.
+ * Buffer.from(str[, encoding])
+ * Buffer.from(array)
+ * Buffer.from(buffer)
+ * Buffer.from(arrayBuffer[, byteOffset[, length]])
+ **/
+Buffer.from = function (value, encodingOrOffset, length) {
+  return from(null, value, encodingOrOffset, length)
+}
+
+if (Buffer.TYPED_ARRAY_SUPPORT) {
+  Buffer.prototype.__proto__ = Uint8Array.prototype
+  Buffer.__proto__ = Uint8Array
+  if (typeof Symbol !== 'undefined' && Symbol.species &&
+      Buffer[Symbol.species] === Buffer) {
+    // Fix subarray() in ES2016. See: https://github.com/feross/buffer/pull/97
+    Object.defineProperty(Buffer, Symbol.species, {
+      value: null,
+      configurable: true
+    })
+  }
+}
+
+function assertSize (size) {
+  if (typeof size !== 'number') {
+    throw new TypeError('"size" argument must be a number')
+  } else if (size < 0) {
+    throw new RangeError('"size" argument must not be negative')
+  }
+}
+
+function alloc (that, size, fill, encoding) {
+  assertSize(size)
+  if (size <= 0) {
+    return createBuffer(that, size)
+  }
+  if (fill !== undefined) {
+    // Only pay attention to encoding if it's a string. This
+    // prevents accidentally sending in a number that would
+    // be interpretted as a start offset.
+    return typeof encoding === 'string'
+      ? createBuffer(that, size).fill(fill, encoding)
+      : createBuffer(that, size).fill(fill)
+  }
+  return createBuffer(that, size)
+}
+
+/**
+ * Creates a new filled Buffer instance.
+ * alloc(size[, fill[, encoding]])
+ **/
+Buffer.alloc = function (size, fill, encoding) {
+  return alloc(null, size, fill, encoding)
+}
+
+function allocUnsafe (that, size) {
+  assertSize(size)
+  that = createBuffer(that, size < 0 ? 0 : checked(size) | 0)
   if (!Buffer.TYPED_ARRAY_SUPPORT) {
-    for (var i = 0; i < length; i++) {
+    for (var i = 0; i < size; ++i) {
       that[i] = 0
     }
   }
   return that
 }
 
+/**
+ * Equivalent to Buffer(num), by default creates a non-zero-filled Buffer instance.
+ * */
+Buffer.allocUnsafe = function (size) {
+  return allocUnsafe(null, size)
+}
+/**
+ * Equivalent to SlowBuffer(num), by default creates a non-zero-filled Buffer instance.
+ */
+Buffer.allocUnsafeSlow = function (size) {
+  return allocUnsafe(null, size)
+}
+
 function fromString (that, string, encoding) {
-  if (typeof encoding !== 'string' || encoding === '') encoding = 'utf8'
+  if (typeof encoding !== 'string' || encoding === '') {
+    encoding = 'utf8'
+  }
 
-  // Assumption: byteLength() return value is always < kMaxLength.
+  if (!Buffer.isEncoding(encoding)) {
+    throw new TypeError('"encoding" must be a valid string encoding')
+  }
+
   var length = byteLength(string, encoding) | 0
-  that = allocate(that, length)
+  that = createBuffer(that, length)
 
-  that.write(string, encoding)
-  return that
-}
+  var actual = that.write(string, encoding)
 
-function fromObject (that, object) {
-  if (Buffer.isBuffer(object)) return fromBuffer(that, object)
-
-  if (isArray(object)) return fromArray(that, object)
-
-  if (object == null) {
-    throw new TypeError('must start with number, buffer, array or string')
+  if (actual !== length) {
+    // Writing a hex string, for example, that contains invalid characters will
+    // cause everything after the first invalid character to be ignored. (e.g.
+    // 'abxxcd' will be treated as 'ab')
+    that = that.slice(0, actual)
   }
 
-  if (typeof ArrayBuffer !== 'undefined' && object.buffer instanceof ArrayBuffer) {
-    return fromTypedArray(that, object)
-  }
-
-  if (object.length) return fromArrayLike(that, object)
-
-  return fromJsonObject(that, object)
-}
-
-function fromBuffer (that, buffer) {
-  var length = checked(buffer.length) | 0
-  that = allocate(that, length)
-  buffer.copy(that, 0, 0, length)
-  return that
-}
-
-function fromArray (that, array) {
-  var length = checked(array.length) | 0
-  that = allocate(that, length)
-  for (var i = 0; i < length; i += 1) {
-    that[i] = array[i] & 255
-  }
-  return that
-}
-
-// Duplicate of fromArray() to keep fromArray() monomorphic.
-function fromTypedArray (that, array) {
-  var length = checked(array.length) | 0
-  that = allocate(that, length)
-  // Truncating the elements is probably not what people expect from typed
-  // arrays with BYTES_PER_ELEMENT > 1 but it's compatible with the behavior
-  // of the old Buffer constructor.
-  for (var i = 0; i < length; i += 1) {
-    that[i] = array[i] & 255
-  }
   return that
 }
 
 function fromArrayLike (that, array) {
-  var length = checked(array.length) | 0
-  that = allocate(that, length)
+  var length = array.length < 0 ? 0 : checked(array.length) | 0
+  that = createBuffer(that, length)
   for (var i = 0; i < length; i += 1) {
     that[i] = array[i] & 255
   }
   return that
 }
 
-// Deserialize { type: 'Buffer', data: [1,2,3,...] } into a Buffer object.
-// Returns a zero-length buffer for inputs that don't conform to the spec.
-function fromJsonObject (that, object) {
-  var array
-  var length = 0
+function fromArrayBuffer (that, array, byteOffset, length) {
+  array.byteLength // this throws if `array` is not a valid ArrayBuffer
 
-  if (object.type === 'Buffer' && isArray(object.data)) {
-    array = object.data
-    length = checked(array.length) | 0
+  if (byteOffset < 0 || array.byteLength < byteOffset) {
+    throw new RangeError('\'offset\' is out of bounds')
   }
-  that = allocate(that, length)
 
-  for (var i = 0; i < length; i += 1) {
-    that[i] = array[i] & 255
+  if (array.byteLength < byteOffset + (length || 0)) {
+    throw new RangeError('\'length\' is out of bounds')
   }
-  return that
-}
 
-function allocate (that, length) {
+  if (byteOffset === undefined && length === undefined) {
+    array = new Uint8Array(array)
+  } else if (length === undefined) {
+    array = new Uint8Array(array, byteOffset)
+  } else {
+    array = new Uint8Array(array, byteOffset, length)
+  }
+
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     // Return an augmented `Uint8Array` instance, for best performance
-    that = Buffer._augment(new Uint8Array(length))
+    that = array
+    that.__proto__ = Buffer.prototype
   } else {
     // Fallback: Return an object instance of the Buffer class
-    that.length = length
-    that._isBuffer = true
+    that = fromArrayLike(that, array)
+  }
+  return that
+}
+
+function fromObject (that, obj) {
+  if (Buffer.isBuffer(obj)) {
+    var len = checked(obj.length) | 0
+    that = createBuffer(that, len)
+
+    if (that.length === 0) {
+      return that
+    }
+
+    obj.copy(that, 0, 0, len)
+    return that
   }
 
-  var fromPool = length !== 0 && length <= Buffer.poolSize >>> 1
-  if (fromPool) that.parent = rootParent
+  if (obj) {
+    if ((typeof ArrayBuffer !== 'undefined' &&
+        obj.buffer instanceof ArrayBuffer) || 'length' in obj) {
+      if (typeof obj.length !== 'number' || isnan(obj.length)) {
+        return createBuffer(that, 0)
+      }
+      return fromArrayLike(that, obj)
+    }
 
-  return that
+    if (obj.type === 'Buffer' && isArray(obj.data)) {
+      return fromArrayLike(that, obj.data)
+    }
+  }
+
+  throw new TypeError('First argument must be a string, Buffer, ArrayBuffer, Array, or array-like object.')
 }
 
 function checked (length) {
-  // Note: cannot use `length < kMaxLength` here because that fails when
+  // Note: cannot use `length < kMaxLength()` here because that fails when
   // length is NaN (which is otherwise coerced to zero.)
   if (length >= kMaxLength()) {
     throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
@@ -687,12 +1041,11 @@ function checked (length) {
   return length | 0
 }
 
-function SlowBuffer (subject, encoding) {
-  if (!(this instanceof SlowBuffer)) return new SlowBuffer(subject, encoding)
-
-  var buf = new Buffer(subject, encoding)
-  delete buf.parent
-  return buf
+function SlowBuffer (length) {
+  if (+length != length) { // eslint-disable-line eqeqeq
+    length = 0
+  }
+  return Buffer.alloc(+length)
 }
 
 Buffer.isBuffer = function isBuffer (b) {
@@ -709,17 +1062,12 @@ Buffer.compare = function compare (a, b) {
   var x = a.length
   var y = b.length
 
-  var i = 0
-  var len = Math.min(x, y)
-  while (i < len) {
-    if (a[i] !== b[i]) break
-
-    ++i
-  }
-
-  if (i !== len) {
-    x = a[i]
-    y = b[i]
+  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
+    if (a[i] !== b[i]) {
+      x = a[i]
+      y = b[i]
+      break
+    }
   }
 
   if (x < y) return -1
@@ -733,9 +1081,9 @@ Buffer.isEncoding = function isEncoding (encoding) {
     case 'utf8':
     case 'utf-8':
     case 'ascii':
+    case 'latin1':
     case 'binary':
     case 'base64':
-    case 'raw':
     case 'ucs2':
     case 'ucs-2':
     case 'utf16le':
@@ -747,34 +1095,46 @@ Buffer.isEncoding = function isEncoding (encoding) {
 }
 
 Buffer.concat = function concat (list, length) {
-  if (!isArray(list)) throw new TypeError('list argument must be an Array of Buffers.')
+  if (!isArray(list)) {
+    throw new TypeError('"list" argument must be an Array of Buffers')
+  }
 
   if (list.length === 0) {
-    return new Buffer(0)
-  } else if (list.length === 1) {
-    return list[0]
+    return Buffer.alloc(0)
   }
 
   var i
   if (length === undefined) {
     length = 0
-    for (i = 0; i < list.length; i++) {
+    for (i = 0; i < list.length; ++i) {
       length += list[i].length
     }
   }
 
-  var buf = new Buffer(length)
+  var buffer = Buffer.allocUnsafe(length)
   var pos = 0
-  for (i = 0; i < list.length; i++) {
-    var item = list[i]
-    item.copy(buf, pos)
-    pos += item.length
+  for (i = 0; i < list.length; ++i) {
+    var buf = list[i]
+    if (!Buffer.isBuffer(buf)) {
+      throw new TypeError('"list" argument must be an Array of Buffers')
+    }
+    buf.copy(buffer, pos)
+    pos += buf.length
   }
-  return buf
+  return buffer
 }
 
 function byteLength (string, encoding) {
-  if (typeof string !== 'string') string = '' + string
+  if (Buffer.isBuffer(string)) {
+    return string.length
+  }
+  if (typeof ArrayBuffer !== 'undefined' && typeof ArrayBuffer.isView === 'function' &&
+      (ArrayBuffer.isView(string) || string instanceof ArrayBuffer)) {
+    return string.byteLength
+  }
+  if (typeof string !== 'string') {
+    string = '' + string
+  }
 
   var len = string.length
   if (len === 0) return 0
@@ -784,13 +1144,12 @@ function byteLength (string, encoding) {
   for (;;) {
     switch (encoding) {
       case 'ascii':
+      case 'latin1':
       case 'binary':
-      // Deprecated
-      case 'raw':
-      case 'raws':
         return len
       case 'utf8':
       case 'utf-8':
+      case undefined:
         return utf8ToBytes(string).length
       case 'ucs2':
       case 'ucs-2':
@@ -810,20 +1169,42 @@ function byteLength (string, encoding) {
 }
 Buffer.byteLength = byteLength
 
-// pre-set for values that may exist in the future
-Buffer.prototype.length = undefined
-Buffer.prototype.parent = undefined
-
 function slowToString (encoding, start, end) {
   var loweredCase = false
 
-  start = start | 0
-  end = end === undefined || end === Infinity ? this.length : end | 0
+  // No need to verify that "this.length <= MAX_UINT32" since it's a read-only
+  // property of a typed array.
+
+  // This behaves neither like String nor Uint8Array in that we set start/end
+  // to their upper/lower bounds if the value passed is out of range.
+  // undefined is handled specially as per ECMA-262 6th Edition,
+  // Section 13.3.3.7 Runtime Semantics: KeyedBindingInitialization.
+  if (start === undefined || start < 0) {
+    start = 0
+  }
+  // Return early if start > this.length. Done here to prevent potential uint32
+  // coercion fail below.
+  if (start > this.length) {
+    return ''
+  }
+
+  if (end === undefined || end > this.length) {
+    end = this.length
+  }
+
+  if (end <= 0) {
+    return ''
+  }
+
+  // Force coersion to uint32. This will also coerce falsey/NaN values to 0.
+  end >>>= 0
+  start >>>= 0
+
+  if (end <= start) {
+    return ''
+  }
 
   if (!encoding) encoding = 'utf8'
-  if (start < 0) start = 0
-  if (end > this.length) end = this.length
-  if (end <= start) return ''
 
   while (true) {
     switch (encoding) {
@@ -837,8 +1218,9 @@ function slowToString (encoding, start, end) {
       case 'ascii':
         return asciiSlice(this, start, end)
 
+      case 'latin1':
       case 'binary':
-        return binarySlice(this, start, end)
+        return latin1Slice(this, start, end)
 
       case 'base64':
         return base64Slice(this, start, end)
@@ -855,6 +1237,53 @@ function slowToString (encoding, start, end) {
         loweredCase = true
     }
   }
+}
+
+// The property is used by `Buffer.isBuffer` and `is-buffer` (in Safari 5-7) to detect
+// Buffer instances.
+Buffer.prototype._isBuffer = true
+
+function swap (b, n, m) {
+  var i = b[n]
+  b[n] = b[m]
+  b[m] = i
+}
+
+Buffer.prototype.swap16 = function swap16 () {
+  var len = this.length
+  if (len % 2 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 16-bits')
+  }
+  for (var i = 0; i < len; i += 2) {
+    swap(this, i, i + 1)
+  }
+  return this
+}
+
+Buffer.prototype.swap32 = function swap32 () {
+  var len = this.length
+  if (len % 4 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 32-bits')
+  }
+  for (var i = 0; i < len; i += 4) {
+    swap(this, i, i + 3)
+    swap(this, i + 1, i + 2)
+  }
+  return this
+}
+
+Buffer.prototype.swap64 = function swap64 () {
+  var len = this.length
+  if (len % 8 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 64-bits')
+  }
+  for (var i = 0; i < len; i += 8) {
+    swap(this, i, i + 7)
+    swap(this, i + 1, i + 6)
+    swap(this, i + 2, i + 5)
+    swap(this, i + 3, i + 4)
+  }
+  return this
 }
 
 Buffer.prototype.toString = function toString () {
@@ -880,63 +1309,197 @@ Buffer.prototype.inspect = function inspect () {
   return '<Buffer ' + str + '>'
 }
 
-Buffer.prototype.compare = function compare (b) {
-  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
-  if (this === b) return 0
-  return Buffer.compare(this, b)
+Buffer.prototype.compare = function compare (target, start, end, thisStart, thisEnd) {
+  if (!Buffer.isBuffer(target)) {
+    throw new TypeError('Argument must be a Buffer')
+  }
+
+  if (start === undefined) {
+    start = 0
+  }
+  if (end === undefined) {
+    end = target ? target.length : 0
+  }
+  if (thisStart === undefined) {
+    thisStart = 0
+  }
+  if (thisEnd === undefined) {
+    thisEnd = this.length
+  }
+
+  if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
+    throw new RangeError('out of range index')
+  }
+
+  if (thisStart >= thisEnd && start >= end) {
+    return 0
+  }
+  if (thisStart >= thisEnd) {
+    return -1
+  }
+  if (start >= end) {
+    return 1
+  }
+
+  start >>>= 0
+  end >>>= 0
+  thisStart >>>= 0
+  thisEnd >>>= 0
+
+  if (this === target) return 0
+
+  var x = thisEnd - thisStart
+  var y = end - start
+  var len = Math.min(x, y)
+
+  var thisCopy = this.slice(thisStart, thisEnd)
+  var targetCopy = target.slice(start, end)
+
+  for (var i = 0; i < len; ++i) {
+    if (thisCopy[i] !== targetCopy[i]) {
+      x = thisCopy[i]
+      y = targetCopy[i]
+      break
+    }
+  }
+
+  if (x < y) return -1
+  if (y < x) return 1
+  return 0
 }
 
-Buffer.prototype.indexOf = function indexOf (val, byteOffset) {
-  if (byteOffset > 0x7fffffff) byteOffset = 0x7fffffff
-  else if (byteOffset < -0x80000000) byteOffset = -0x80000000
-  byteOffset >>= 0
+// Finds either the first index of `val` in `buffer` at offset >= `byteOffset`,
+// OR the last index of `val` in `buffer` at offset <= `byteOffset`.
+//
+// Arguments:
+// - buffer - a Buffer to search
+// - val - a string, Buffer, or number
+// - byteOffset - an index into `buffer`; will be clamped to an int32
+// - encoding - an optional encoding, relevant is val is a string
+// - dir - true for indexOf, false for lastIndexOf
+function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
+  // Empty buffer means no match
+  if (buffer.length === 0) return -1
 
-  if (this.length === 0) return -1
-  if (byteOffset >= this.length) return -1
+  // Normalize byteOffset
+  if (typeof byteOffset === 'string') {
+    encoding = byteOffset
+    byteOffset = 0
+  } else if (byteOffset > 0x7fffffff) {
+    byteOffset = 0x7fffffff
+  } else if (byteOffset < -0x80000000) {
+    byteOffset = -0x80000000
+  }
+  byteOffset = +byteOffset  // Coerce to Number.
+  if (isNaN(byteOffset)) {
+    // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
+    byteOffset = dir ? 0 : (buffer.length - 1)
+  }
 
-  // Negative offsets start from the end of the buffer
-  if (byteOffset < 0) byteOffset = Math.max(this.length + byteOffset, 0)
+  // Normalize byteOffset: negative offsets start from the end of the buffer
+  if (byteOffset < 0) byteOffset = buffer.length + byteOffset
+  if (byteOffset >= buffer.length) {
+    if (dir) return -1
+    else byteOffset = buffer.length - 1
+  } else if (byteOffset < 0) {
+    if (dir) byteOffset = 0
+    else return -1
+  }
 
+  // Normalize val
   if (typeof val === 'string') {
-    if (val.length === 0) return -1 // special case: looking for empty string always fails
-    return String.prototype.indexOf.call(this, val, byteOffset)
-  }
-  if (Buffer.isBuffer(val)) {
-    return arrayIndexOf(this, val, byteOffset)
-  }
-  if (typeof val === 'number') {
-    if (Buffer.TYPED_ARRAY_SUPPORT && Uint8Array.prototype.indexOf === 'function') {
-      return Uint8Array.prototype.indexOf.call(this, val, byteOffset)
-    }
-    return arrayIndexOf(this, [ val ], byteOffset)
+    val = Buffer.from(val, encoding)
   }
 
-  function arrayIndexOf (arr, val, byteOffset) {
-    var foundIndex = -1
-    for (var i = 0; byteOffset + i < arr.length; i++) {
-      if (arr[byteOffset + i] === val[foundIndex === -1 ? 0 : i - foundIndex]) {
-        if (foundIndex === -1) foundIndex = i
-        if (i - foundIndex + 1 === val.length) return byteOffset + foundIndex
+  // Finally, search either indexOf (if dir is true) or lastIndexOf
+  if (Buffer.isBuffer(val)) {
+    // Special case: looking for empty string/buffer always fails
+    if (val.length === 0) {
+      return -1
+    }
+    return arrayIndexOf(buffer, val, byteOffset, encoding, dir)
+  } else if (typeof val === 'number') {
+    val = val & 0xFF // Search for a byte value [0-255]
+    if (Buffer.TYPED_ARRAY_SUPPORT &&
+        typeof Uint8Array.prototype.indexOf === 'function') {
+      if (dir) {
+        return Uint8Array.prototype.indexOf.call(buffer, val, byteOffset)
       } else {
-        foundIndex = -1
+        return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
       }
     }
-    return -1
+    return arrayIndexOf(buffer, [ val ], byteOffset, encoding, dir)
   }
 
   throw new TypeError('val must be string, number or Buffer')
 }
 
-// `get` will be removed in Node 0.13+
-Buffer.prototype.get = function get (offset) {
-  console.log('.get() is deprecated. Access using array indexes instead.')
-  return this.readUInt8(offset)
+function arrayIndexOf (arr, val, byteOffset, encoding, dir) {
+  var indexSize = 1
+  var arrLength = arr.length
+  var valLength = val.length
+
+  if (encoding !== undefined) {
+    encoding = String(encoding).toLowerCase()
+    if (encoding === 'ucs2' || encoding === 'ucs-2' ||
+        encoding === 'utf16le' || encoding === 'utf-16le') {
+      if (arr.length < 2 || val.length < 2) {
+        return -1
+      }
+      indexSize = 2
+      arrLength /= 2
+      valLength /= 2
+      byteOffset /= 2
+    }
+  }
+
+  function read (buf, i) {
+    if (indexSize === 1) {
+      return buf[i]
+    } else {
+      return buf.readUInt16BE(i * indexSize)
+    }
+  }
+
+  var i
+  if (dir) {
+    var foundIndex = -1
+    for (i = byteOffset; i < arrLength; i++) {
+      if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
+        if (foundIndex === -1) foundIndex = i
+        if (i - foundIndex + 1 === valLength) return foundIndex * indexSize
+      } else {
+        if (foundIndex !== -1) i -= i - foundIndex
+        foundIndex = -1
+      }
+    }
+  } else {
+    if (byteOffset + valLength > arrLength) byteOffset = arrLength - valLength
+    for (i = byteOffset; i >= 0; i--) {
+      var found = true
+      for (var j = 0; j < valLength; j++) {
+        if (read(arr, i + j) !== read(val, j)) {
+          found = false
+          break
+        }
+      }
+      if (found) return i
+    }
+  }
+
+  return -1
 }
 
-// `set` will be removed in Node 0.13+
-Buffer.prototype.set = function set (v, offset) {
-  console.log('.set() is deprecated. Access using array indexes instead.')
-  return this.writeUInt8(v, offset)
+Buffer.prototype.includes = function includes (val, byteOffset, encoding) {
+  return this.indexOf(val, byteOffset, encoding) !== -1
+}
+
+Buffer.prototype.indexOf = function indexOf (val, byteOffset, encoding) {
+  return bidirectionalIndexOf(this, val, byteOffset, encoding, true)
+}
+
+Buffer.prototype.lastIndexOf = function lastIndexOf (val, byteOffset, encoding) {
+  return bidirectionalIndexOf(this, val, byteOffset, encoding, false)
 }
 
 function hexWrite (buf, string, offset, length) {
@@ -953,14 +1516,14 @@ function hexWrite (buf, string, offset, length) {
 
   // must be an even number of digits
   var strLen = string.length
-  if (strLen % 2 !== 0) throw new Error('Invalid hex string')
+  if (strLen % 2 !== 0) throw new TypeError('Invalid hex string')
 
   if (length > strLen / 2) {
     length = strLen / 2
   }
-  for (var i = 0; i < length; i++) {
+  for (var i = 0; i < length; ++i) {
     var parsed = parseInt(string.substr(i * 2, 2), 16)
-    if (isNaN(parsed)) throw new Error('Invalid hex string')
+    if (isNaN(parsed)) return i
     buf[offset + i] = parsed
   }
   return i
@@ -974,7 +1537,7 @@ function asciiWrite (buf, string, offset, length) {
   return blitBuffer(asciiToBytes(string), buf, offset, length)
 }
 
-function binaryWrite (buf, string, offset, length) {
+function latin1Write (buf, string, offset, length) {
   return asciiWrite(buf, string, offset, length)
 }
 
@@ -1009,17 +1572,16 @@ Buffer.prototype.write = function write (string, offset, length, encoding) {
     }
   // legacy write(string, encoding, offset, length) - remove in v0.13
   } else {
-    var swap = encoding
-    encoding = offset
-    offset = length | 0
-    length = swap
+    throw new Error(
+      'Buffer.write(string, encoding, offset[, length]) is no longer supported'
+    )
   }
 
   var remaining = this.length - offset
   if (length === undefined || length > remaining) length = remaining
 
   if ((string.length > 0 && (length < 0 || offset < 0)) || offset > this.length) {
-    throw new RangeError('attempt to write outside buffer bounds')
+    throw new RangeError('Attempt to write outside buffer bounds')
   }
 
   if (!encoding) encoding = 'utf8'
@@ -1037,8 +1599,9 @@ Buffer.prototype.write = function write (string, offset, length, encoding) {
       case 'ascii':
         return asciiWrite(this, string, offset, length)
 
+      case 'latin1':
       case 'binary':
-        return binaryWrite(this, string, offset, length)
+        return latin1Write(this, string, offset, length)
 
       case 'base64':
         // Warning: maxLength not taken into account in base64Write
@@ -1074,37 +1637,116 @@ function base64Slice (buf, start, end) {
 }
 
 function utf8Slice (buf, start, end) {
-  var res = ''
-  var tmp = ''
   end = Math.min(buf.length, end)
+  var res = []
 
-  for (var i = start; i < end; i++) {
-    if (buf[i] <= 0x7F) {
-      res += decodeUtf8Char(tmp) + String.fromCharCode(buf[i])
-      tmp = ''
-    } else {
-      tmp += '%' + buf[i].toString(16)
+  var i = start
+  while (i < end) {
+    var firstByte = buf[i]
+    var codePoint = null
+    var bytesPerSequence = (firstByte > 0xEF) ? 4
+      : (firstByte > 0xDF) ? 3
+      : (firstByte > 0xBF) ? 2
+      : 1
+
+    if (i + bytesPerSequence <= end) {
+      var secondByte, thirdByte, fourthByte, tempCodePoint
+
+      switch (bytesPerSequence) {
+        case 1:
+          if (firstByte < 0x80) {
+            codePoint = firstByte
+          }
+          break
+        case 2:
+          secondByte = buf[i + 1]
+          if ((secondByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
+            if (tempCodePoint > 0x7F) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 3:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
+            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 4:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          fourthByte = buf[i + 3]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
+            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
+              codePoint = tempCodePoint
+            }
+          }
+      }
     }
+
+    if (codePoint === null) {
+      // we did not generate a valid codePoint so insert a
+      // replacement char (U+FFFD) and advance only 1 byte
+      codePoint = 0xFFFD
+      bytesPerSequence = 1
+    } else if (codePoint > 0xFFFF) {
+      // encode to utf16 (surrogate pair dance)
+      codePoint -= 0x10000
+      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
+      codePoint = 0xDC00 | codePoint & 0x3FF
+    }
+
+    res.push(codePoint)
+    i += bytesPerSequence
   }
 
-  return res + decodeUtf8Char(tmp)
+  return decodeCodePointsArray(res)
+}
+
+// Based on http://stackoverflow.com/a/22747272/680742, the browser with
+// the lowest limit is Chrome, with 0x10000 args.
+// We go 1 magnitude less, for safety
+var MAX_ARGUMENTS_LENGTH = 0x1000
+
+function decodeCodePointsArray (codePoints) {
+  var len = codePoints.length
+  if (len <= MAX_ARGUMENTS_LENGTH) {
+    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
+  }
+
+  // Decode in chunks to avoid "call stack size exceeded".
+  var res = ''
+  var i = 0
+  while (i < len) {
+    res += String.fromCharCode.apply(
+      String,
+      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
+    )
+  }
+  return res
 }
 
 function asciiSlice (buf, start, end) {
   var ret = ''
   end = Math.min(buf.length, end)
 
-  for (var i = start; i < end; i++) {
+  for (var i = start; i < end; ++i) {
     ret += String.fromCharCode(buf[i] & 0x7F)
   }
   return ret
 }
 
-function binarySlice (buf, start, end) {
+function latin1Slice (buf, start, end) {
   var ret = ''
   end = Math.min(buf.length, end)
 
-  for (var i = start; i < end; i++) {
+  for (var i = start; i < end; ++i) {
     ret += String.fromCharCode(buf[i])
   }
   return ret
@@ -1117,7 +1759,7 @@ function hexSlice (buf, start, end) {
   if (!end || end < 0 || end > len) end = len
 
   var out = ''
-  for (var i = start; i < end; i++) {
+  for (var i = start; i < end; ++i) {
     out += toHex(buf[i])
   }
   return out
@@ -1155,16 +1797,15 @@ Buffer.prototype.slice = function slice (start, end) {
 
   var newBuf
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    newBuf = Buffer._augment(this.subarray(start, end))
+    newBuf = this.subarray(start, end)
+    newBuf.__proto__ = Buffer.prototype
   } else {
     var sliceLen = end - start
     newBuf = new Buffer(sliceLen, undefined)
-    for (var i = 0; i < sliceLen; i++) {
+    for (var i = 0; i < sliceLen; ++i) {
       newBuf[i] = this[i + start]
     }
   }
-
-  if (newBuf.length) newBuf.parent = this.parent || this
 
   return newBuf
 }
@@ -1334,16 +1975,19 @@ Buffer.prototype.readDoubleBE = function readDoubleBE (offset, noAssert) {
 }
 
 function checkInt (buf, value, offset, ext, max, min) {
-  if (!Buffer.isBuffer(buf)) throw new TypeError('buffer must be a Buffer instance')
-  if (value > max || value < min) throw new RangeError('value is out of bounds')
-  if (offset + ext > buf.length) throw new RangeError('index out of range')
+  if (!Buffer.isBuffer(buf)) throw new TypeError('"buffer" argument must be a Buffer instance')
+  if (value > max || value < min) throw new RangeError('"value" argument is out of bounds')
+  if (offset + ext > buf.length) throw new RangeError('Index out of range')
 }
 
 Buffer.prototype.writeUIntLE = function writeUIntLE (value, offset, byteLength, noAssert) {
   value = +value
   offset = offset | 0
   byteLength = byteLength | 0
-  if (!noAssert) checkInt(this, value, offset, byteLength, Math.pow(2, 8 * byteLength), 0)
+  if (!noAssert) {
+    var maxBytes = Math.pow(2, 8 * byteLength) - 1
+    checkInt(this, value, offset, byteLength, maxBytes, 0)
+  }
 
   var mul = 1
   var i = 0
@@ -1359,7 +2003,10 @@ Buffer.prototype.writeUIntBE = function writeUIntBE (value, offset, byteLength, 
   value = +value
   offset = offset | 0
   byteLength = byteLength | 0
-  if (!noAssert) checkInt(this, value, offset, byteLength, Math.pow(2, 8 * byteLength), 0)
+  if (!noAssert) {
+    var maxBytes = Math.pow(2, 8 * byteLength) - 1
+    checkInt(this, value, offset, byteLength, maxBytes, 0)
+  }
 
   var i = byteLength - 1
   var mul = 1
@@ -1376,13 +2023,13 @@ Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
   offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
   if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
-  this[offset] = value
+  this[offset] = (value & 0xff)
   return offset + 1
 }
 
 function objectWriteUInt16 (buf, value, offset, littleEndian) {
   if (value < 0) value = 0xffff + value + 1
-  for (var i = 0, j = Math.min(buf.length - offset, 2); i < j; i++) {
+  for (var i = 0, j = Math.min(buf.length - offset, 2); i < j; ++i) {
     buf[offset + i] = (value & (0xff << (8 * (littleEndian ? i : 1 - i)))) >>>
       (littleEndian ? i : 1 - i) * 8
   }
@@ -1393,7 +2040,7 @@ Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert
   offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = value
+    this[offset] = (value & 0xff)
     this[offset + 1] = (value >>> 8)
   } else {
     objectWriteUInt16(this, value, offset, true)
@@ -1407,7 +2054,7 @@ Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert
   if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     this[offset] = (value >>> 8)
-    this[offset + 1] = value
+    this[offset + 1] = (value & 0xff)
   } else {
     objectWriteUInt16(this, value, offset, false)
   }
@@ -1416,7 +2063,7 @@ Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert
 
 function objectWriteUInt32 (buf, value, offset, littleEndian) {
   if (value < 0) value = 0xffffffff + value + 1
-  for (var i = 0, j = Math.min(buf.length - offset, 4); i < j; i++) {
+  for (var i = 0, j = Math.min(buf.length - offset, 4); i < j; ++i) {
     buf[offset + i] = (value >>> (littleEndian ? i : 3 - i) * 8) & 0xff
   }
 }
@@ -1429,7 +2076,7 @@ Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert
     this[offset + 3] = (value >>> 24)
     this[offset + 2] = (value >>> 16)
     this[offset + 1] = (value >>> 8)
-    this[offset] = value
+    this[offset] = (value & 0xff)
   } else {
     objectWriteUInt32(this, value, offset, true)
   }
@@ -1444,7 +2091,7 @@ Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert
     this[offset] = (value >>> 24)
     this[offset + 1] = (value >>> 16)
     this[offset + 2] = (value >>> 8)
-    this[offset + 3] = value
+    this[offset + 3] = (value & 0xff)
   } else {
     objectWriteUInt32(this, value, offset, false)
   }
@@ -1462,9 +2109,12 @@ Buffer.prototype.writeIntLE = function writeIntLE (value, offset, byteLength, no
 
   var i = 0
   var mul = 1
-  var sub = value < 0 ? 1 : 0
+  var sub = 0
   this[offset] = value & 0xFF
   while (++i < byteLength && (mul *= 0x100)) {
+    if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
+      sub = 1
+    }
     this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
   }
 
@@ -1482,9 +2132,12 @@ Buffer.prototype.writeIntBE = function writeIntBE (value, offset, byteLength, no
 
   var i = byteLength - 1
   var mul = 1
-  var sub = value < 0 ? 1 : 0
+  var sub = 0
   this[offset + i] = value & 0xFF
   while (--i >= 0 && (mul *= 0x100)) {
+    if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
+      sub = 1
+    }
     this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
   }
 
@@ -1497,7 +2150,7 @@ Buffer.prototype.writeInt8 = function writeInt8 (value, offset, noAssert) {
   if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
   if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
   if (value < 0) value = 0xff + value + 1
-  this[offset] = value
+  this[offset] = (value & 0xff)
   return offset + 1
 }
 
@@ -1506,7 +2159,7 @@ Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) 
   offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = value
+    this[offset] = (value & 0xff)
     this[offset + 1] = (value >>> 8)
   } else {
     objectWriteUInt16(this, value, offset, true)
@@ -1520,7 +2173,7 @@ Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) 
   if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     this[offset] = (value >>> 8)
-    this[offset + 1] = value
+    this[offset + 1] = (value & 0xff)
   } else {
     objectWriteUInt16(this, value, offset, false)
   }
@@ -1532,7 +2185,7 @@ Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) 
   offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = value
+    this[offset] = (value & 0xff)
     this[offset + 1] = (value >>> 8)
     this[offset + 2] = (value >>> 16)
     this[offset + 3] = (value >>> 24)
@@ -1551,7 +2204,7 @@ Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) 
     this[offset] = (value >>> 24)
     this[offset + 1] = (value >>> 16)
     this[offset + 2] = (value >>> 8)
-    this[offset + 3] = value
+    this[offset + 3] = (value & 0xff)
   } else {
     objectWriteUInt32(this, value, offset, false)
   }
@@ -1559,9 +2212,8 @@ Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) 
 }
 
 function checkIEEE754 (buf, value, offset, ext, max, min) {
-  if (value > max || value < min) throw new RangeError('value is out of bounds')
-  if (offset + ext > buf.length) throw new RangeError('index out of range')
-  if (offset < 0) throw new RangeError('index out of range')
+  if (offset + ext > buf.length) throw new RangeError('Index out of range')
+  if (offset < 0) throw new RangeError('Index out of range')
 }
 
 function writeFloat (buf, value, offset, littleEndian, noAssert) {
@@ -1622,141 +2274,96 @@ Buffer.prototype.copy = function copy (target, targetStart, start, end) {
   }
 
   var len = end - start
+  var i
 
-  if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
-    for (var i = 0; i < len; i++) {
+  if (this === target && start < targetStart && targetStart < end) {
+    // descending copy from end
+    for (i = len - 1; i >= 0; --i) {
+      target[i + targetStart] = this[i + start]
+    }
+  } else if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
+    // ascending copy from start
+    for (i = 0; i < len; ++i) {
       target[i + targetStart] = this[i + start]
     }
   } else {
-    target._set(this.subarray(start, start + len), targetStart)
+    Uint8Array.prototype.set.call(
+      target,
+      this.subarray(start, start + len),
+      targetStart
+    )
   }
 
   return len
 }
 
-// fill(value, start=0, end=buffer.length)
-Buffer.prototype.fill = function fill (value, start, end) {
-  if (!value) value = 0
-  if (!start) start = 0
-  if (!end) end = this.length
+// Usage:
+//    buffer.fill(number[, offset[, end]])
+//    buffer.fill(buffer[, offset[, end]])
+//    buffer.fill(string[, offset[, end]][, encoding])
+Buffer.prototype.fill = function fill (val, start, end, encoding) {
+  // Handle string cases:
+  if (typeof val === 'string') {
+    if (typeof start === 'string') {
+      encoding = start
+      start = 0
+      end = this.length
+    } else if (typeof end === 'string') {
+      encoding = end
+      end = this.length
+    }
+    if (val.length === 1) {
+      var code = val.charCodeAt(0)
+      if (code < 256) {
+        val = code
+      }
+    }
+    if (encoding !== undefined && typeof encoding !== 'string') {
+      throw new TypeError('encoding must be a string')
+    }
+    if (typeof encoding === 'string' && !Buffer.isEncoding(encoding)) {
+      throw new TypeError('Unknown encoding: ' + encoding)
+    }
+  } else if (typeof val === 'number') {
+    val = val & 255
+  }
 
-  if (end < start) throw new RangeError('end < start')
+  // Invalid ranges are not set to a default, so can range check early.
+  if (start < 0 || this.length < start || this.length < end) {
+    throw new RangeError('Out of range index')
+  }
 
-  // Fill 0 bytes; we're done
-  if (end === start) return
-  if (this.length === 0) return
+  if (end <= start) {
+    return this
+  }
 
-  if (start < 0 || start >= this.length) throw new RangeError('start out of bounds')
-  if (end < 0 || end > this.length) throw new RangeError('end out of bounds')
+  start = start >>> 0
+  end = end === undefined ? this.length : end >>> 0
+
+  if (!val) val = 0
 
   var i
-  if (typeof value === 'number') {
-    for (i = start; i < end; i++) {
-      this[i] = value
+  if (typeof val === 'number') {
+    for (i = start; i < end; ++i) {
+      this[i] = val
     }
   } else {
-    var bytes = utf8ToBytes(value.toString())
+    var bytes = Buffer.isBuffer(val)
+      ? val
+      : utf8ToBytes(new Buffer(val, encoding).toString())
     var len = bytes.length
-    for (i = start; i < end; i++) {
-      this[i] = bytes[i % len]
+    for (i = 0; i < end - start; ++i) {
+      this[i + start] = bytes[i % len]
     }
   }
 
   return this
 }
 
-/**
- * Creates a new `ArrayBuffer` with the *copied* memory of the buffer instance.
- * Added in Node 0.12. Only available in browsers that support ArrayBuffer.
- */
-Buffer.prototype.toArrayBuffer = function toArrayBuffer () {
-  if (typeof Uint8Array !== 'undefined') {
-    if (Buffer.TYPED_ARRAY_SUPPORT) {
-      return (new Buffer(this)).buffer
-    } else {
-      var buf = new Uint8Array(this.length)
-      for (var i = 0, len = buf.length; i < len; i += 1) {
-        buf[i] = this[i]
-      }
-      return buf.buffer
-    }
-  } else {
-    throw new TypeError('Buffer.toArrayBuffer not supported in this browser')
-  }
-}
-
 // HELPER FUNCTIONS
 // ================
 
-var BP = Buffer.prototype
-
-/**
- * Augment a Uint8Array *instance* (not the Uint8Array class!) with Buffer methods
- */
-Buffer._augment = function _augment (arr) {
-  arr.constructor = Buffer
-  arr._isBuffer = true
-
-  // save reference to original Uint8Array set method before overwriting
-  arr._set = arr.set
-
-  // deprecated, will be removed in node 0.13+
-  arr.get = BP.get
-  arr.set = BP.set
-
-  arr.write = BP.write
-  arr.toString = BP.toString
-  arr.toLocaleString = BP.toString
-  arr.toJSON = BP.toJSON
-  arr.equals = BP.equals
-  arr.compare = BP.compare
-  arr.indexOf = BP.indexOf
-  arr.copy = BP.copy
-  arr.slice = BP.slice
-  arr.readUIntLE = BP.readUIntLE
-  arr.readUIntBE = BP.readUIntBE
-  arr.readUInt8 = BP.readUInt8
-  arr.readUInt16LE = BP.readUInt16LE
-  arr.readUInt16BE = BP.readUInt16BE
-  arr.readUInt32LE = BP.readUInt32LE
-  arr.readUInt32BE = BP.readUInt32BE
-  arr.readIntLE = BP.readIntLE
-  arr.readIntBE = BP.readIntBE
-  arr.readInt8 = BP.readInt8
-  arr.readInt16LE = BP.readInt16LE
-  arr.readInt16BE = BP.readInt16BE
-  arr.readInt32LE = BP.readInt32LE
-  arr.readInt32BE = BP.readInt32BE
-  arr.readFloatLE = BP.readFloatLE
-  arr.readFloatBE = BP.readFloatBE
-  arr.readDoubleLE = BP.readDoubleLE
-  arr.readDoubleBE = BP.readDoubleBE
-  arr.writeUInt8 = BP.writeUInt8
-  arr.writeUIntLE = BP.writeUIntLE
-  arr.writeUIntBE = BP.writeUIntBE
-  arr.writeUInt16LE = BP.writeUInt16LE
-  arr.writeUInt16BE = BP.writeUInt16BE
-  arr.writeUInt32LE = BP.writeUInt32LE
-  arr.writeUInt32BE = BP.writeUInt32BE
-  arr.writeIntLE = BP.writeIntLE
-  arr.writeIntBE = BP.writeIntBE
-  arr.writeInt8 = BP.writeInt8
-  arr.writeInt16LE = BP.writeInt16LE
-  arr.writeInt16BE = BP.writeInt16BE
-  arr.writeInt32LE = BP.writeInt32LE
-  arr.writeInt32BE = BP.writeInt32BE
-  arr.writeFloatLE = BP.writeFloatLE
-  arr.writeFloatBE = BP.writeFloatBE
-  arr.writeDoubleLE = BP.writeDoubleLE
-  arr.writeDoubleBE = BP.writeDoubleBE
-  arr.fill = BP.fill
-  arr.inspect = BP.inspect
-  arr.toArrayBuffer = BP.toArrayBuffer
-
-  return arr
-}
-
-var INVALID_BASE64_RE = /[^+\/0-9A-z\-]/g
+var INVALID_BASE64_RE = /[^+\/0-9A-Za-z-_]/g
 
 function base64clean (str) {
   // Node strips out invalid characters like \n and \t from the string, base64-js does not
@@ -1786,28 +2393,15 @@ function utf8ToBytes (string, units) {
   var length = string.length
   var leadSurrogate = null
   var bytes = []
-  var i = 0
 
-  for (; i < length; i++) {
+  for (var i = 0; i < length; ++i) {
     codePoint = string.charCodeAt(i)
 
     // is surrogate component
     if (codePoint > 0xD7FF && codePoint < 0xE000) {
       // last char was a lead
-      if (leadSurrogate) {
-        // 2 leads in a row
-        if (codePoint < 0xDC00) {
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          leadSurrogate = codePoint
-          continue
-        } else {
-          // valid surrogate pair
-          codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
-          leadSurrogate = null
-        }
-      } else {
+      if (!leadSurrogate) {
         // no lead yet
-
         if (codePoint > 0xDBFF) {
           // unexpected trail
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
@@ -1816,17 +2410,29 @@ function utf8ToBytes (string, units) {
           // unpaired lead
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
           continue
-        } else {
-          // valid lead
-          leadSurrogate = codePoint
-          continue
         }
+
+        // valid lead
+        leadSurrogate = codePoint
+
+        continue
       }
+
+      // 2 leads in a row
+      if (codePoint < 0xDC00) {
+        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+        leadSurrogate = codePoint
+        continue
+      }
+
+      // valid surrogate pair
+      codePoint = (leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00) + 0x10000
     } else if (leadSurrogate) {
       // valid bmp char, but last char was a lead
       if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-      leadSurrogate = null
     }
+
+    leadSurrogate = null
 
     // encode utf8
     if (codePoint < 0x80) {
@@ -1845,7 +2451,7 @@ function utf8ToBytes (string, units) {
         codePoint >> 0x6 & 0x3F | 0x80,
         codePoint & 0x3F | 0x80
       )
-    } else if (codePoint < 0x200000) {
+    } else if (codePoint < 0x110000) {
       if ((units -= 4) < 0) break
       bytes.push(
         codePoint >> 0x12 | 0xF0,
@@ -1863,7 +2469,7 @@ function utf8ToBytes (string, units) {
 
 function asciiToBytes (str) {
   var byteArray = []
-  for (var i = 0; i < str.length; i++) {
+  for (var i = 0; i < str.length; ++i) {
     // Node's code seems to be doing this and not & 0x7F..
     byteArray.push(str.charCodeAt(i) & 0xFF)
   }
@@ -1873,7 +2479,7 @@ function asciiToBytes (str) {
 function utf16leToBytes (str, units) {
   var c, hi, lo
   var byteArray = []
-  for (var i = 0; i < str.length; i++) {
+  for (var i = 0; i < str.length; ++i) {
     if ((units -= 2) < 0) break
 
     c = str.charCodeAt(i)
@@ -1891,269 +2497,19 @@ function base64ToBytes (str) {
 }
 
 function blitBuffer (src, dst, offset, length) {
-  for (var i = 0; i < length; i++) {
+  for (var i = 0; i < length; ++i) {
     if ((i + offset >= dst.length) || (i >= src.length)) break
     dst[i + offset] = src[i]
   }
   return i
 }
 
-function decodeUtf8Char (str) {
-  try {
-    return decodeURIComponent(str)
-  } catch (err) {
-    return String.fromCharCode(0xFFFD) // UTF 8 invalid char
-  }
+function isnan (val) {
+  return val !== val // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":8,"ieee754":9,"is-array":10}],8:[function(require,module,exports){
-var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-;(function (exports) {
-	'use strict';
-
-  var Arr = (typeof Uint8Array !== 'undefined')
-    ? Uint8Array
-    : Array
-
-	var PLUS   = '+'.charCodeAt(0)
-	var SLASH  = '/'.charCodeAt(0)
-	var NUMBER = '0'.charCodeAt(0)
-	var LOWER  = 'a'.charCodeAt(0)
-	var UPPER  = 'A'.charCodeAt(0)
-	var PLUS_URL_SAFE = '-'.charCodeAt(0)
-	var SLASH_URL_SAFE = '_'.charCodeAt(0)
-
-	function decode (elt) {
-		var code = elt.charCodeAt(0)
-		if (code === PLUS ||
-		    code === PLUS_URL_SAFE)
-			return 62 // '+'
-		if (code === SLASH ||
-		    code === SLASH_URL_SAFE)
-			return 63 // '/'
-		if (code < NUMBER)
-			return -1 //no match
-		if (code < NUMBER + 10)
-			return code - NUMBER + 26 + 26
-		if (code < UPPER + 26)
-			return code - UPPER
-		if (code < LOWER + 26)
-			return code - LOWER + 26
-	}
-
-	function b64ToByteArray (b64) {
-		var i, j, l, tmp, placeHolders, arr
-
-		if (b64.length % 4 > 0) {
-			throw new Error('Invalid string. Length must be a multiple of 4')
-		}
-
-		// the number of equal signs (place holders)
-		// if there are two placeholders, than the two characters before it
-		// represent one byte
-		// if there is only one, then the three characters before it represent 2 bytes
-		// this is just a cheap hack to not do indexOf twice
-		var len = b64.length
-		placeHolders = '=' === b64.charAt(len - 2) ? 2 : '=' === b64.charAt(len - 1) ? 1 : 0
-
-		// base64 is 4/3 + up to two characters of the original data
-		arr = new Arr(b64.length * 3 / 4 - placeHolders)
-
-		// if there are placeholders, only get up to the last complete 4 chars
-		l = placeHolders > 0 ? b64.length - 4 : b64.length
-
-		var L = 0
-
-		function push (v) {
-			arr[L++] = v
-		}
-
-		for (i = 0, j = 0; i < l; i += 4, j += 3) {
-			tmp = (decode(b64.charAt(i)) << 18) | (decode(b64.charAt(i + 1)) << 12) | (decode(b64.charAt(i + 2)) << 6) | decode(b64.charAt(i + 3))
-			push((tmp & 0xFF0000) >> 16)
-			push((tmp & 0xFF00) >> 8)
-			push(tmp & 0xFF)
-		}
-
-		if (placeHolders === 2) {
-			tmp = (decode(b64.charAt(i)) << 2) | (decode(b64.charAt(i + 1)) >> 4)
-			push(tmp & 0xFF)
-		} else if (placeHolders === 1) {
-			tmp = (decode(b64.charAt(i)) << 10) | (decode(b64.charAt(i + 1)) << 4) | (decode(b64.charAt(i + 2)) >> 2)
-			push((tmp >> 8) & 0xFF)
-			push(tmp & 0xFF)
-		}
-
-		return arr
-	}
-
-	function uint8ToBase64 (uint8) {
-		var i,
-			extraBytes = uint8.length % 3, // if we have 1 byte left, pad 2 bytes
-			output = "",
-			temp, length
-
-		function encode (num) {
-			return lookup.charAt(num)
-		}
-
-		function tripletToBase64 (num) {
-			return encode(num >> 18 & 0x3F) + encode(num >> 12 & 0x3F) + encode(num >> 6 & 0x3F) + encode(num & 0x3F)
-		}
-
-		// go through the array every three bytes, we'll deal with trailing stuff later
-		for (i = 0, length = uint8.length - extraBytes; i < length; i += 3) {
-			temp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
-			output += tripletToBase64(temp)
-		}
-
-		// pad the end with zeros, but make sure to not forget the extra bytes
-		switch (extraBytes) {
-			case 1:
-				temp = uint8[uint8.length - 1]
-				output += encode(temp >> 2)
-				output += encode((temp << 4) & 0x3F)
-				output += '=='
-				break
-			case 2:
-				temp = (uint8[uint8.length - 2] << 8) + (uint8[uint8.length - 1])
-				output += encode(temp >> 10)
-				output += encode((temp >> 4) & 0x3F)
-				output += encode((temp << 2) & 0x3F)
-				output += '='
-				break
-		}
-
-		return output
-	}
-
-	exports.toByteArray = b64ToByteArray
-	exports.fromByteArray = uint8ToBase64
-}(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
-
-},{}],9:[function(require,module,exports){
-exports.read = function (buffer, offset, isLE, mLen, nBytes) {
-  var e, m
-  var eLen = nBytes * 8 - mLen - 1
-  var eMax = (1 << eLen) - 1
-  var eBias = eMax >> 1
-  var nBits = -7
-  var i = isLE ? (nBytes - 1) : 0
-  var d = isLE ? -1 : 1
-  var s = buffer[offset + i]
-
-  i += d
-
-  e = s & ((1 << (-nBits)) - 1)
-  s >>= (-nBits)
-  nBits += eLen
-  for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8) {}
-
-  m = e & ((1 << (-nBits)) - 1)
-  e >>= (-nBits)
-  nBits += mLen
-  for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8) {}
-
-  if (e === 0) {
-    e = 1 - eBias
-  } else if (e === eMax) {
-    return m ? NaN : ((s ? -1 : 1) * Infinity)
-  } else {
-    m = m + Math.pow(2, mLen)
-    e = e - eBias
-  }
-  return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
-}
-
-exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
-  var e, m, c
-  var eLen = nBytes * 8 - mLen - 1
-  var eMax = (1 << eLen) - 1
-  var eBias = eMax >> 1
-  var rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0)
-  var i = isLE ? 0 : (nBytes - 1)
-  var d = isLE ? 1 : -1
-  var s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0
-
-  value = Math.abs(value)
-
-  if (isNaN(value) || value === Infinity) {
-    m = isNaN(value) ? 1 : 0
-    e = eMax
-  } else {
-    e = Math.floor(Math.log(value) / Math.LN2)
-    if (value * (c = Math.pow(2, -e)) < 1) {
-      e--
-      c *= 2
-    }
-    if (e + eBias >= 1) {
-      value += rt / c
-    } else {
-      value += rt * Math.pow(2, 1 - eBias)
-    }
-    if (value * c >= 2) {
-      e++
-      c /= 2
-    }
-
-    if (e + eBias >= eMax) {
-      m = 0
-      e = eMax
-    } else if (e + eBias >= 1) {
-      m = (value * c - 1) * Math.pow(2, mLen)
-      e = e + eBias
-    } else {
-      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen)
-      e = 0
-    }
-  }
-
-  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8) {}
-
-  e = (e << mLen) | m
-  eLen += mLen
-  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
-
-  buffer[offset + i - d] |= s * 128
-}
-
-},{}],10:[function(require,module,exports){
-
-/**
- * isArray
- */
-
-var isArray = Array.isArray;
-
-/**
- * toString
- */
-
-var str = Object.prototype.toString;
-
-/**
- * Whether or not the given `val`
- * is an array.
- *
- * example:
- *
- *        isArray([]);
- *        // > true
- *        isArray(arguments);
- *        // > false
- *        isArray('');
- *        // > false
- *
- * @param {mixed} val
- * @return {bool}
- */
-
-module.exports = isArray || function (val) {
-  return !! val && '[object Array]' == str.call(val);
-};
-
-},{}],11:[function(require,module,exports){
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"base64-js":6,"ieee754":43,"isarray":45}],9:[function(require,module,exports){
 (function () {
     "use strict";
 
@@ -2190,8 +2546,11 @@ module.exports = isArray || function (val) {
         var Assertion = chai.Assertion;
         var assert = chai.assert;
 
-        function isJQueryPromise(thenable) {
-            return typeof thenable.always === "function" &&
+        function isLegacyJQueryPromise(thenable) {
+            // jQuery promises are Promises/A+-compatible since 3.0.0. jQuery 3.0.0 is also the first version
+            // to define the catch method.
+            return typeof thenable.catch !== "function" &&
+                   typeof thenable.always === "function" &&
                    typeof thenable.done === "function" &&
                    typeof thenable.fail === "function" &&
                    typeof thenable.pipe === "function" &&
@@ -2203,9 +2562,10 @@ module.exports = isArray || function (val) {
             if (typeof assertion._obj.then !== "function") {
                 throw new TypeError(utils.inspect(assertion._obj) + " is not a thenable.");
             }
-            if (isJQueryPromise(assertion._obj)) {
-                throw new TypeError("Chai as Promised is incompatible with jQuery's thenables, sorry! Please use a " +
-                                    "Promises/A+ compatible library (see http://promisesaplus.com/).");
+            if (isLegacyJQueryPromise(assertion._obj)) {
+                throw new TypeError("Chai as Promised is incompatible with thenables of jQuery<3.0.0, sorry! Please " +
+                                    "upgrade jQuery or use another Promises/A+ compatible library (see " +
+                                    "http://promisesaplus.com/).");
             }
         }
 
@@ -2389,8 +2749,8 @@ module.exports = isArray || function (val) {
             doNotify(getBasePromise(this), done);
         });
 
-        method("become", function (value) {
-            return this.eventually.deep.equal(value);
+        method("become", function (value, message) {
+            return this.eventually.deep.equal(value, message);
         });
 
         ////////
@@ -2414,28 +2774,22 @@ module.exports = isArray || function (val) {
         });
 
         getterNames.forEach(function (getterName) {
-            var propertyDesc = propertyDescs[getterName];
-
             // Chainable methods are things like `an`, which can work both for `.should.be.an.instanceOf` and as
             // `should.be.an("object")`. We need to handle those specially.
-            var isChainableMethod = false;
-            try {
-                isChainableMethod = typeof propertyDesc.get.call({}) === "function";
-            } catch (e) { }
+            var isChainableMethod = Assertion.prototype.__methods.hasOwnProperty(getterName);
 
             if (isChainableMethod) {
-                Assertion.addChainableMethod(
+                Assertion.overwriteChainableMethod(
                     getterName,
-                    function () {
-                        var assertion = this;
-                        function originalMethod() {
-                            return propertyDesc.get.call(assertion).apply(assertion, arguments);
-                        }
-                        doAsserterAsyncAndAddThen(originalMethod, this, arguments);
+                    function (originalMethod) {
+                        return function() {
+                            doAsserterAsyncAndAddThen(originalMethod, this, arguments);
+                        };
                     },
-                    function () {
-                        var originalGetter = propertyDesc.get;
-                        doAsserterAsyncAndAddThen(originalGetter, this);
+                    function (originalGetter) {
+                        return function() {
+                            doAsserterAsyncAndAddThen(originalGetter, this);
+                        };
                     }
                 );
             } else {
@@ -2532,10 +2886,10 @@ module.exports = isArray || function (val) {
     }
 }());
 
-},{}],12:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 module.exports = require('./lib/chai');
 
-},{"./lib/chai":13}],13:[function(require,module,exports){
+},{"./lib/chai":11}],11:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011-2014 Jake Luer <jake@alogicalparadox.com>
@@ -2549,7 +2903,7 @@ var used = []
  * Chai version
  */
 
-exports.version = '1.10.0';
+exports.version = '3.5.0';
 
 /*!
  * Assertion Error
@@ -2581,6 +2935,12 @@ exports.use = function (fn) {
 
   return this;
 };
+
+/*!
+ * Utility Functions
+ */
+
+exports.util = util;
 
 /*!
  * Configuration
@@ -2624,7 +2984,7 @@ exports.use(should);
 var assert = require('./chai/interface/assert');
 exports.use(assert);
 
-},{"./chai/assertion":14,"./chai/config":15,"./chai/core/assertions":16,"./chai/interface/assert":17,"./chai/interface/expect":18,"./chai/interface/should":19,"./chai/utils":30,"assertion-error":39}],14:[function(require,module,exports){
+},{"./chai/assertion":12,"./chai/config":13,"./chai/core/assertions":14,"./chai/interface/assert":15,"./chai/interface/expect":16,"./chai/interface/should":17,"./chai/utils":31,"assertion-error":5}],12:[function(require,module,exports){
 /*!
  * chai
  * http://chaijs.com
@@ -2633,7 +2993,6 @@ exports.use(assert);
  */
 
 var config = require('./config');
-var NOOP = function() { };
 
 module.exports = function (_chai, util) {
   /*!
@@ -2697,10 +3056,6 @@ module.exports = function (_chai, util) {
     util.addChainableMethod(this.prototype, name, fn, chainingBehavior);
   };
 
-  Assertion.addChainableNoop = function(name, fn) {
-    util.addChainableMethod(this.prototype, name, NOOP, fn);
-  };
-
   Assertion.overwriteProperty = function (name, fn) {
     util.overwriteProperty(this.prototype, name, fn);
   };
@@ -2713,17 +3068,18 @@ module.exports = function (_chai, util) {
     util.overwriteChainableMethod(this.prototype, name, fn, chainingBehavior);
   };
 
-  /*!
-   * ### .assert(expression, message, negateMessage, expected, actual)
+  /**
+   * ### .assert(expression, message, negateMessage, expected, actual, showDiff)
    *
    * Executes an expression and check expectations. Throws AssertionError for reporting if test doesn't pass.
    *
    * @name assert
    * @param {Philosophical} expression to be tested
-   * @param {String or Function} message or function that returns message to display if fails
-   * @param {String or Function} negatedMessage or function that returns negatedMessage to display if negated expression fails
+   * @param {String|Function} message or function that returns message to display if expression fails
+   * @param {String|Function} negatedMessage or function that returns negatedMessage to display if negated expression fails
    * @param {Mixed} expected value (remember to check for negation)
    * @param {Mixed} actual (optional) will default to `this.obj`
+   * @param {Boolean} showDiff (optional) when set to `true`, assert will display a diff in addition to the message if expression fails
    * @api private
    */
 
@@ -2761,7 +3117,7 @@ module.exports = function (_chai, util) {
   });
 };
 
-},{"./config":15}],15:[function(require,module,exports){
+},{"./config":13}],13:[function(require,module,exports){
 module.exports = {
 
   /**
@@ -2798,10 +3154,15 @@ module.exports = {
    * ### config.truncateThreshold
    *
    * User configurable property, sets length threshold for actual and
-   * expected values in assertion errors. If this threshold is exceeded,
-   * the value is truncated.
+   * expected values in assertion errors. If this threshold is exceeded, for
+   * example for large data structures, the value is replaced with something
+   * like `[ Array(3) ]` or `{ Object (prop1, prop2) }`.
    *
    * Set it to zero if you want to disable truncating altogether.
+   *
+   * This is especially userful when doing assertions on arrays: having this
+   * set to a reasonable large value makes the failure messages readily
+   * inspectable.
    *
    *     chai.config.truncateThreshold = 0;  // disable truncating
    *
@@ -2813,7 +3174,7 @@ module.exports = {
 
 };
 
-},{}],16:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 /*!
  * chai
  * http://chaijs.com
@@ -2841,6 +3202,7 @@ module.exports = function (chai, _) {
    * - been
    * - is
    * - that
+   * - which
    * - and
    * - has
    * - have
@@ -2850,12 +3212,13 @@ module.exports = function (chai, _) {
    * - same
    *
    * @name language chains
+   * @namespace BDD
    * @api public
    */
 
   [ 'to', 'be', 'been'
   , 'is', 'and', 'has', 'have'
-  , 'with', 'that', 'at'
+  , 'with', 'that', 'which', 'at'
   , 'of', 'same' ].forEach(function (chain) {
     Assertion.addProperty(chain, function () {
       return this;
@@ -2873,6 +3236,7 @@ module.exports = function (chai, _) {
    *       .and.not.equal('bar');
    *
    * @name not
+   * @namespace BDD
    * @api public
    */
 
@@ -2890,12 +3254,56 @@ module.exports = function (chai, _) {
    *     expect({ foo: { bar: { baz: 'quux' } } })
    *       .to.have.deep.property('foo.bar.baz', 'quux');
    *
+   * `.deep.property` special characters can be escaped
+   * by adding two slashes before the `.` or `[]`.
+   *
+   *     var deepCss = { '.link': { '[target]': 42 }};
+   *     expect(deepCss).to.have.deep.property('\\.link.\\[target\\]', 42);
+   *
    * @name deep
+   * @namespace BDD
    * @api public
    */
 
   Assertion.addProperty('deep', function () {
     flag(this, 'deep', true);
+  });
+
+  /**
+   * ### .any
+   *
+   * Sets the `any` flag, (opposite of the `all` flag)
+   * later used in the `keys` assertion.
+   *
+   *     expect(foo).to.have.any.keys('bar', 'baz');
+   *
+   * @name any
+   * @namespace BDD
+   * @api public
+   */
+
+  Assertion.addProperty('any', function () {
+    flag(this, 'any', true);
+    flag(this, 'all', false)
+  });
+
+
+  /**
+   * ### .all
+   *
+   * Sets the `all` flag (opposite of the `any` flag)
+   * later used by the `keys` assertion.
+   *
+   *     expect(foo).to.have.all.keys('bar', 'baz');
+   *
+   * @name all
+   * @namespace BDD
+   * @api public
+   */
+
+  Assertion.addProperty('all', function () {
+    flag(this, 'all', true);
+    flag(this, 'any', false);
   });
 
   /**
@@ -2910,6 +3318,13 @@ module.exports = function (chai, _) {
    *     expect({ foo: 'bar' }).to.be.an('object');
    *     expect(null).to.be.a('null');
    *     expect(undefined).to.be.an('undefined');
+   *     expect(new Error).to.be.an('error');
+   *     expect(new Promise).to.be.a('promise');
+   *     expect(new Float32Array()).to.be.a('float32array');
+   *     expect(Symbol()).to.be.a('symbol');
+   *
+   *     // es6 overrides
+   *     expect({[Symbol.toStringTag]:()=>'foo'}).to.be.a('foo');
    *
    *     // language chain
    *     expect(foo).to.be.an.instanceof(Foo);
@@ -2918,6 +3333,7 @@ module.exports = function (chai, _) {
    * @alias an
    * @param {String} type
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -2943,7 +3359,7 @@ module.exports = function (chai, _) {
    * The `include` and `contain` assertions can be used as either property
    * based language chains or as methods to assert the inclusion of an object
    * in an array or a substring in a string. When used as language chains,
-   * they toggle the `contain` flag for the `keys` assertion.
+   * they toggle the `contains` flag for the `keys` assertion.
    *
    *     expect([1,2,3]).to.include(2);
    *     expect('foobar').to.contain('foo');
@@ -2951,8 +3367,11 @@ module.exports = function (chai, _) {
    *
    * @name include
    * @alias contain
+   * @alias includes
+   * @alias contains
    * @param {Object|String|Number} obj
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -2961,9 +3380,12 @@ module.exports = function (chai, _) {
   }
 
   function include (val, msg) {
+    _.expectTypes(this, ['array', 'object', 'string']);
+
     if (msg) flag(this, 'message', msg);
     var obj = flag(this, 'object');
     var expected = false;
+
     if (_.type(obj) === 'array' && _.type(val) === 'object') {
       for (var i in obj) {
         if (_.eql(obj[i], val)) {
@@ -2976,11 +3398,11 @@ module.exports = function (chai, _) {
         for (var k in val) new Assertion(obj).property(k, val[k]);
         return;
       }
-      var subset = {}
-      for (var k in val) subset[k] = obj[k]
+      var subset = {};
+      for (var k in val) subset[k] = obj[k];
       expected = _.eql(subset, val);
     } else {
-      expected = obj && ~obj.indexOf(val)
+      expected = (obj != undefined) && ~obj.indexOf(val);
     }
     this.assert(
         expected
@@ -2990,27 +3412,26 @@ module.exports = function (chai, _) {
 
   Assertion.addChainableMethod('include', include, includeChainingBehavior);
   Assertion.addChainableMethod('contain', include, includeChainingBehavior);
+  Assertion.addChainableMethod('contains', include, includeChainingBehavior);
+  Assertion.addChainableMethod('includes', include, includeChainingBehavior);
 
   /**
    * ### .ok
    *
    * Asserts that the target is truthy.
    *
-   *     expect('everthing').to.be.ok;
+   *     expect('everything').to.be.ok;
    *     expect(1).to.be.ok;
    *     expect(false).to.not.be.ok;
    *     expect(undefined).to.not.be.ok;
    *     expect(null).to.not.be.ok;
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect('everthing').to.be.ok();
-   *     
    * @name ok
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('ok', function () {
+  Assertion.addProperty('ok', function () {
     this.assert(
         flag(this, 'object')
       , 'expected #{this} to be truthy'
@@ -3025,15 +3446,12 @@ module.exports = function (chai, _) {
    *     expect(true).to.be.true;
    *     expect(1).to.not.be.true;
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect(true).to.be.true();
-   *
    * @name true
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('true', function () {
+  Assertion.addProperty('true', function () {
     this.assert(
         true === flag(this, 'object')
       , 'expected #{this} to be true'
@@ -3050,15 +3468,12 @@ module.exports = function (chai, _) {
    *     expect(false).to.be.false;
    *     expect(0).to.not.be.false;
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect(false).to.be.false();
-   *
    * @name false
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('false', function () {
+  Assertion.addProperty('false', function () {
     this.assert(
         false === flag(this, 'object')
       , 'expected #{this} to be false'
@@ -3073,17 +3488,14 @@ module.exports = function (chai, _) {
    * Asserts that the target is `null`.
    *
    *     expect(null).to.be.null;
-   *     expect(undefined).not.to.be.null;
-   *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect(null).to.be.null();
+   *     expect(undefined).to.not.be.null;
    *
    * @name null
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('null', function () {
+  Assertion.addProperty('null', function () {
     this.assert(
         null === flag(this, 'object')
       , 'expected #{this} to be null'
@@ -3099,19 +3511,36 @@ module.exports = function (chai, _) {
    *     expect(undefined).to.be.undefined;
    *     expect(null).to.not.be.undefined;
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect(undefined).to.be.undefined();
-   *
    * @name undefined
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('undefined', function () {
+  Assertion.addProperty('undefined', function () {
     this.assert(
         undefined === flag(this, 'object')
       , 'expected #{this} to be undefined'
       , 'expected #{this} not to be undefined'
+    );
+  });
+
+  /**
+   * ### .NaN
+   * Asserts that the target is `NaN`.
+   *
+   *     expect('foo').to.be.NaN;
+   *     expect(4).not.to.be.NaN;
+   *
+   * @name NaN
+   * @namespace BDD
+   * @api public
+   */
+
+  Assertion.addProperty('NaN', function () {
+    this.assert(
+        isNaN(flag(this, 'object'))
+        , 'expected #{this} to be NaN'
+        , 'expected #{this} not to be NaN'
     );
   });
 
@@ -3128,15 +3557,12 @@ module.exports = function (chai, _) {
    *     expect(bar).to.not.exist;
    *     expect(baz).to.not.exist;
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect(foo).to.exist();
-   *
    * @name exist
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('exist', function () {
+  Assertion.addProperty('exist', function () {
     this.assert(
         null != flag(this, 'object')
       , 'expected #{this} to exist'
@@ -3148,7 +3574,7 @@ module.exports = function (chai, _) {
   /**
    * ### .empty
    *
-   * Asserts that the target's length is `0`. For arrays, it checks
+   * Asserts that the target's length is `0`. For arrays and strings, it checks
    * the `length` property. For objects, it gets the count of
    * enumerable keys.
    *
@@ -3156,15 +3582,12 @@ module.exports = function (chai, _) {
    *     expect('').to.be.empty;
    *     expect({}).to.be.empty;
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     expect([]).to.be.empty();
-   *
    * @name empty
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addChainableNoop('empty', function () {
+  Assertion.addProperty('empty', function () {
     var obj = flag(this, 'object')
       , expected = obj;
 
@@ -3190,14 +3613,9 @@ module.exports = function (chai, _) {
    *       expect(arguments).to.be.arguments;
    *     }
    *
-   * Can also be used as a function, which prevents some linter errors.
-   *
-   *     function test () {
-   *       expect(arguments).to.be.arguments();
-   *     }
-   *
    * @name arguments
    * @alias Arguments
+   * @namespace BDD
    * @api public
    */
 
@@ -3211,8 +3629,8 @@ module.exports = function (chai, _) {
     );
   }
 
-  Assertion.addChainableNoop('arguments', checkArguments);
-  Assertion.addChainableNoop('Arguments', checkArguments);
+  Assertion.addProperty('arguments', checkArguments);
+  Assertion.addProperty('Arguments', checkArguments);
 
   /**
    * ### .equal(value)
@@ -3233,6 +3651,7 @@ module.exports = function (chai, _) {
    * @alias deep.equal
    * @param {Mixed} value
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3269,6 +3688,7 @@ module.exports = function (chai, _) {
    * @alias eqls
    * @param {Mixed} value
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3307,6 +3727,7 @@ module.exports = function (chai, _) {
    * @alias greaterThan
    * @param {Number} value
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3355,6 +3776,7 @@ module.exports = function (chai, _) {
    * @alias gte
    * @param {Number} value
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3403,6 +3825,7 @@ module.exports = function (chai, _) {
    * @alias lessThan
    * @param {Number} value
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3451,6 +3874,7 @@ module.exports = function (chai, _) {
    * @alias lte
    * @param {Number} value
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3498,6 +3922,7 @@ module.exports = function (chai, _) {
    * @param {Number} start lowerbound inclusive
    * @param {Number} finish upperbound inclusive
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3537,6 +3962,7 @@ module.exports = function (chai, _) {
    * @param {Constructor} constructor
    * @param {String} message _optional_
    * @alias instanceOf
+   * @namespace BDD
    * @api public
    */
 
@@ -3571,7 +3997,7 @@ module.exports = function (chai, _) {
    *         green: { tea: 'matcha' }
    *       , teas: [ 'chai', 'matcha', { tea: 'konacha' } ]
    *     };
-
+   *
    *     expect(deepObj).to.have.deep.property('green.tea', 'matcha');
    *     expect(deepObj).to.have.deep.property('teas[1]', 'matcha');
    *     expect(deepObj).to.have.deep.property('teas[2].tea', 'konacha');
@@ -3603,38 +4029,56 @@ module.exports = function (chai, _) {
    *       .with.deep.property('[2]')
    *         .that.deep.equals({ tea: 'konacha' });
    *
+   * Note that dots and bracket in `name` must be backslash-escaped when
+   * the `deep` flag is set, while they must NOT be escaped when the `deep`
+   * flag is not set.
+   *
+   *     // simple referencing
+   *     var css = { '.link[target]': 42 };
+   *     expect(css).to.have.property('.link[target]', 42);
+   *
+   *     // deep referencing
+   *     var deepCss = { '.link': { '[target]': 42 }};
+   *     expect(deepCss).to.have.deep.property('\\.link.\\[target\\]', 42);
+   *
    * @name property
    * @alias deep.property
    * @param {String} name
    * @param {Mixed} value (optional)
    * @param {String} message _optional_
    * @returns value of property for chaining
+   * @namespace BDD
    * @api public
    */
 
   Assertion.addMethod('property', function (name, val, msg) {
     if (msg) flag(this, 'message', msg);
 
-    var descriptor = flag(this, 'deep') ? 'deep property ' : 'property '
+    var isDeep = !!flag(this, 'deep')
+      , descriptor = isDeep ? 'deep property ' : 'property '
       , negate = flag(this, 'negate')
       , obj = flag(this, 'object')
-      , value = flag(this, 'deep')
-        ? _.getPathValue(name, obj)
+      , pathInfo = isDeep ? _.getPathInfo(name, obj) : null
+      , hasProperty = isDeep
+        ? pathInfo.exists
+        : _.hasProperty(name, obj)
+      , value = isDeep
+        ? pathInfo.value
         : obj[name];
 
-    if (negate && undefined !== val) {
+    if (negate && arguments.length > 1) {
       if (undefined === value) {
         msg = (msg != null) ? msg + ': ' : '';
         throw new Error(msg + _.inspect(obj) + ' has no ' + descriptor + _.inspect(name));
       }
     } else {
       this.assert(
-          undefined !== value
+          hasProperty
         , 'expected #{this} to have a ' + descriptor + _.inspect(name)
         , 'expected #{this} to not have ' + descriptor + _.inspect(name));
     }
 
-    if (undefined !== val) {
+    if (arguments.length > 1) {
       this.assert(
           val === value
         , 'expected #{this} to have a ' + descriptor + _.inspect(name) + ' of #{exp}, but got #{act}'
@@ -3659,6 +4103,7 @@ module.exports = function (chai, _) {
    * @alias haveOwnProperty
    * @param {String} name
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3676,16 +4121,60 @@ module.exports = function (chai, _) {
   Assertion.addMethod('haveOwnProperty', assertOwnProperty);
 
   /**
-   * ### .length(value)
+   * ### .ownPropertyDescriptor(name[, descriptor[, message]])
    *
-   * Asserts that the target's `length` property has
-   * the expected value.
+   * Asserts that the target has an own property descriptor `name`, that optionally matches `descriptor`.
    *
-   *     expect([ 1, 2, 3]).to.have.length(3);
-   *     expect('foobar').to.have.length(6);
+   *     expect('test').to.have.ownPropertyDescriptor('length');
+   *     expect('test').to.have.ownPropertyDescriptor('length', { enumerable: false, configurable: false, writable: false, value: 4 });
+   *     expect('test').not.to.have.ownPropertyDescriptor('length', { enumerable: false, configurable: false, writable: false, value: 3 });
+   *     expect('test').ownPropertyDescriptor('length').to.have.property('enumerable', false);
+   *     expect('test').ownPropertyDescriptor('length').to.have.keys('value');
    *
-   * Can also be used as a chain precursor to a value
-   * comparison for the length property.
+   * @name ownPropertyDescriptor
+   * @alias haveOwnPropertyDescriptor
+   * @param {String} name
+   * @param {Object} descriptor _optional_
+   * @param {String} message _optional_
+   * @namespace BDD
+   * @api public
+   */
+
+  function assertOwnPropertyDescriptor (name, descriptor, msg) {
+    if (typeof descriptor === 'string') {
+      msg = descriptor;
+      descriptor = null;
+    }
+    if (msg) flag(this, 'message', msg);
+    var obj = flag(this, 'object');
+    var actualDescriptor = Object.getOwnPropertyDescriptor(Object(obj), name);
+    if (actualDescriptor && descriptor) {
+      this.assert(
+          _.eql(descriptor, actualDescriptor)
+        , 'expected the own property descriptor for ' + _.inspect(name) + ' on #{this} to match ' + _.inspect(descriptor) + ', got ' + _.inspect(actualDescriptor)
+        , 'expected the own property descriptor for ' + _.inspect(name) + ' on #{this} to not match ' + _.inspect(descriptor)
+        , descriptor
+        , actualDescriptor
+        , true
+      );
+    } else {
+      this.assert(
+          actualDescriptor
+        , 'expected #{this} to have an own property descriptor for ' + _.inspect(name)
+        , 'expected #{this} to not have an own property descriptor for ' + _.inspect(name)
+      );
+    }
+    flag(this, 'object', actualDescriptor);
+  }
+
+  Assertion.addMethod('ownPropertyDescriptor', assertOwnPropertyDescriptor);
+  Assertion.addMethod('haveOwnPropertyDescriptor', assertOwnPropertyDescriptor);
+
+  /**
+   * ### .length
+   *
+   * Sets the `doLength` flag later used as a chain precursor to a value
+   * comparison for the `length` property.
    *
    *     expect('foo').to.have.length.above(2);
    *     expect([ 1, 2, 3 ]).to.have.length.above(2);
@@ -3694,10 +4183,29 @@ module.exports = function (chai, _) {
    *     expect('foo').to.have.length.within(2,4);
    *     expect([ 1, 2, 3 ]).to.have.length.within(2,4);
    *
+   * *Deprecation notice:* Using `length` as an assertion will be deprecated
+   * in version 2.4.0 and removed in 3.0.0. Code using the old style of
+   * asserting for `length` property value using `length(value)` should be
+   * switched to use `lengthOf(value)` instead.
+   *
    * @name length
-   * @alias lengthOf
+   * @namespace BDD
+   * @api public
+   */
+
+  /**
+   * ### .lengthOf(value[, message])
+   *
+   * Asserts that the target's `length` property has
+   * the expected value.
+   *
+   *     expect([ 1, 2, 3]).to.have.lengthOf(3);
+   *     expect('foobar').to.have.lengthOf(6);
+   *
+   * @name lengthOf
    * @param {Number} length
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3731,12 +4239,13 @@ module.exports = function (chai, _) {
    *     expect('foobar').to.match(/^foo/);
    *
    * @name match
+   * @alias matches
    * @param {RegExp} RegularExpression
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
-
-  Assertion.addMethod('match', function (re, msg) {
+  function assertMatch(re, msg) {
     if (msg) flag(this, 'message', msg);
     var obj = flag(this, 'object');
     this.assert(
@@ -3744,7 +4253,10 @@ module.exports = function (chai, _) {
       , 'expected #{this} to match ' + re
       , 'expected #{this} not to match ' + re
     );
-  });
+  }
+
+  Assertion.addMethod('match', assertMatch);
+  Assertion.addMethod('matches', assertMatch);
 
   /**
    * ### .string(string)
@@ -3756,6 +4268,7 @@ module.exports = function (chai, _) {
    * @name string
    * @param {String} string
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -3775,42 +4288,88 @@ module.exports = function (chai, _) {
   /**
    * ### .keys(key1, [key2], [...])
    *
-   * Asserts that the target has exactly the given keys, or
-   * asserts the inclusion of some keys when using the
-   * `include` or `contain` modifiers.
+   * Asserts that the target contains any or all of the passed-in keys.
+   * Use in combination with `any`, `all`, `contains`, or `have` will affect
+   * what will pass.
    *
-   *     expect({ foo: 1, bar: 2 }).to.have.keys(['foo', 'bar']);
-   *     expect({ foo: 1, bar: 2, baz: 3 }).to.contain.keys('foo', 'bar');
+   * When used in conjunction with `any`, at least one key that is passed
+   * in must exist in the target object. This is regardless whether or not
+   * the `have` or `contain` qualifiers are used. Note, either `any` or `all`
+   * should be used in the assertion. If neither are used, the assertion is
+   * defaulted to `all`.
+   *
+   * When both `all` and `contain` are used, the target object must have at
+   * least all of the passed-in keys but may have more keys not listed.
+   *
+   * When both `all` and `have` are used, the target object must both contain
+   * all of the passed-in keys AND the number of keys in the target object must
+   * match the number of keys passed in (in other words, a target object must
+   * have all and only all of the passed-in keys).
+   *
+   *     expect({ foo: 1, bar: 2 }).to.have.any.keys('foo', 'baz');
+   *     expect({ foo: 1, bar: 2 }).to.have.any.keys('foo');
+   *     expect({ foo: 1, bar: 2 }).to.contain.any.keys('bar', 'baz');
+   *     expect({ foo: 1, bar: 2 }).to.contain.any.keys(['foo']);
+   *     expect({ foo: 1, bar: 2 }).to.contain.any.keys({'foo': 6});
+   *     expect({ foo: 1, bar: 2 }).to.have.all.keys(['bar', 'foo']);
+   *     expect({ foo: 1, bar: 2 }).to.have.all.keys({'bar': 6, 'foo': 7});
+   *     expect({ foo: 1, bar: 2, baz: 3 }).to.contain.all.keys(['bar', 'foo']);
+   *     expect({ foo: 1, bar: 2, baz: 3 }).to.contain.all.keys({'bar': 6});
+   *
    *
    * @name keys
    * @alias key
-   * @param {String...|Array} keys
+   * @param {...String|Array|Object} keys
+   * @namespace BDD
    * @api public
    */
 
   function assertKeys (keys) {
     var obj = flag(this, 'object')
       , str
-      , ok = true;
+      , ok = true
+      , mixedArgsMsg = 'keys must be given single argument of Array|Object|String, or multiple String arguments';
 
-    keys = keys instanceof Array
-      ? keys
-      : Array.prototype.slice.call(arguments);
+    switch (_.type(keys)) {
+      case "array":
+        if (arguments.length > 1) throw (new Error(mixedArgsMsg));
+        break;
+      case "object":
+        if (arguments.length > 1) throw (new Error(mixedArgsMsg));
+        keys = Object.keys(keys);
+        break;
+      default:
+        keys = Array.prototype.slice.call(arguments);
+    }
 
     if (!keys.length) throw new Error('keys required');
 
     var actual = Object.keys(obj)
       , expected = keys
-      , len = keys.length;
+      , len = keys.length
+      , any = flag(this, 'any')
+      , all = flag(this, 'all');
 
-    // Inclusion
-    ok = keys.every(function(key){
-      return ~actual.indexOf(key);
-    });
+    if (!any && !all) {
+      all = true;
+    }
 
-    // Strict
-    if (!flag(this, 'negate') && !flag(this, 'contains')) {
-      ok = ok && keys.length == actual.length;
+    // Has any
+    if (any) {
+      var intersection = expected.filter(function(key) {
+        return ~actual.indexOf(key);
+      });
+      ok = intersection.length > 0;
+    }
+
+    // Has all
+    if (all) {
+      ok = keys.every(function(key){
+        return ~actual.indexOf(key);
+      });
+      if (!flag(this, 'negate') && !flag(this, 'contains')) {
+        ok = ok && keys.length == actual.length;
+      }
     }
 
     // Key string
@@ -3819,7 +4378,12 @@ module.exports = function (chai, _) {
         return _.inspect(key);
       });
       var last = keys.pop();
-      str = keys.join(', ') + ', and ' + last;
+      if (all) {
+        str = keys.join(', ') + ', and ' + last;
+      }
+      if (any) {
+        str = keys.join(', ') + ', or ' + last;
+      }
     } else {
       str = _.inspect(keys[0]);
     }
@@ -3835,7 +4399,7 @@ module.exports = function (chai, _) {
         ok
       , 'expected #{this} to ' + str
       , 'expected #{this} to not ' + str
-      , expected.sort()
+      , expected.slice(0).sort()
       , actual.sort()
       , true
     );
@@ -3859,7 +4423,6 @@ module.exports = function (chai, _) {
    *     expect(fn).to.not.throw('good function');
    *     expect(fn).to.throw(ReferenceError, /bad function/);
    *     expect(fn).to.throw(err);
-   *     expect(fn).to.not.throw(new RangeError('Out of range.'));
    *
    * Please note that when a throw expectation is negated, it will check each
    * parameter independently, starting with error constructor type. The appropriate way
@@ -3877,6 +4440,7 @@ module.exports = function (chai, _) {
    * @param {String} message _optional_
    * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types
    * @returns error for chaining (null if no error)
+   * @namespace BDD
    * @api public
    */
 
@@ -3901,9 +4465,9 @@ module.exports = function (chai, _) {
       constructor = null;
       errMsg = null;
     } else if (typeof constructor === 'function') {
-      name = constructor.prototype.name || constructor.name;
-      if (name === 'Error' && constructor !== Error) {
-        name = (new constructor()).name;
+      name = constructor.prototype.name;
+      if (!name || (name === 'Error' && constructor !== Error)) {
+        name = constructor.name || (new constructor()).name;
       }
     } else {
       constructor = null;
@@ -3943,7 +4507,7 @@ module.exports = function (chai, _) {
       }
 
       // next, check message
-      var message = 'object' === _.type(err) && "message" in err
+      var message = 'error' === _.type(err) && "message" in err
         ? err.message
         : '' + err;
 
@@ -4017,12 +4581,14 @@ module.exports = function (chai, _) {
    *     expect(Klass).itself.to.respondTo('baz');
    *
    * @name respondTo
+   * @alias respondsTo
    * @param {String} method
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addMethod('respondTo', function (method, msg) {
+  function respondTo (method, msg) {
     if (msg) flag(this, 'message', msg);
     var obj = flag(this, 'object')
       , itself = flag(this, 'itself')
@@ -4035,7 +4601,10 @@ module.exports = function (chai, _) {
       , 'expected #{this} to respond to ' + _.inspect(method)
       , 'expected #{this} to not respond to ' + _.inspect(method)
     );
-  });
+  }
+
+  Assertion.addMethod('respondTo', respondTo);
+  Assertion.addMethod('respondsTo', respondTo);
 
   /**
    * ### .itself
@@ -4050,6 +4619,7 @@ module.exports = function (chai, _) {
    *     expect(Foo).itself.not.to.respondTo('baz');
    *
    * @name itself
+   * @namespace BDD
    * @api public
    */
 
@@ -4065,12 +4635,14 @@ module.exports = function (chai, _) {
    *     expect(1).to.satisfy(function(num) { return num > 0; });
    *
    * @name satisfy
+   * @alias satisfies
    * @param {Function} matcher
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addMethod('satisfy', function (matcher, msg) {
+  function satisfy (matcher, msg) {
     if (msg) flag(this, 'message', msg);
     var obj = flag(this, 'object');
     var result = matcher(obj);
@@ -4081,7 +4653,10 @@ module.exports = function (chai, _) {
       , this.negate ? false : true
       , result
     );
-  });
+  }
+
+  Assertion.addMethod('satisfy', satisfy);
+  Assertion.addMethod('satisfies', satisfy);
 
   /**
    * ### .closeTo(expected, delta)
@@ -4091,19 +4666,21 @@ module.exports = function (chai, _) {
    *     expect(1.5).to.be.closeTo(1, 0.5);
    *
    * @name closeTo
+   * @alias approximately
    * @param {Number} expected
    * @param {Number} delta
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
-  Assertion.addMethod('closeTo', function (expected, delta, msg) {
+  function closeTo(expected, delta, msg) {
     if (msg) flag(this, 'message', msg);
     var obj = flag(this, 'object');
 
     new Assertion(obj, msg).is.a('number');
     if (_.type(expected) !== 'number' || _.type(delta) !== 'number') {
-      throw new Error('the arguments to closeTo must be numbers');
+      throw new Error('the arguments to closeTo or approximately must be numbers');
     }
 
     this.assert(
@@ -4111,7 +4688,10 @@ module.exports = function (chai, _) {
       , 'expected #{this} to be close to ' + expected + ' +/- ' + delta
       , 'expected #{this} not to be close to ' + expected + ' +/- ' + delta
     );
-  });
+  }
+
+  Assertion.addMethod('closeTo', closeTo);
+  Assertion.addMethod('approximately', closeTo);
 
   function isSubsetOf(subset, superset, cmp) {
     return subset.every(function(elem) {
@@ -4142,6 +4722,7 @@ module.exports = function (chai, _) {
    * @name members
    * @param {Array} set
    * @param {String} message _optional_
+   * @namespace BDD
    * @api public
    */
 
@@ -4172,9 +4753,290 @@ module.exports = function (chai, _) {
         , subset
     );
   });
+
+  /**
+   * ### .oneOf(list)
+   *
+   * Assert that a value appears somewhere in the top level of array `list`.
+   *
+   *     expect('a').to.be.oneOf(['a', 'b', 'c']);
+   *     expect(9).to.not.be.oneOf(['z']);
+   *     expect([3]).to.not.be.oneOf([1, 2, [3]]);
+   *
+   *     var three = [3];
+   *     // for object-types, contents are not compared
+   *     expect(three).to.not.be.oneOf([1, 2, [3]]);
+   *     // comparing references works
+   *     expect(three).to.be.oneOf([1, 2, three]);
+   *
+   * @name oneOf
+   * @param {Array<*>} list
+   * @param {String} message _optional_
+   * @namespace BDD
+   * @api public
+   */
+
+  function oneOf (list, msg) {
+    if (msg) flag(this, 'message', msg);
+    var expected = flag(this, 'object');
+    new Assertion(list).to.be.an('array');
+
+    this.assert(
+        list.indexOf(expected) > -1
+      , 'expected #{this} to be one of #{exp}'
+      , 'expected #{this} to not be one of #{exp}'
+      , list
+      , expected
+    );
+  }
+
+  Assertion.addMethod('oneOf', oneOf);
+
+
+  /**
+   * ### .change(function)
+   *
+   * Asserts that a function changes an object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val += 3 };
+   *     var noChangeFn = function() { return 'foo' + 'bar'; }
+   *     expect(fn).to.change(obj, 'val');
+   *     expect(noChangeFn).to.not.change(obj, 'val')
+   *
+   * @name change
+   * @alias changes
+   * @alias Change
+   * @param {String} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace BDD
+   * @api public
+   */
+
+  function assertChanges (object, prop, msg) {
+    if (msg) flag(this, 'message', msg);
+    var fn = flag(this, 'object');
+    new Assertion(object, msg).to.have.property(prop);
+    new Assertion(fn).is.a('function');
+
+    var initial = object[prop];
+    fn();
+
+    this.assert(
+      initial !== object[prop]
+      , 'expected .' + prop + ' to change'
+      , 'expected .' + prop + ' to not change'
+    );
+  }
+
+  Assertion.addChainableMethod('change', assertChanges);
+  Assertion.addChainableMethod('changes', assertChanges);
+
+  /**
+   * ### .increase(function)
+   *
+   * Asserts that a function increases an object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 15 };
+   *     expect(fn).to.increase(obj, 'val');
+   *
+   * @name increase
+   * @alias increases
+   * @alias Increase
+   * @param {String} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace BDD
+   * @api public
+   */
+
+  function assertIncreases (object, prop, msg) {
+    if (msg) flag(this, 'message', msg);
+    var fn = flag(this, 'object');
+    new Assertion(object, msg).to.have.property(prop);
+    new Assertion(fn).is.a('function');
+
+    var initial = object[prop];
+    fn();
+
+    this.assert(
+      object[prop] - initial > 0
+      , 'expected .' + prop + ' to increase'
+      , 'expected .' + prop + ' to not increase'
+    );
+  }
+
+  Assertion.addChainableMethod('increase', assertIncreases);
+  Assertion.addChainableMethod('increases', assertIncreases);
+
+  /**
+   * ### .decrease(function)
+   *
+   * Asserts that a function decreases an object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 5 };
+   *     expect(fn).to.decrease(obj, 'val');
+   *
+   * @name decrease
+   * @alias decreases
+   * @alias Decrease
+   * @param {String} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace BDD
+   * @api public
+   */
+
+  function assertDecreases (object, prop, msg) {
+    if (msg) flag(this, 'message', msg);
+    var fn = flag(this, 'object');
+    new Assertion(object, msg).to.have.property(prop);
+    new Assertion(fn).is.a('function');
+
+    var initial = object[prop];
+    fn();
+
+    this.assert(
+      object[prop] - initial < 0
+      , 'expected .' + prop + ' to decrease'
+      , 'expected .' + prop + ' to not decrease'
+    );
+  }
+
+  Assertion.addChainableMethod('decrease', assertDecreases);
+  Assertion.addChainableMethod('decreases', assertDecreases);
+
+  /**
+   * ### .extensible
+   *
+   * Asserts that the target is extensible (can have new properties added to
+   * it).
+   *
+   *     var nonExtensibleObject = Object.preventExtensions({});
+   *     var sealedObject = Object.seal({});
+   *     var frozenObject = Object.freeze({});
+   *
+   *     expect({}).to.be.extensible;
+   *     expect(nonExtensibleObject).to.not.be.extensible;
+   *     expect(sealedObject).to.not.be.extensible;
+   *     expect(frozenObject).to.not.be.extensible;
+   *
+   * @name extensible
+   * @namespace BDD
+   * @api public
+   */
+
+  Assertion.addProperty('extensible', function() {
+    var obj = flag(this, 'object');
+
+    // In ES5, if the argument to this method is not an object (a primitive), then it will cause a TypeError.
+    // In ES6, a non-object argument will be treated as if it was a non-extensible ordinary object, simply return false.
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/isExtensible
+    // The following provides ES6 behavior when a TypeError is thrown under ES5.
+
+    var isExtensible;
+
+    try {
+      isExtensible = Object.isExtensible(obj);
+    } catch (err) {
+      if (err instanceof TypeError) isExtensible = false;
+      else throw err;
+    }
+
+    this.assert(
+      isExtensible
+      , 'expected #{this} to be extensible'
+      , 'expected #{this} to not be extensible'
+    );
+  });
+
+  /**
+   * ### .sealed
+   *
+   * Asserts that the target is sealed (cannot have new properties added to it
+   * and its existing properties cannot be removed).
+   *
+   *     var sealedObject = Object.seal({});
+   *     var frozenObject = Object.freeze({});
+   *
+   *     expect(sealedObject).to.be.sealed;
+   *     expect(frozenObject).to.be.sealed;
+   *     expect({}).to.not.be.sealed;
+   *
+   * @name sealed
+   * @namespace BDD
+   * @api public
+   */
+
+  Assertion.addProperty('sealed', function() {
+    var obj = flag(this, 'object');
+
+    // In ES5, if the argument to this method is not an object (a primitive), then it will cause a TypeError.
+    // In ES6, a non-object argument will be treated as if it was a sealed ordinary object, simply return true.
+    // See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/isSealed
+    // The following provides ES6 behavior when a TypeError is thrown under ES5.
+
+    var isSealed;
+
+    try {
+      isSealed = Object.isSealed(obj);
+    } catch (err) {
+      if (err instanceof TypeError) isSealed = true;
+      else throw err;
+    }
+
+    this.assert(
+      isSealed
+      , 'expected #{this} to be sealed'
+      , 'expected #{this} to not be sealed'
+    );
+  });
+
+  /**
+   * ### .frozen
+   *
+   * Asserts that the target is frozen (cannot have new properties added to it
+   * and its existing properties cannot be modified).
+   *
+   *     var frozenObject = Object.freeze({});
+   *
+   *     expect(frozenObject).to.be.frozen;
+   *     expect({}).to.not.be.frozen;
+   *
+   * @name frozen
+   * @namespace BDD
+   * @api public
+   */
+
+  Assertion.addProperty('frozen', function() {
+    var obj = flag(this, 'object');
+
+    // In ES5, if the argument to this method is not an object (a primitive), then it will cause a TypeError.
+    // In ES6, a non-object argument will be treated as if it was a frozen ordinary object, simply return true.
+    // See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/isFrozen
+    // The following provides ES6 behavior when a TypeError is thrown under ES5.
+
+    var isFrozen;
+
+    try {
+      isFrozen = Object.isFrozen(obj);
+    } catch (err) {
+      if (err instanceof TypeError) isFrozen = true;
+      else throw err;
+    }
+
+    this.assert(
+      isFrozen
+      , 'expected #{this} to be frozen'
+      , 'expected #{this} to not be frozen'
+    );
+  });
 };
 
-},{}],17:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011-2014 Jake Luer <jake@alogicalparadox.com>
@@ -4206,6 +5068,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} expression to test for truthiness
    * @param {String} message to display on error
    * @name assert
+   * @namespace Assert
    * @api public
    */
 
@@ -4228,6 +5091,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} expected
    * @param {String} message
    * @param {String} operator
+   * @namespace Assert
    * @api public
    */
 
@@ -4241,38 +5105,42 @@ module.exports = function (chai, util) {
   };
 
   /**
-   * ### .ok(object, [message])
+   * ### .isOk(object, [message])
    *
    * Asserts that `object` is truthy.
    *
-   *     assert.ok('everything', 'everything is ok');
-   *     assert.ok(false, 'this will fail');
+   *     assert.isOk('everything', 'everything is ok');
+   *     assert.isOk(false, 'this will fail');
    *
-   * @name ok
+   * @name isOk
+   * @alias ok
    * @param {Mixed} object to test
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
-  assert.ok = function (val, msg) {
+  assert.isOk = function (val, msg) {
     new Assertion(val, msg).is.ok;
   };
 
   /**
-   * ### .notOk(object, [message])
+   * ### .isNotOk(object, [message])
    *
    * Asserts that `object` is falsy.
    *
-   *     assert.notOk('everything', 'this will fail');
-   *     assert.notOk(false, 'this will pass');
+   *     assert.isNotOk('everything', 'this will fail');
+   *     assert.isNotOk(false, 'this will pass');
    *
-   * @name notOk
+   * @name isNotOk
+   * @alias notOk
    * @param {Mixed} object to test
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
-  assert.notOk = function (val, msg) {
+  assert.isNotOk = function (val, msg) {
     new Assertion(val, msg).is.not.ok;
   };
 
@@ -4287,6 +5155,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} actual
    * @param {Mixed} expected
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4313,6 +5182,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} actual
    * @param {Mixed} expected
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4339,6 +5209,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} actual
    * @param {Mixed} expected
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4357,6 +5228,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} actual
    * @param {Mixed} expected
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4375,6 +5247,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} actual
    * @param {Mixed} expected
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4393,11 +5266,90 @@ module.exports = function (chai, util) {
    * @param {Mixed} actual
    * @param {Mixed} expected
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.notDeepEqual = function (act, exp, msg) {
     new Assertion(act, msg).to.not.eql(exp);
+  };
+
+   /**
+   * ### .isAbove(valueToCheck, valueToBeAbove, [message])
+   *
+   * Asserts `valueToCheck` is strictly greater than (>) `valueToBeAbove`
+   *
+   *     assert.isAbove(5, 2, '5 is strictly greater than 2');
+   *
+   * @name isAbove
+   * @param {Mixed} valueToCheck
+   * @param {Mixed} valueToBeAbove
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isAbove = function (val, abv, msg) {
+    new Assertion(val, msg).to.be.above(abv);
+  };
+
+   /**
+   * ### .isAtLeast(valueToCheck, valueToBeAtLeast, [message])
+   *
+   * Asserts `valueToCheck` is greater than or equal to (>=) `valueToBeAtLeast`
+   *
+   *     assert.isAtLeast(5, 2, '5 is greater or equal to 2');
+   *     assert.isAtLeast(3, 3, '3 is greater or equal to 3');
+   *
+   * @name isAtLeast
+   * @param {Mixed} valueToCheck
+   * @param {Mixed} valueToBeAtLeast
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isAtLeast = function (val, atlst, msg) {
+    new Assertion(val, msg).to.be.least(atlst);
+  };
+
+   /**
+   * ### .isBelow(valueToCheck, valueToBeBelow, [message])
+   *
+   * Asserts `valueToCheck` is strictly less than (<) `valueToBeBelow`
+   *
+   *     assert.isBelow(3, 6, '3 is strictly less than 6');
+   *
+   * @name isBelow
+   * @param {Mixed} valueToCheck
+   * @param {Mixed} valueToBeBelow
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isBelow = function (val, blw, msg) {
+    new Assertion(val, msg).to.be.below(blw);
+  };
+
+   /**
+   * ### .isAtMost(valueToCheck, valueToBeAtMost, [message])
+   *
+   * Asserts `valueToCheck` is less than or equal to (<=) `valueToBeAtMost`
+   *
+   *     assert.isAtMost(3, 6, '3 is less than or equal to 6');
+   *     assert.isAtMost(4, 4, '4 is less than or equal to 4');
+   *
+   * @name isAtMost
+   * @param {Mixed} valueToCheck
+   * @param {Mixed} valueToBeAtMost
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isAtMost = function (val, atmst, msg) {
+    new Assertion(val, msg).to.be.most(atmst);
   };
 
   /**
@@ -4411,11 +5363,31 @@ module.exports = function (chai, util) {
    * @name isTrue
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.isTrue = function (val, msg) {
     new Assertion(val, msg).is['true'];
+  };
+
+  /**
+   * ### .isNotTrue(value, [message])
+   *
+   * Asserts that `value` is not true.
+   *
+   *     var tea = 'tasty chai';
+   *     assert.isNotTrue(tea, 'great, time for tea!');
+   *
+   * @name isNotTrue
+   * @param {Mixed} value
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isNotTrue = function (val, msg) {
+    new Assertion(val, msg).to.not.equal(true);
   };
 
   /**
@@ -4429,11 +5401,31 @@ module.exports = function (chai, util) {
    * @name isFalse
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.isFalse = function (val, msg) {
     new Assertion(val, msg).is['false'];
+  };
+
+  /**
+   * ### .isNotFalse(value, [message])
+   *
+   * Asserts that `value` is not false.
+   *
+   *     var tea = 'tasty chai';
+   *     assert.isNotFalse(tea, 'great, time for tea!');
+   *
+   * @name isNotFalse
+   * @param {Mixed} value
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isNotFalse = function (val, msg) {
+    new Assertion(val, msg).to.not.equal(false);
   };
 
   /**
@@ -4446,6 +5438,7 @@ module.exports = function (chai, util) {
    * @name isNull
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4464,11 +5457,45 @@ module.exports = function (chai, util) {
    * @name isNotNull
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.isNotNull = function (val, msg) {
     new Assertion(val, msg).to.not.equal(null);
+  };
+
+  /**
+   * ### .isNaN
+   * Asserts that value is NaN
+   *
+   *    assert.isNaN('foo', 'foo is NaN');
+   *
+   * @name isNaN
+   * @param {Mixed} value
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isNaN = function (val, msg) {
+    new Assertion(val, msg).to.be.NaN;
+  };
+
+  /**
+   * ### .isNotNaN
+   * Asserts that value is not NaN
+   *
+   *    assert.isNotNaN(4, '4 is not NaN');
+   *
+   * @name isNotNaN
+   * @param {Mixed} value
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+  assert.isNotNaN = function (val, msg) {
+    new Assertion(val, msg).not.to.be.NaN;
   };
 
   /**
@@ -4482,6 +5509,7 @@ module.exports = function (chai, util) {
    * @name isUndefined
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4500,6 +5528,7 @@ module.exports = function (chai, util) {
    * @name isDefined
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4518,6 +5547,7 @@ module.exports = function (chai, util) {
    * @name isFunction
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4536,6 +5566,7 @@ module.exports = function (chai, util) {
    * @name isNotFunction
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4546,8 +5577,8 @@ module.exports = function (chai, util) {
   /**
    * ### .isObject(value, [message])
    *
-   * Asserts that `value` is an object (as revealed by
-   * `Object.prototype.toString`).
+   * Asserts that `value` is an object of type 'Object' (as revealed by `Object.prototype.toString`).
+   * _The assertion does not match subclassed objects._
    *
    *     var selection = { name: 'Chai', serve: 'with spices' };
    *     assert.isObject(selection, 'tea selection is an object');
@@ -4555,6 +5586,7 @@ module.exports = function (chai, util) {
    * @name isObject
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4565,7 +5597,7 @@ module.exports = function (chai, util) {
   /**
    * ### .isNotObject(value, [message])
    *
-   * Asserts that `value` is _not_ an object.
+   * Asserts that `value` is _not_ an object of type 'Object' (as revealed by `Object.prototype.toString`).
    *
    *     var selection = 'chai'
    *     assert.isNotObject(selection, 'tea selection is not an object');
@@ -4574,6 +5606,7 @@ module.exports = function (chai, util) {
    * @name isNotObject
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4592,6 +5625,7 @@ module.exports = function (chai, util) {
    * @name isArray
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4610,6 +5644,7 @@ module.exports = function (chai, util) {
    * @name isNotArray
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4628,6 +5663,7 @@ module.exports = function (chai, util) {
    * @name isString
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4646,6 +5682,7 @@ module.exports = function (chai, util) {
    * @name isNotString
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4664,6 +5701,7 @@ module.exports = function (chai, util) {
    * @name isNumber
    * @param {Number} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4682,6 +5720,7 @@ module.exports = function (chai, util) {
    * @name isNotNumber
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4703,6 +5742,7 @@ module.exports = function (chai, util) {
    * @name isBoolean
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4724,6 +5764,7 @@ module.exports = function (chai, util) {
    * @name isNotBoolean
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4748,6 +5789,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} value
    * @param {String} name
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4767,6 +5809,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} value
    * @param {String} typeof name
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4788,6 +5831,7 @@ module.exports = function (chai, util) {
    * @param {Object} object
    * @param {Constructor} constructor
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4809,6 +5853,7 @@ module.exports = function (chai, util) {
    * @param {Object} object
    * @param {Constructor} constructor
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4829,6 +5874,7 @@ module.exports = function (chai, util) {
    * @param {Array|String} haystack
    * @param {Mixed} needle
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4841,7 +5887,7 @@ module.exports = function (chai, util) {
    *
    * Asserts that `haystack` does not include `needle`. Works
    * for strings and arrays.
-   *i
+   *
    *     assert.notInclude('foobar', 'baz', 'string not include substring');
    *     assert.notInclude([ 1, 2, 3 ], 4, 'array not include contain value');
    *
@@ -4849,6 +5895,7 @@ module.exports = function (chai, util) {
    * @param {Array|String} haystack
    * @param {Mixed} needle
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4867,6 +5914,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} value
    * @param {RegExp} regexp
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4885,6 +5933,7 @@ module.exports = function (chai, util) {
    * @param {Mixed} value
    * @param {RegExp} regexp
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4903,6 +5952,7 @@ module.exports = function (chai, util) {
    * @param {Object} object
    * @param {String} property
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4921,6 +5971,7 @@ module.exports = function (chai, util) {
    * @param {Object} object
    * @param {String} property
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4940,6 +5991,7 @@ module.exports = function (chai, util) {
    * @param {Object} object
    * @param {String} property
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4959,6 +6011,7 @@ module.exports = function (chai, util) {
    * @param {Object} object
    * @param {String} property
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4979,6 +6032,7 @@ module.exports = function (chai, util) {
    * @param {String} property
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -4999,6 +6053,7 @@ module.exports = function (chai, util) {
    * @param {String} property
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -5020,6 +6075,7 @@ module.exports = function (chai, util) {
    * @param {String} property
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -5041,6 +6097,7 @@ module.exports = function (chai, util) {
    * @param {String} property
    * @param {Mixed} value
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -5054,12 +6111,13 @@ module.exports = function (chai, util) {
    * Asserts that `object` has a `length` property with the expected value.
    *
    *     assert.lengthOf([1,2,3], 3, 'array has length of 3');
-   *     assert.lengthOf('foobar', 5, 'string has length of 6');
+   *     assert.lengthOf('foobar', 6, 'string has length of 6');
    *
    * @name lengthOf
    * @param {Mixed} object
    * @param {Number} length
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -5074,11 +6132,11 @@ module.exports = function (chai, util) {
    * `constructor`, or alternately that it will throw an error with message
    * matching `regexp`.
    *
-   *     assert.throw(fn, 'function throws a reference error');
-   *     assert.throw(fn, /function throws a reference error/);
-   *     assert.throw(fn, ReferenceError);
-   *     assert.throw(fn, ReferenceError, 'function throws a reference error');
-   *     assert.throw(fn, ReferenceError, /function throws a reference error/);
+   *     assert.throws(fn, 'function throws a reference error');
+   *     assert.throws(fn, /function throws a reference error/);
+   *     assert.throws(fn, ReferenceError);
+   *     assert.throws(fn, ReferenceError, 'function throws a reference error');
+   *     assert.throws(fn, ReferenceError, /function throws a reference error/);
    *
    * @name throws
    * @alias throw
@@ -5088,16 +6146,17 @@ module.exports = function (chai, util) {
    * @param {RegExp} regexp
    * @param {String} message
    * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types
+   * @namespace Assert
    * @api public
    */
 
-  assert.Throw = function (fn, errt, errs, msg) {
+  assert.throws = function (fn, errt, errs, msg) {
     if ('string' === typeof errt || errt instanceof RegExp) {
       errs = errt;
       errt = null;
     }
 
-    var assertErr = new Assertion(fn, msg).to.Throw(errt, errs);
+    var assertErr = new Assertion(fn, msg).to.throw(errt, errs);
     return flag(assertErr, 'object');
   };
 
@@ -5116,6 +6175,7 @@ module.exports = function (chai, util) {
    * @param {RegExp} regexp
    * @param {String} message
    * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types
+   * @namespace Assert
    * @api public
    */
 
@@ -5141,14 +6201,41 @@ module.exports = function (chai, util) {
    * @param {String} operator
    * @param {Mixed} val2
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.operator = function (val, operator, val2, msg) {
-    if (!~['==', '===', '>', '>=', '<', '<=', '!=', '!=='].indexOf(operator)) {
-      throw new Error('Invalid operator "' + operator + '"');
+    var ok;
+    switch(operator) {
+      case '==':
+        ok = val == val2;
+        break;
+      case '===':
+        ok = val === val2;
+        break;
+      case '>':
+        ok = val > val2;
+        break;
+      case '>=':
+        ok = val >= val2;
+        break;
+      case '<':
+        ok = val < val2;
+        break;
+      case '<=':
+        ok = val <= val2;
+        break;
+      case '!=':
+        ok = val != val2;
+        break;
+      case '!==':
+        ok = val !== val2;
+        break;
+      default:
+        throw new Error('Invalid operator "' + operator + '"');
     }
-    var test = new Assertion(eval(val + operator + val2), msg);
+    var test = new Assertion(ok, msg);
     test.assert(
         true === flag(test, 'object')
       , 'expected ' + util.inspect(val) + ' to be ' + operator + ' ' + util.inspect(val2)
@@ -5167,11 +6254,32 @@ module.exports = function (chai, util) {
    * @param {Number} expected
    * @param {Number} delta
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.closeTo = function (act, exp, delta, msg) {
     new Assertion(act, msg).to.be.closeTo(exp, delta);
+  };
+
+  /**
+   * ### .approximately(actual, expected, delta, [message])
+   *
+   * Asserts that the target is equal `expected`, to within a +/- `delta` range.
+   *
+   *     assert.approximately(1.5, 1, 0.5, 'numbers are close');
+   *
+   * @name approximately
+   * @param {Number} actual
+   * @param {Number} expected
+   * @param {Number} delta
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.approximately = function (act, exp, delta, msg) {
+    new Assertion(act, msg).to.be.approximately(exp, delta);
   };
 
   /**
@@ -5186,11 +6294,32 @@ module.exports = function (chai, util) {
    * @param {Array} set1
    * @param {Array} set2
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
   assert.sameMembers = function (set1, set2, msg) {
     new Assertion(set1, msg).to.have.same.members(set2);
+  }
+
+  /**
+   * ### .sameDeepMembers(set1, set2, [message])
+   *
+   * Asserts that `set1` and `set2` have the same members - using a deep equality checking.
+   * Order is not taken into account.
+   *
+   *     assert.sameDeepMembers([ {b: 3}, {a: 2}, {c: 5} ], [ {c: 5}, {b: 3}, {a: 2} ], 'same deep members');
+   *
+   * @name sameDeepMembers
+   * @param {Array} set1
+   * @param {Array} set2
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.sameDeepMembers = function (set1, set2, msg) {
+    new Assertion(set1, msg).to.have.same.deep.members(set2);
   }
 
   /**
@@ -5205,6 +6334,7 @@ module.exports = function (chai, util) {
    * @param {Array} superset
    * @param {Array} subset
    * @param {String} message
+   * @namespace Assert
    * @api public
    */
 
@@ -5212,12 +6342,325 @@ module.exports = function (chai, util) {
     new Assertion(superset, msg).to.include.members(subset);
   }
 
-  /*!
-   * Undocumented / untested
+  /**
+   * ### .includeDeepMembers(superset, subset, [message])
+   *
+   * Asserts that `subset` is included in `superset` - using deep equality checking.
+   * Order is not taken into account.
+   * Duplicates are ignored.
+   *
+   *     assert.includeDeepMembers([ {a: 1}, {b: 2}, {c: 3} ], [ {b: 2}, {a: 1}, {b: 2} ], 'include deep members');
+   *
+   * @name includeDeepMembers
+   * @param {Array} superset
+   * @param {Array} subset
+   * @param {String} message
+   * @namespace Assert
+   * @api public
    */
 
-  assert.ifError = function (val, msg) {
-    new Assertion(val, msg).to.not.be.ok;
+  assert.includeDeepMembers = function (superset, subset, msg) {
+    new Assertion(superset, msg).to.include.deep.members(subset);
+  }
+
+  /**
+   * ### .oneOf(inList, list, [message])
+   *
+   * Asserts that non-object, non-array value `inList` appears in the flat array `list`.
+   *
+   *     assert.oneOf(1, [ 2, 1 ], 'Not found in list');
+   *
+   * @name oneOf
+   * @param {*} inList
+   * @param {Array<*>} list
+   * @param {String} message
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.oneOf = function (inList, list, msg) {
+    new Assertion(inList, msg).to.be.oneOf(list);
+  }
+
+   /**
+   * ### .changes(function, object, property)
+   *
+   * Asserts that a function changes the value of a property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 22 };
+   *     assert.changes(fn, obj, 'val');
+   *
+   * @name changes
+   * @param {Function} modifier function
+   * @param {Object} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.changes = function (fn, obj, prop) {
+    new Assertion(fn).to.change(obj, prop);
+  }
+
+   /**
+   * ### .doesNotChange(function, object, property)
+   *
+   * Asserts that a function does not changes the value of a property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { console.log('foo'); };
+   *     assert.doesNotChange(fn, obj, 'val');
+   *
+   * @name doesNotChange
+   * @param {Function} modifier function
+   * @param {Object} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.doesNotChange = function (fn, obj, prop) {
+    new Assertion(fn).to.not.change(obj, prop);
+  }
+
+   /**
+   * ### .increases(function, object, property)
+   *
+   * Asserts that a function increases an object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 13 };
+   *     assert.increases(fn, obj, 'val');
+   *
+   * @name increases
+   * @param {Function} modifier function
+   * @param {Object} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.increases = function (fn, obj, prop) {
+    new Assertion(fn).to.increase(obj, prop);
+  }
+
+   /**
+   * ### .doesNotIncrease(function, object, property)
+   *
+   * Asserts that a function does not increase object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 8 };
+   *     assert.doesNotIncrease(fn, obj, 'val');
+   *
+   * @name doesNotIncrease
+   * @param {Function} modifier function
+   * @param {Object} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.doesNotIncrease = function (fn, obj, prop) {
+    new Assertion(fn).to.not.increase(obj, prop);
+  }
+
+   /**
+   * ### .decreases(function, object, property)
+   *
+   * Asserts that a function decreases an object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 5 };
+   *     assert.decreases(fn, obj, 'val');
+   *
+   * @name decreases
+   * @param {Function} modifier function
+   * @param {Object} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.decreases = function (fn, obj, prop) {
+    new Assertion(fn).to.decrease(obj, prop);
+  }
+
+   /**
+   * ### .doesNotDecrease(function, object, property)
+   *
+   * Asserts that a function does not decreases an object property
+   *
+   *     var obj = { val: 10 };
+   *     var fn = function() { obj.val = 15 };
+   *     assert.doesNotDecrease(fn, obj, 'val');
+   *
+   * @name doesNotDecrease
+   * @param {Function} modifier function
+   * @param {Object} object
+   * @param {String} property name
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.doesNotDecrease = function (fn, obj, prop) {
+    new Assertion(fn).to.not.decrease(obj, prop);
+  }
+
+  /*!
+   * ### .ifError(object)
+   *
+   * Asserts if value is not a false value, and throws if it is a true value.
+   * This is added to allow for chai to be a drop-in replacement for Node's
+   * assert class.
+   *
+   *     var err = new Error('I am a custom error');
+   *     assert.ifError(err); // Rethrows err!
+   *
+   * @name ifError
+   * @param {Object} object
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.ifError = function (val) {
+    if (val) {
+      throw(val);
+    }
+  };
+
+  /**
+   * ### .isExtensible(object)
+   *
+   * Asserts that `object` is extensible (can have new properties added to it).
+   *
+   *     assert.isExtensible({});
+   *
+   * @name isExtensible
+   * @alias extensible
+   * @param {Object} object
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isExtensible = function (obj, msg) {
+    new Assertion(obj, msg).to.be.extensible;
+  };
+
+  /**
+   * ### .isNotExtensible(object)
+   *
+   * Asserts that `object` is _not_ extensible.
+   *
+   *     var nonExtensibleObject = Object.preventExtensions({});
+   *     var sealedObject = Object.seal({});
+   *     var frozenObject = Object.freese({});
+   *
+   *     assert.isNotExtensible(nonExtensibleObject);
+   *     assert.isNotExtensible(sealedObject);
+   *     assert.isNotExtensible(frozenObject);
+   *
+   * @name isNotExtensible
+   * @alias notExtensible
+   * @param {Object} object
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isNotExtensible = function (obj, msg) {
+    new Assertion(obj, msg).to.not.be.extensible;
+  };
+
+  /**
+   * ### .isSealed(object)
+   *
+   * Asserts that `object` is sealed (cannot have new properties added to it
+   * and its existing properties cannot be removed).
+   *
+   *     var sealedObject = Object.seal({});
+   *     var frozenObject = Object.seal({});
+   *
+   *     assert.isSealed(sealedObject);
+   *     assert.isSealed(frozenObject);
+   *
+   * @name isSealed
+   * @alias sealed
+   * @param {Object} object
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isSealed = function (obj, msg) {
+    new Assertion(obj, msg).to.be.sealed;
+  };
+
+  /**
+   * ### .isNotSealed(object)
+   *
+   * Asserts that `object` is _not_ sealed.
+   *
+   *     assert.isNotSealed({});
+   *
+   * @name isNotSealed
+   * @alias notSealed
+   * @param {Object} object
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isNotSealed = function (obj, msg) {
+    new Assertion(obj, msg).to.not.be.sealed;
+  };
+
+  /**
+   * ### .isFrozen(object)
+   *
+   * Asserts that `object` is frozen (cannot have new properties added to it
+   * and its existing properties cannot be modified).
+   *
+   *     var frozenObject = Object.freeze({});
+   *     assert.frozen(frozenObject);
+   *
+   * @name isFrozen
+   * @alias frozen
+   * @param {Object} object
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isFrozen = function (obj, msg) {
+    new Assertion(obj, msg).to.be.frozen;
+  };
+
+  /**
+   * ### .isNotFrozen(object)
+   *
+   * Asserts that `object` is _not_ frozen.
+   *
+   *     assert.isNotFrozen({});
+   *
+   * @name isNotFrozen
+   * @alias notFrozen
+   * @param {Object} object
+   * @param {String} message _optional_
+   * @namespace Assert
+   * @api public
+   */
+
+  assert.isNotFrozen = function (obj, msg) {
+    new Assertion(obj, msg).to.not.be.frozen;
   };
 
   /*!
@@ -5228,11 +6671,19 @@ module.exports = function (chai, util) {
     assert[as] = assert[name];
     return alias;
   })
-  ('Throw', 'throw')
-  ('Throw', 'throws');
+  ('isOk', 'ok')
+  ('isNotOk', 'notOk')
+  ('throws', 'throw')
+  ('throws', 'Throw')
+  ('isExtensible', 'extensible')
+  ('isNotExtensible', 'notExtensible')
+  ('isSealed', 'sealed')
+  ('isNotSealed', 'notSealed')
+  ('isFrozen', 'frozen')
+  ('isNotFrozen', 'notFrozen');
 };
 
-},{}],18:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5243,10 +6694,32 @@ module.exports = function (chai, util) {
   chai.expect = function (val, message) {
     return new chai.Assertion(val, message);
   };
+
+  /**
+   * ### .fail(actual, expected, [message], [operator])
+   *
+   * Throw a failure.
+   *
+   * @name fail
+   * @param {Mixed} actual
+   * @param {Mixed} expected
+   * @param {String} message
+   * @param {String} operator
+   * @namespace Expect
+   * @api public
+   */
+
+  chai.expect.fail = function (actual, expected, message, operator) {
+    message = message || 'expect.fail()';
+    throw new chai.AssertionError(message, {
+        actual: actual
+      , expected: expected
+      , operator: operator
+    }, chai.expect.fail);
+  };
 };
 
-
-},{}],19:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5259,10 +6732,8 @@ module.exports = function (chai, util) {
   function loadShould () {
     // explicitly define this method as function as to have it's name to include as `ssfi`
     function shouldGetter() {
-      if (this instanceof String || this instanceof Number) {
-        return new Assertion(this.constructor(this), null, shouldGetter);
-      } else if (this instanceof Boolean) {
-        return new Assertion(this == true, null, shouldGetter);
+      if (this instanceof String || this instanceof Number || this instanceof Boolean ) {
+        return new Assertion(this.valueOf(), null, shouldGetter);
       }
       return new Assertion(this, null, shouldGetter);
     }
@@ -5289,13 +6760,89 @@ module.exports = function (chai, util) {
 
     var should = {};
 
+    /**
+     * ### .fail(actual, expected, [message], [operator])
+     *
+     * Throw a failure.
+     *
+     * @name fail
+     * @param {Mixed} actual
+     * @param {Mixed} expected
+     * @param {String} message
+     * @param {String} operator
+     * @namespace Should
+     * @api public
+     */
+
+    should.fail = function (actual, expected, message, operator) {
+      message = message || 'should.fail()';
+      throw new chai.AssertionError(message, {
+          actual: actual
+        , expected: expected
+        , operator: operator
+      }, should.fail);
+    };
+
+    /**
+     * ### .equal(actual, expected, [message])
+     *
+     * Asserts non-strict equality (`==`) of `actual` and `expected`.
+     *
+     *     should.equal(3, '3', '== coerces values to strings');
+     *
+     * @name equal
+     * @param {Mixed} actual
+     * @param {Mixed} expected
+     * @param {String} message
+     * @namespace Should
+     * @api public
+     */
+
     should.equal = function (val1, val2, msg) {
       new Assertion(val1, msg).to.equal(val2);
     };
 
+    /**
+     * ### .throw(function, [constructor/string/regexp], [string/regexp], [message])
+     *
+     * Asserts that `function` will throw an error that is an instance of
+     * `constructor`, or alternately that it will throw an error with message
+     * matching `regexp`.
+     *
+     *     should.throw(fn, 'function throws a reference error');
+     *     should.throw(fn, /function throws a reference error/);
+     *     should.throw(fn, ReferenceError);
+     *     should.throw(fn, ReferenceError, 'function throws a reference error');
+     *     should.throw(fn, ReferenceError, /function throws a reference error/);
+     *
+     * @name throw
+     * @alias Throw
+     * @param {Function} function
+     * @param {ErrorConstructor} constructor
+     * @param {RegExp} regexp
+     * @param {String} message
+     * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types
+     * @namespace Should
+     * @api public
+     */
+
     should.Throw = function (fn, errt, errs, msg) {
       new Assertion(fn, msg).to.Throw(errt, errs);
     };
+
+    /**
+     * ### .exist
+     *
+     * Asserts that the target is neither `null` nor `undefined`.
+     *
+     *     var foo = 'hi';
+     *
+     *     should.exist(foo, 'foo exists');
+     *
+     * @name exist
+     * @namespace Should
+     * @api public
+     */
 
     should.exist = function (val, msg) {
       new Assertion(val, msg).to.exist;
@@ -5304,13 +6851,62 @@ module.exports = function (chai, util) {
     // negation
     should.not = {}
 
+    /**
+     * ### .not.equal(actual, expected, [message])
+     *
+     * Asserts non-strict inequality (`!=`) of `actual` and `expected`.
+     *
+     *     should.not.equal(3, 4, 'these numbers are not equal');
+     *
+     * @name not.equal
+     * @param {Mixed} actual
+     * @param {Mixed} expected
+     * @param {String} message
+     * @namespace Should
+     * @api public
+     */
+
     should.not.equal = function (val1, val2, msg) {
       new Assertion(val1, msg).to.not.equal(val2);
     };
 
+    /**
+     * ### .throw(function, [constructor/regexp], [message])
+     *
+     * Asserts that `function` will _not_ throw an error that is an instance of
+     * `constructor`, or alternately that it will not throw an error with message
+     * matching `regexp`.
+     *
+     *     should.not.throw(fn, Error, 'function does not throw');
+     *
+     * @name not.throw
+     * @alias not.Throw
+     * @param {Function} function
+     * @param {ErrorConstructor} constructor
+     * @param {RegExp} regexp
+     * @param {String} message
+     * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types
+     * @namespace Should
+     * @api public
+     */
+
     should.not.Throw = function (fn, errt, errs, msg) {
       new Assertion(fn, msg).to.not.Throw(errt, errs);
     };
+
+    /**
+     * ### .not.exist
+     *
+     * Asserts that the target is neither `null` nor `undefined`.
+     *
+     *     var bar = null;
+     *
+     *     should.not.exist(bar, 'bar does not exist');
+     *
+     * @name not.exist
+     * @namespace Should
+     * @api public
+     */
 
     should.not.exist = function (val, msg) {
       new Assertion(val, msg).to.not.exist;
@@ -5326,7 +6922,7 @@ module.exports = function (chai, util) {
   chai.Should = loadShould;
 };
 
-},{}],20:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 /*!
  * Chai - addChainingMethod utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5381,6 +6977,7 @@ var call  = Function.prototype.call,
  * @param {String} name of method to add
  * @param {Function} method function to be used for `name`, when called
  * @param {Function} chainingBehavior function to be called every time the property is accessed
+ * @namespace Utils
  * @name addChainableMethod
  * @api public
  */
@@ -5439,7 +7036,7 @@ module.exports = function (ctx, name, method, chainingBehavior) {
   });
 };
 
-},{"../config":15,"./flag":23,"./transferFlags":37}],21:[function(require,module,exports){
+},{"../config":13,"./flag":22,"./transferFlags":38}],19:[function(require,module,exports){
 /*!
  * Chai - addMethod utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5469,6 +7066,7 @@ var config = require('../config');
  * @param {Object} ctx object to which the method is added
  * @param {String} name of method to add
  * @param {Function} method function to be used for name
+ * @namespace Utils
  * @name addMethod
  * @api public
  */
@@ -5484,12 +7082,15 @@ module.exports = function (ctx, name, method) {
   };
 };
 
-},{"../config":15,"./flag":23}],22:[function(require,module,exports){
+},{"../config":13,"./flag":22}],20:[function(require,module,exports){
 /*!
  * Chai - addProperty utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
  * MIT Licensed
  */
+
+var config = require('../config');
+var flag = require('./flag');
 
 /**
  * ### addProperty (ctx, name, getter)
@@ -5512,13 +7113,18 @@ module.exports = function (ctx, name, method) {
  * @param {Object} ctx object to which the property is added
  * @param {String} name of property to add
  * @param {Function} getter function to be used for name
+ * @namespace Utils
  * @name addProperty
  * @api public
  */
 
 module.exports = function (ctx, name, getter) {
   Object.defineProperty(ctx, name,
-    { get: function () {
+    { get: function addProperty() {
+        var old_ssfi = flag(this, 'ssfi');
+        if (old_ssfi && config.includeStack === false)
+          flag(this, 'ssfi', addProperty);
+
         var result = getter.call(this);
         return result === undefined ? this : result;
       }
@@ -5526,7 +7132,51 @@ module.exports = function (ctx, name, getter) {
   });
 };
 
-},{}],23:[function(require,module,exports){
+},{"../config":13,"./flag":22}],21:[function(require,module,exports){
+/*!
+ * Chai - expectTypes utility
+ * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
+ * MIT Licensed
+ */
+
+/**
+ * ### expectTypes(obj, types)
+ *
+ * Ensures that the object being tested against is of a valid type.
+ *
+ *     utils.expectTypes(this, ['array', 'object', 'string']);
+ *
+ * @param {Mixed} obj constructed Assertion
+ * @param {Array} type A list of allowed types for this assertion
+ * @namespace Utils
+ * @name expectTypes
+ * @api public
+ */
+
+var AssertionError = require('assertion-error');
+var flag = require('./flag');
+var type = require('type-detect');
+
+module.exports = function (obj, types) {
+  var obj = flag(obj, 'object');
+  types = types.map(function (t) { return t.toLowerCase(); });
+  types.sort();
+
+  // Transforms ['lorem', 'ipsum'] into 'a lirum, or an ipsum'
+  var str = types.map(function (t, index) {
+    var art = ~[ 'a', 'e', 'i', 'o', 'u' ].indexOf(t.charAt(0)) ? 'an' : 'a';
+    var or = types.length > 1 && index === types.length - 1 ? 'or ' : '';
+    return or + art + ' ' + t;
+  }).join(', ');
+
+  if (!types.some(function (expected) { return type(obj) === expected; })) {
+    throw new AssertionError(
+      'object tested must be ' + str + ', but ' + type(obj) + ' given'
+    );
+  }
+};
+
+},{"./flag":22,"assertion-error":5,"type-detect":94}],22:[function(require,module,exports){
 /*!
  * Chai - flag utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5534,7 +7184,7 @@ module.exports = function (ctx, name, getter) {
  */
 
 /**
- * ### flag(object ,key, [value])
+ * ### flag(object, key, [value])
  *
  * Get or set a flag value on an object. If a
  * value is provided it will be set, else it will
@@ -5544,9 +7194,10 @@ module.exports = function (ctx, name, getter) {
  *     utils.flag(this, 'foo', 'bar'); // setter
  *     utils.flag(this, 'foo'); // getter, returns `bar`
  *
- * @param {Object} object (constructed Assertion
+ * @param {Object} object constructed Assertion
  * @param {String} key
  * @param {Mixed} value (optional)
+ * @namespace Utils
  * @name flag
  * @api private
  */
@@ -5560,7 +7211,7 @@ module.exports = function (obj, key, value) {
   }
 };
 
-},{}],24:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 /*!
  * Chai - getActual utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5574,13 +7225,15 @@ module.exports = function (obj, key, value) {
  *
  * @param {Object} object (constructed Assertion)
  * @param {Arguments} chai.Assertion.prototype.assert arguments
+ * @namespace Utils
+ * @name getActual
  */
 
 module.exports = function (obj, args) {
   return args.length > 4 ? args[4] : obj._obj;
 };
 
-},{}],25:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 /*!
  * Chai - getEnumerableProperties utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5595,6 +7248,7 @@ module.exports = function (obj, args) {
  *
  * @param {Object} object
  * @returns {Array}
+ * @namespace Utils
  * @name getEnumerableProperties
  * @api public
  */
@@ -5607,7 +7261,7 @@ module.exports = function getEnumerableProperties(object) {
   return result;
 };
 
-},{}],26:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 /*!
  * Chai - message composition utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5637,6 +7291,7 @@ var flag = require('./flag')
  *
  * @param {Object} object (constructed Assertion)
  * @param {Arguments} chai.Assertion.prototype.assert arguments
+ * @namespace Utils
  * @name getMessage
  * @api public
  */
@@ -5652,14 +7307,14 @@ module.exports = function (obj, args) {
   if(typeof msg === "function") msg = msg();
   msg = msg || '';
   msg = msg
-    .replace(/#{this}/g, objDisplay(val))
-    .replace(/#{act}/g, objDisplay(actual))
-    .replace(/#{exp}/g, objDisplay(expected));
+    .replace(/#\{this\}/g, function () { return objDisplay(val); })
+    .replace(/#\{act\}/g, function () { return objDisplay(actual); })
+    .replace(/#\{exp\}/g, function () { return objDisplay(expected); });
 
   return flagMsg ? flagMsg + ': ' + msg : msg;
 };
 
-},{"./flag":23,"./getActual":24,"./inspect":31,"./objDisplay":32}],27:[function(require,module,exports){
+},{"./flag":22,"./getActual":23,"./inspect":32,"./objDisplay":33}],26:[function(require,module,exports){
 /*!
  * Chai - getName utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5672,6 +7327,8 @@ module.exports = function (obj, args) {
  * Gets the name of a function, in a cross-browser way.
  *
  * @param {Function} a function (usually a constructor)
+ * @namespace Utils
+ * @name getName
  */
 
 module.exports = function (func) {
@@ -5681,13 +7338,128 @@ module.exports = function (func) {
   return match && match[1] ? match[1] : "";
 };
 
-},{}],28:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
+/*!
+ * Chai - getPathInfo utility
+ * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
+ * MIT Licensed
+ */
+
+var hasProperty = require('./hasProperty');
+
+/**
+ * ### .getPathInfo(path, object)
+ *
+ * This allows the retrieval of property info in an
+ * object given a string path.
+ *
+ * The path info consists of an object with the
+ * following properties:
+ *
+ * * parent - The parent object of the property referenced by `path`
+ * * name - The name of the final property, a number if it was an array indexer
+ * * value - The value of the property, if it exists, otherwise `undefined`
+ * * exists - Whether the property exists or not
+ *
+ * @param {String} path
+ * @param {Object} object
+ * @returns {Object} info
+ * @namespace Utils
+ * @name getPathInfo
+ * @api public
+ */
+
+module.exports = function getPathInfo(path, obj) {
+  var parsed = parsePath(path),
+      last = parsed[parsed.length - 1];
+
+  var info = {
+    parent: parsed.length > 1 ? _getPathValue(parsed, obj, parsed.length - 1) : obj,
+    name: last.p || last.i,
+    value: _getPathValue(parsed, obj)
+  };
+  info.exists = hasProperty(info.name, info.parent);
+
+  return info;
+};
+
+
+/*!
+ * ## parsePath(path)
+ *
+ * Helper function used to parse string object
+ * paths. Use in conjunction with `_getPathValue`.
+ *
+ *      var parsed = parsePath('myobject.property.subprop');
+ *
+ * ### Paths:
+ *
+ * * Can be as near infinitely deep and nested
+ * * Arrays are also valid using the formal `myobject.document[3].property`.
+ * * Literal dots and brackets (not delimiter) must be backslash-escaped.
+ *
+ * @param {String} path
+ * @returns {Object} parsed
+ * @api private
+ */
+
+function parsePath (path) {
+  var str = path.replace(/([^\\])\[/g, '$1.[')
+    , parts = str.match(/(\\\.|[^.]+?)+/g);
+  return parts.map(function (value) {
+    var re = /^\[(\d+)\]$/
+      , mArr = re.exec(value);
+    if (mArr) return { i: parseFloat(mArr[1]) };
+    else return { p: value.replace(/\\([.\[\]])/g, '$1') };
+  });
+}
+
+
+/*!
+ * ## _getPathValue(parsed, obj)
+ *
+ * Helper companion function for `.parsePath` that returns
+ * the value located at the parsed address.
+ *
+ *      var value = getPathValue(parsed, obj);
+ *
+ * @param {Object} parsed definition from `parsePath`.
+ * @param {Object} object to search against
+ * @param {Number} object to search against
+ * @returns {Object|Undefined} value
+ * @api private
+ */
+
+function _getPathValue (parsed, obj, index) {
+  var tmp = obj
+    , res;
+
+  index = (index === undefined ? parsed.length : index);
+
+  for (var i = 0, l = index; i < l; i++) {
+    var part = parsed[i];
+    if (tmp) {
+      if ('undefined' !== typeof part.p)
+        tmp = tmp[part.p];
+      else if ('undefined' !== typeof part.i)
+        tmp = tmp[part.i];
+      if (i == (l - 1)) res = tmp;
+    } else {
+      res = undefined;
+    }
+  }
+  return res;
+}
+
+},{"./hasProperty":30}],28:[function(require,module,exports){
 /*!
  * Chai - getPathValue utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
  * @see https://github.com/logicalparadox/filtr
  * MIT Licensed
  */
+
+var getPathInfo = require('./getPathInfo');
 
 /**
  * ### .getPathValue(path, object)
@@ -5715,77 +7487,16 @@ module.exports = function (func) {
  * @param {String} path
  * @param {Object} object
  * @returns {Object} value or `undefined`
+ * @namespace Utils
  * @name getPathValue
  * @api public
  */
-
-var getPathValue = module.exports = function (path, obj) {
-  var parsed = parsePath(path);
-  return _getPathValue(parsed, obj);
+module.exports = function(path, obj) {
+  var info = getPathInfo(path, obj);
+  return info.value;
 };
 
-/*!
- * ## parsePath(path)
- *
- * Helper function used to parse string object
- * paths. Use in conjunction with `_getPathValue`.
- *
- *      var parsed = parsePath('myobject.property.subprop');
- *
- * ### Paths:
- *
- * * Can be as near infinitely deep and nested
- * * Arrays are also valid using the formal `myobject.document[3].property`.
- *
- * @param {String} path
- * @returns {Object} parsed
- * @api private
- */
-
-function parsePath (path) {
-  var str = path.replace(/\[/g, '.[')
-    , parts = str.match(/(\\\.|[^.]+?)+/g);
-  return parts.map(function (value) {
-    var re = /\[(\d+)\]$/
-      , mArr = re.exec(value)
-    if (mArr) return { i: parseFloat(mArr[1]) };
-    else return { p: value };
-  });
-};
-
-/*!
- * ## _getPathValue(parsed, obj)
- *
- * Helper companion function for `.parsePath` that returns
- * the value located at the parsed address.
- *
- *      var value = getPathValue(parsed, obj);
- *
- * @param {Object} parsed definition from `parsePath`.
- * @param {Object} object to search against
- * @returns {Object|Undefined} value
- * @api private
- */
-
-function _getPathValue (parsed, obj) {
-  var tmp = obj
-    , res;
-  for (var i = 0, l = parsed.length; i < l; i++) {
-    var part = parsed[i];
-    if (tmp) {
-      if ('undefined' !== typeof part.p)
-        tmp = tmp[part.p];
-      else if ('undefined' !== typeof part.i)
-        tmp = tmp[part.i];
-      if (i == (l - 1)) res = tmp;
-    } else {
-      res = undefined;
-    }
-  }
-  return res;
-};
-
-},{}],29:[function(require,module,exports){
+},{"./getPathInfo":27}],29:[function(require,module,exports){
 /*!
  * Chai - getProperties utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -5800,12 +7511,13 @@ function _getPathValue (parsed, obj) {
  *
  * @param {Object} object
  * @returns {Array}
+ * @namespace Utils
  * @name getProperties
  * @api public
  */
 
 module.exports = function getProperties(object) {
-  var result = Object.getOwnPropertyNames(subject);
+  var result = Object.getOwnPropertyNames(object);
 
   function addProperty(property) {
     if (result.indexOf(property) === -1) {
@@ -5813,7 +7525,7 @@ module.exports = function getProperties(object) {
     }
   }
 
-  var proto = Object.getPrototypeOf(subject);
+  var proto = Object.getPrototypeOf(object);
   while (proto !== null) {
     Object.getOwnPropertyNames(proto).forEach(addProperty);
     proto = Object.getPrototypeOf(proto);
@@ -5823,6 +7535,72 @@ module.exports = function getProperties(object) {
 };
 
 },{}],30:[function(require,module,exports){
+/*!
+ * Chai - hasProperty utility
+ * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
+ * MIT Licensed
+ */
+
+var type = require('type-detect');
+
+/**
+ * ### .hasProperty(object, name)
+ *
+ * This allows checking whether an object has
+ * named property or numeric array index.
+ *
+ * Basically does the same thing as the `in`
+ * operator but works properly with natives
+ * and null/undefined values.
+ *
+ *     var obj = {
+ *         arr: ['a', 'b', 'c']
+ *       , str: 'Hello'
+ *     }
+ *
+ * The following would be the results.
+ *
+ *     hasProperty('str', obj);  // true
+ *     hasProperty('constructor', obj);  // true
+ *     hasProperty('bar', obj);  // false
+ *
+ *     hasProperty('length', obj.str); // true
+ *     hasProperty(1, obj.str);  // true
+ *     hasProperty(5, obj.str);  // false
+ *
+ *     hasProperty('length', obj.arr);  // true
+ *     hasProperty(2, obj.arr);  // true
+ *     hasProperty(3, obj.arr);  // false
+ *
+ * @param {Objuect} object
+ * @param {String|Number} name
+ * @returns {Boolean} whether it exists
+ * @namespace Utils
+ * @name getPathInfo
+ * @api public
+ */
+
+var literals = {
+    'number': Number
+  , 'string': String
+};
+
+module.exports = function hasProperty(name, obj) {
+  var ot = type(obj);
+
+  // Bad Object, obviously no props at all
+  if(ot === 'null' || ot === 'undefined')
+    return false;
+
+  // The `in` operator does not work with certain literals
+  // box these before the check
+  if(literals[ot] && typeof obj !== 'object')
+    obj = new literals[ot](obj);
+
+  return name in obj;
+};
+
+},{"type-detect":94}],31:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011 Jake Luer <jake@alogicalparadox.com>
@@ -5845,7 +7623,12 @@ exports.test = require('./test');
  * type utility
  */
 
-exports.type = require('./type');
+exports.type = require('type-detect');
+
+/*!
+ * expectTypes utility
+ */
+exports.expectTypes = require('./expectTypes');
 
 /*!
  * message utility
@@ -5896,6 +7679,18 @@ exports.eql = require('deep-eql');
 exports.getPathValue = require('./getPathValue');
 
 /*!
+ * Deep path info
+ */
+
+exports.getPathInfo = require('./getPathInfo');
+
+/*!
+ * Check if a property exists
+ */
+
+exports.hasProperty = require('./hasProperty');
+
+/*!
  * Function name
  */
 
@@ -5937,8 +7732,7 @@ exports.addChainableMethod = require('./addChainableMethod');
 
 exports.overwriteChainableMethod = require('./overwriteChainableMethod');
 
-
-},{"./addChainableMethod":20,"./addMethod":21,"./addProperty":22,"./flag":23,"./getActual":24,"./getMessage":26,"./getName":27,"./getPathValue":28,"./inspect":31,"./objDisplay":32,"./overwriteChainableMethod":33,"./overwriteMethod":34,"./overwriteProperty":35,"./test":36,"./transferFlags":37,"./type":38,"deep-eql":40}],31:[function(require,module,exports){
+},{"./addChainableMethod":18,"./addMethod":19,"./addProperty":20,"./expectTypes":21,"./flag":22,"./getActual":23,"./getMessage":25,"./getName":26,"./getPathInfo":27,"./getPathValue":28,"./hasProperty":30,"./inspect":32,"./objDisplay":33,"./overwriteChainableMethod":34,"./overwriteMethod":35,"./overwriteProperty":36,"./test":37,"./transferFlags":38,"deep-eql":39,"type-detect":94}],32:[function(require,module,exports){
 // This is (almost) directly from Node.js utils
 // https://github.com/joyent/node/blob/f8c335d0caf47f16d31413f89aa28eda3878e3aa/lib/util.js
 
@@ -5958,6 +7752,8 @@ module.exports = inspect;
  * @param {Number} depth Depth in which to descend in object. Default is 2.
  * @param {Boolean} colors Flag to turn on ANSI escape codes to color the
  *    output. Default is false (no coloring).
+ * @namespace Utils
+ * @name inspect
  */
 function inspect(obj, showHidden, depth, colors) {
   var ctx = {
@@ -6273,7 +8069,7 @@ function objectToString(o) {
   return Object.prototype.toString.call(o);
 }
 
-},{"./getEnumerableProperties":25,"./getName":27,"./getProperties":29}],32:[function(require,module,exports){
+},{"./getEnumerableProperties":24,"./getName":26,"./getProperties":29}],33:[function(require,module,exports){
 /*!
  * Chai - flag utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6296,6 +8092,7 @@ var config = require('../config');
  *
  * @param {Mixed} javascript object to inspect
  * @name objDisplay
+ * @namespace Utils
  * @api public
  */
 
@@ -6324,7 +8121,7 @@ module.exports = function (obj) {
   }
 };
 
-},{"../config":15,"./inspect":31}],33:[function(require,module,exports){
+},{"../config":13,"./inspect":32}],34:[function(require,module,exports){
 /*!
  * Chai - overwriteChainableMethod utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6332,7 +8129,7 @@ module.exports = function (obj) {
  */
 
 /**
- * ### overwriteChainableMethod (ctx, name, fn)
+ * ### overwriteChainableMethod (ctx, name, method, chainingBehavior)
  *
  * Overwites an already existing chainable method
  * and provides access to the previous function or
@@ -6359,6 +8156,7 @@ module.exports = function (obj) {
  * @param {String} name of method / property to overwrite
  * @param {Function} method function that returns a function to be used for name
  * @param {Function} chainingBehavior function that returns a function to be used for property
+ * @namespace Utils
  * @name overwriteChainableMethod
  * @api public
  */
@@ -6379,7 +8177,7 @@ module.exports = function (ctx, name, method, chainingBehavior) {
   };
 };
 
-},{}],34:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 /*!
  * Chai - overwriteMethod utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6415,6 +8213,7 @@ module.exports = function (ctx, name, method, chainingBehavior) {
  * @param {Object} ctx object whose method is to be overwritten
  * @param {String} name of method to overwrite
  * @param {Function} method function that returns a function to be used for name
+ * @namespace Utils
  * @name overwriteMethod
  * @api public
  */
@@ -6432,7 +8231,7 @@ module.exports = function (ctx, name, method) {
   }
 };
 
-},{}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 /*!
  * Chai - overwriteProperty utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6468,6 +8267,7 @@ module.exports = function (ctx, name, method) {
  * @param {Object} ctx object whose property is to be overwritten
  * @param {String} name of property to overwrite
  * @param {Function} getter function that returns a getter function to be used for name
+ * @namespace Utils
  * @name overwriteProperty
  * @api public
  */
@@ -6488,7 +8288,7 @@ module.exports = function (ctx, name, getter) {
   });
 };
 
-},{}],36:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 /*!
  * Chai - test utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6508,6 +8308,8 @@ var flag = require('./flag');
  *
  * @param {Object} object (constructed Assertion)
  * @param {Arguments} chai.Assertion.prototype.assert arguments
+ * @namespace Utils
+ * @name test
  */
 
 module.exports = function (obj, args) {
@@ -6516,7 +8318,7 @@ module.exports = function (obj, args) {
   return negate ? !expr : expr;
 };
 
-},{"./flag":23}],37:[function(require,module,exports){
+},{"./flag":22}],38:[function(require,module,exports){
 /*!
  * Chai - transferFlags utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6539,9 +8341,10 @@ module.exports = function (obj, args) {
  *     utils.transferFlags(assertion, anotherAssertion, false);
  *
  * @param {Assertion} assertion the assertion to transfer the flags from
- * @param {Object} object the object to transfer the flags too; usually a new assertion
+ * @param {Object} object the object to transfer the flags to; usually a new assertion
  * @param {Boolean} includeAll
- * @name getAllFlags
+ * @namespace Utils
+ * @name transferFlags
  * @api private
  */
 
@@ -6562,169 +8365,10 @@ module.exports = function (assertion, object, includeAll) {
   }
 };
 
-},{}],38:[function(require,module,exports){
-/*!
- * Chai - type utility
- * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
- * MIT Licensed
- */
-
-/*!
- * Detectable javascript natives
- */
-
-var natives = {
-    '[object Arguments]': 'arguments'
-  , '[object Array]': 'array'
-  , '[object Date]': 'date'
-  , '[object Function]': 'function'
-  , '[object Number]': 'number'
-  , '[object RegExp]': 'regexp'
-  , '[object String]': 'string'
-};
-
-/**
- * ### type(object)
- *
- * Better implementation of `typeof` detection that can
- * be used cross-browser. Handles the inconsistencies of
- * Array, `null`, and `undefined` detection.
- *
- *     utils.type({}) // 'object'
- *     utils.type(null) // `null'
- *     utils.type(undefined) // `undefined`
- *     utils.type([]) // `array`
- *
- * @param {Mixed} object to detect type of
- * @name type
- * @api private
- */
-
-module.exports = function (obj) {
-  var str = Object.prototype.toString.call(obj);
-  if (natives[str]) return natives[str];
-  if (obj === null) return 'null';
-  if (obj === undefined) return 'undefined';
-  if (obj === Object(obj)) return 'object';
-  return typeof obj;
-};
-
 },{}],39:[function(require,module,exports){
-/*!
- * assertion-error
- * Copyright(c) 2013 Jake Luer <jake@qualiancy.com>
- * MIT Licensed
- */
-
-/*!
- * Return a function that will copy properties from
- * one object to another excluding any originally
- * listed. Returned function will create a new `{}`.
- *
- * @param {String} excluded properties ...
- * @return {Function}
- */
-
-function exclude () {
-  var excludes = [].slice.call(arguments);
-
-  function excludeProps (res, obj) {
-    Object.keys(obj).forEach(function (key) {
-      if (!~excludes.indexOf(key)) res[key] = obj[key];
-    });
-  }
-
-  return function extendExclude () {
-    var args = [].slice.call(arguments)
-      , i = 0
-      , res = {};
-
-    for (; i < args.length; i++) {
-      excludeProps(res, args[i]);
-    }
-
-    return res;
-  };
-};
-
-/*!
- * Primary Exports
- */
-
-module.exports = AssertionError;
-
-/**
- * ### AssertionError
- *
- * An extension of the JavaScript `Error` constructor for
- * assertion and validation scenarios.
- *
- * @param {String} message
- * @param {Object} properties to include (optional)
- * @param {callee} start stack function (optional)
- */
-
-function AssertionError (message, _props, ssf) {
-  var extend = exclude('name', 'message', 'stack', 'constructor', 'toJSON')
-    , props = extend(_props || {});
-
-  // default values
-  this.message = message || 'Unspecified AssertionError';
-  this.showDiff = false;
-
-  // copy from properties
-  for (var key in props) {
-    this[key] = props[key];
-  }
-
-  // capture stack trace
-  ssf = ssf || arguments.callee;
-  if (ssf && Error.captureStackTrace) {
-    Error.captureStackTrace(this, ssf);
-  }
-}
-
-/*!
- * Inherit from Error.prototype
- */
-
-AssertionError.prototype = Object.create(Error.prototype);
-
-/*!
- * Statically set name
- */
-
-AssertionError.prototype.name = 'AssertionError';
-
-/*!
- * Ensure correct constructor
- */
-
-AssertionError.prototype.constructor = AssertionError;
-
-/**
- * Allow errors to be converted to JSON for static transfer.
- *
- * @param {Boolean} include stack (default: `true`)
- * @return {Object} object that can be `JSON.stringify`
- */
-
-AssertionError.prototype.toJSON = function (stack) {
-  var extend = exclude('constructor', 'toJSON', 'stack')
-    , props = extend({ name: this.name }, this);
-
-  // include stack if exists and not turned off
-  if (false !== stack && this.stack) {
-    props.stack = this.stack;
-  }
-
-  return props;
-};
-
-},{}],40:[function(require,module,exports){
 module.exports = require('./lib/eql');
 
-},{"./lib/eql":41}],41:[function(require,module,exports){
+},{"./lib/eql":40}],40:[function(require,module,exports){
 /*!
  * deep-eql
  * Copyright(c) 2013 Jake Luer <jake@alogicalparadox.com>
@@ -6983,10 +8627,10 @@ function objectEqual(a, b, m) {
   return true;
 }
 
-},{"buffer":7,"type-detect":42}],42:[function(require,module,exports){
+},{"buffer":8,"type-detect":41}],41:[function(require,module,exports){
 module.exports = require('./lib/type');
 
-},{"./lib/type":43}],43:[function(require,module,exports){
+},{"./lib/type":42}],42:[function(require,module,exports){
 /*!
  * type-detect
  * Copyright(c) 2013 jake luer <jake@alogicalparadox.com>
@@ -7130,7 +8774,226 @@ Library.prototype.test = function (obj, type) {
   }
 };
 
+},{}],43:[function(require,module,exports){
+exports.read = function (buffer, offset, isLE, mLen, nBytes) {
+  var e, m
+  var eLen = nBytes * 8 - mLen - 1
+  var eMax = (1 << eLen) - 1
+  var eBias = eMax >> 1
+  var nBits = -7
+  var i = isLE ? (nBytes - 1) : 0
+  var d = isLE ? -1 : 1
+  var s = buffer[offset + i]
+
+  i += d
+
+  e = s & ((1 << (-nBits)) - 1)
+  s >>= (-nBits)
+  nBits += eLen
+  for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8) {}
+
+  m = e & ((1 << (-nBits)) - 1)
+  e >>= (-nBits)
+  nBits += mLen
+  for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8) {}
+
+  if (e === 0) {
+    e = 1 - eBias
+  } else if (e === eMax) {
+    return m ? NaN : ((s ? -1 : 1) * Infinity)
+  } else {
+    m = m + Math.pow(2, mLen)
+    e = e - eBias
+  }
+  return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
+}
+
+exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
+  var e, m, c
+  var eLen = nBytes * 8 - mLen - 1
+  var eMax = (1 << eLen) - 1
+  var eBias = eMax >> 1
+  var rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0)
+  var i = isLE ? 0 : (nBytes - 1)
+  var d = isLE ? 1 : -1
+  var s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0
+
+  value = Math.abs(value)
+
+  if (isNaN(value) || value === Infinity) {
+    m = isNaN(value) ? 1 : 0
+    e = eMax
+  } else {
+    e = Math.floor(Math.log(value) / Math.LN2)
+    if (value * (c = Math.pow(2, -e)) < 1) {
+      e--
+      c *= 2
+    }
+    if (e + eBias >= 1) {
+      value += rt / c
+    } else {
+      value += rt * Math.pow(2, 1 - eBias)
+    }
+    if (value * c >= 2) {
+      e++
+      c /= 2
+    }
+
+    if (e + eBias >= eMax) {
+      m = 0
+      e = eMax
+    } else if (e + eBias >= 1) {
+      m = (value * c - 1) * Math.pow(2, mLen)
+      e = e + eBias
+    } else {
+      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen)
+      e = 0
+    }
+  }
+
+  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8) {}
+
+  e = (e << mLen) | m
+  eLen += mLen
+  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
+
+  buffer[offset + i - d] |= s * 128
+}
+
 },{}],44:[function(require,module,exports){
+(function (global){
+'use strict';
+var Mutation = global.MutationObserver || global.WebKitMutationObserver;
+
+var scheduleDrain;
+
+{
+  if (Mutation) {
+    var called = 0;
+    var observer = new Mutation(nextTick);
+    var element = global.document.createTextNode('');
+    observer.observe(element, {
+      characterData: true
+    });
+    scheduleDrain = function () {
+      element.data = (called = ++called % 2);
+    };
+  } else if (!global.setImmediate && typeof global.MessageChannel !== 'undefined') {
+    var channel = new global.MessageChannel();
+    channel.port1.onmessage = nextTick;
+    scheduleDrain = function () {
+      channel.port2.postMessage(0);
+    };
+  } else if ('document' in global && 'onreadystatechange' in global.document.createElement('script')) {
+    scheduleDrain = function () {
+
+      // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
+      // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
+      var scriptEl = global.document.createElement('script');
+      scriptEl.onreadystatechange = function () {
+        nextTick();
+
+        scriptEl.onreadystatechange = null;
+        scriptEl.parentNode.removeChild(scriptEl);
+        scriptEl = null;
+      };
+      global.document.documentElement.appendChild(scriptEl);
+    };
+  } else {
+    scheduleDrain = function () {
+      setTimeout(nextTick, 0);
+    };
+  }
+}
+
+var draining;
+var queue = [];
+//named nextTick for less confusing stack traces
+function nextTick() {
+  draining = true;
+  var i, oldQueue;
+  var len = queue.length;
+  while (len) {
+    oldQueue = queue;
+    queue = [];
+    i = -1;
+    while (++i < len) {
+      oldQueue[i]();
+    }
+    len = queue.length;
+  }
+  draining = false;
+}
+
+module.exports = immediate;
+function immediate(task) {
+  if (queue.push(task) === 1 && !draining) {
+    scheduleDrain();
+  }
+}
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],45:[function(require,module,exports){
+var toString = {}.toString;
+
+module.exports = Array.isArray || function (arr) {
+  return toString.call(arr) == '[object Array]';
+};
+
+},{}],46:[function(require,module,exports){
+'use strict';
+var DataReader = require('./dataReader');
+
+function ArrayReader(data) {
+    if (data) {
+        this.data = data;
+        this.length = this.data.length;
+        this.index = 0;
+        this.zero = 0;
+
+        for(var i = 0; i < this.data.length; i++) {
+            data[i] = data[i] & 0xFF;
+        }
+    }
+}
+ArrayReader.prototype = new DataReader();
+/**
+ * @see DataReader.byteAt
+ */
+ArrayReader.prototype.byteAt = function(i) {
+    return this.data[this.zero + i];
+};
+/**
+ * @see DataReader.lastIndexOfSignature
+ */
+ArrayReader.prototype.lastIndexOfSignature = function(sig) {
+    var sig0 = sig.charCodeAt(0),
+        sig1 = sig.charCodeAt(1),
+        sig2 = sig.charCodeAt(2),
+        sig3 = sig.charCodeAt(3);
+    for (var i = this.length - 4; i >= 0; --i) {
+        if (this.data[i] === sig0 && this.data[i + 1] === sig1 && this.data[i + 2] === sig2 && this.data[i + 3] === sig3) {
+            return i - this.zero;
+        }
+    }
+
+    return -1;
+};
+/**
+ * @see DataReader.readData
+ */
+ArrayReader.prototype.readData = function(size) {
+    this.checkOffset(size);
+    if(size === 0) {
+        return [];
+    }
+    var result = this.data.slice(this.zero + this.index, this.zero + this.index + size);
+    this.index += size;
+    return result;
+};
+module.exports = ArrayReader;
+
+},{"./dataReader":51}],47:[function(require,module,exports){
 'use strict';
 // private property
 var _keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
@@ -7202,7 +9065,7 @@ exports.decode = function(input, utf8) {
 
 };
 
-},{}],45:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 'use strict';
 function CompressedObject() {
     this.compressedSize = 0;
@@ -7232,7 +9095,7 @@ CompressedObject.prototype = {
 };
 module.exports = CompressedObject;
 
-},{}],46:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 'use strict';
 exports.STORE = {
     magic: "\x00\x00",
@@ -7247,7 +9110,7 @@ exports.STORE = {
 };
 exports.DEFLATE = require('./flate');
 
-},{"./flate":51}],47:[function(require,module,exports){
+},{"./flate":54}],50:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -7351,7 +9214,7 @@ module.exports = function crc32(input, crc) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./utils":64}],48:[function(require,module,exports){
+},{"./utils":67}],51:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -7359,6 +9222,7 @@ function DataReader(data) {
     this.data = null; // type : see implementation
     this.length = 0;
     this.index = 0;
+    this.zero = 0;
 }
 DataReader.prototype = {
     /**
@@ -7375,7 +9239,7 @@ DataReader.prototype = {
      * @throws {Error} an Error if the index is out of bounds.
      */
     checkIndex: function(newIndex) {
-        if (this.length < newIndex || newIndex < 0) {
+        if (this.length < this.zero + newIndex || newIndex < 0) {
             throw new Error("End of data reached (data length = " + this.length + ", asked index = " + (newIndex) + "). Corrupted zip ?");
         }
     },
@@ -7460,7 +9324,7 @@ DataReader.prototype = {
 };
 module.exports = DataReader;
 
-},{"./utils":64}],49:[function(require,module,exports){
+},{"./utils":67}],52:[function(require,module,exports){
 'use strict';
 exports.base64 = false;
 exports.binary = false;
@@ -7473,7 +9337,7 @@ exports.comment = null;
 exports.unixPermissions = null;
 exports.dosPermissions = null;
 
-},{}],50:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -7580,7 +9444,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./utils":64}],51:[function(require,module,exports){
+},{"./utils":67}],54:[function(require,module,exports){
 'use strict';
 var USE_TYPEDARRAY = (typeof Uint8Array !== 'undefined') && (typeof Uint16Array !== 'undefined') && (typeof Uint32Array !== 'undefined');
 
@@ -7598,7 +9462,7 @@ exports.uncompress =  function(input) {
     return pako.inflateRaw(input);
 };
 
-},{"pako":67}],52:[function(require,module,exports){
+},{"pako":72}],55:[function(require,module,exports){
 'use strict';
 
 var base64 = require('./base64');
@@ -7679,13 +9543,21 @@ JSZip.base64 = {
 JSZip.compressions = require('./compressions');
 module.exports = JSZip;
 
-},{"./base64":44,"./compressions":46,"./defaults":49,"./deprecatedPublicUtils":50,"./load":53,"./object":56,"./support":60}],53:[function(require,module,exports){
+},{"./base64":47,"./compressions":49,"./defaults":52,"./deprecatedPublicUtils":53,"./load":56,"./object":59,"./support":63}],56:[function(require,module,exports){
 'use strict';
 var base64 = require('./base64');
+var utf8 = require('./utf8');
+var utils = require('./utils');
 var ZipEntries = require('./zipEntries');
 module.exports = function(data, options) {
     var files, zipEntries, i, input;
-    options = options || {};
+    options = utils.extend(options || {}, {
+        base64: false,
+        checkCRC32: false,
+        optimizedBinaryString : false,
+        createFolders: false,
+        decodeFileName: utf8.utf8decode
+    });
     if (options.base64) {
         data = base64.decode(data);
     }
@@ -7694,12 +9566,12 @@ module.exports = function(data, options) {
     files = zipEntries.files;
     for (i = 0; i < files.length; i++) {
         input = files[i];
-        this.file(input.fileName, input.decompressed, {
+        this.file(input.fileNameStr, input.decompressed, {
             binary: true,
             optimizedBinaryString: true,
             date: input.date,
             dir: input.dir,
-            comment : input.fileComment.length ? input.fileComment : null,
+            comment : input.fileCommentStr.length ? input.fileCommentStr : null,
             unixPermissions : input.unixPermissions,
             dosPermissions : input.dosPermissions,
             createFolders: options.createFolders
@@ -7712,7 +9584,7 @@ module.exports = function(data, options) {
     return this;
 };
 
-},{"./base64":44,"./zipEntries":65}],54:[function(require,module,exports){
+},{"./base64":47,"./utf8":66,"./utils":67,"./zipEntries":68}],57:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 module.exports = function(data, encoding){
@@ -7723,7 +9595,7 @@ module.exports.test = function(b){
 };
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":7}],55:[function(require,module,exports){
+},{"buffer":8}],58:[function(require,module,exports){
 'use strict';
 var Uint8ArrayReader = require('./uint8ArrayReader');
 
@@ -7731,6 +9603,7 @@ function NodeBufferReader(data) {
     this.data = data;
     this.length = this.data.length;
     this.index = 0;
+    this.zero = 0;
 }
 NodeBufferReader.prototype = new Uint8ArrayReader();
 
@@ -7739,13 +9612,13 @@ NodeBufferReader.prototype = new Uint8ArrayReader();
  */
 NodeBufferReader.prototype.readData = function(size) {
     this.checkOffset(size);
-    var result = this.data.slice(this.index, this.index + size);
+    var result = this.data.slice(this.zero + this.index, this.zero + this.index + size);
     this.index += size;
     return result;
 };
 module.exports = NodeBufferReader;
 
-},{"./uint8ArrayReader":61}],56:[function(require,module,exports){
+},{"./uint8ArrayReader":64}],59:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var utils = require('./utils');
@@ -7922,24 +9795,6 @@ var decToHex = function(dec, bytes) {
 };
 
 /**
- * Merge the objects passed as parameters into a new one.
- * @private
- * @param {...Object} var_args All objects to merge.
- * @return {Object} a new object with the data of the others.
- */
-var extend = function() {
-    var result = {}, i, attr;
-    for (i = 0; i < arguments.length; i++) { // arguments is not enumerable in some browsers
-        for (attr in arguments[i]) {
-            if (arguments[i].hasOwnProperty(attr) && typeof result[attr] === "undefined") {
-                result[attr] = arguments[i][attr];
-            }
-        }
-    }
-    return result;
-};
-
-/**
  * Transforms the (incomplete) options from the user into the complete
  * set of options to create a file.
  * @private
@@ -7951,7 +9806,7 @@ var prepareFileAttrs = function(o) {
     if (o.base64 === true && (o.binary === null || o.binary === undefined)) {
         o.binary = true;
     }
-    o = extend(o, defaults);
+    o = utils.extend(o, defaults);
     o.date = o.date || new Date();
     if (o.compression !== null) o.compression = o.compression.toUpperCase();
 
@@ -8186,12 +10041,16 @@ var generateDosExternalFileAttr = function (dosPermissions, isDir) {
  * @param {JSZip.CompressedObject} compressedObject the compressed object.
  * @param {number} offset the current offset from the start of the zip file.
  * @param {String} platform let's pretend we are this platform (change platform dependents fields)
+ * @param {Function} encodeFileName the function to encode the file name / comment.
  * @return {object} the zip parts.
  */
-var generateZipParts = function(name, file, compressedObject, offset, platform) {
+var generateZipParts = function(name, file, compressedObject, offset, platform, encodeFileName) {
     var data = compressedObject.compressedContent,
+        useCustomEncoding = encodeFileName !== utf8.utf8encode,
+        encodedFileName = utils.transformTo("string", encodeFileName(file.name)),
         utfEncodedFileName = utils.transformTo("string", utf8.utf8encode(file.name)),
         comment = file.comment || "",
+        encodedComment = utils.transformTo("string", encodeFileName(comment)),
         utfEncodedComment = utils.transformTo("string", utf8.utf8encode(comment)),
         useUTF8ForFileName = utfEncodedFileName.length !== file.name.length,
         useUTF8ForComment = utfEncodedComment.length !== comment.length,
@@ -8263,7 +10122,7 @@ var generateZipParts = function(name, file, compressedObject, offset, platform) 
             // Version
             decToHex(1, 1) +
             // NameCRC32
-            decToHex(crc32(utfEncodedFileName), 4) +
+            decToHex(crc32(encodedFileName), 4) +
             // UnicodeName
             utfEncodedFileName;
 
@@ -8282,7 +10141,7 @@ var generateZipParts = function(name, file, compressedObject, offset, platform) 
             // Version
             decToHex(1, 1) +
             // CommentCRC32
-            decToHex(this.crc32(utfEncodedComment), 4) +
+            decToHex(this.crc32(encodedComment), 4) +
             // UnicodeName
             utfEncodedComment;
 
@@ -8301,7 +10160,7 @@ var generateZipParts = function(name, file, compressedObject, offset, platform) 
     header += "\x0A\x00";
     // general purpose bit flag
     // set bit 11 if utf8
-    header += (useUTF8ForFileName || useUTF8ForComment) ? "\x00\x08" : "\x00\x00";
+    header += !useCustomEncoding && (useUTF8ForFileName || useUTF8ForComment) ? "\x00\x08" : "\x00\x00";
     // compression method
     header += compressedObject.compressionMethod;
     // last mod file time
@@ -8315,12 +10174,12 @@ var generateZipParts = function(name, file, compressedObject, offset, platform) 
     // uncompressed size
     header += decToHex(compressedObject.uncompressedSize, 4);
     // file name length
-    header += decToHex(utfEncodedFileName.length, 2);
+    header += decToHex(encodedFileName.length, 2);
     // extra field length
     header += decToHex(extraFields.length, 2);
 
 
-    var fileRecord = signature.LOCAL_FILE_HEADER + header + utfEncodedFileName + extraFields;
+    var fileRecord = signature.LOCAL_FILE_HEADER + header + encodedFileName + extraFields;
 
     var dirRecord = signature.CENTRAL_FILE_HEADER +
     // version made by (00: DOS)
@@ -8328,7 +10187,7 @@ var generateZipParts = function(name, file, compressedObject, offset, platform) 
     // file header (common to file and central directory)
     header +
     // file comment length
-    decToHex(utfEncodedComment.length, 2) +
+    decToHex(encodedComment.length, 2) +
     // disk number start
     "\x00\x00" +
     // internal file attributes TODO
@@ -8338,11 +10197,11 @@ var generateZipParts = function(name, file, compressedObject, offset, platform) 
     // relative offset of local header
     decToHex(offset, 4) +
     // file name
-    utfEncodedFileName +
+    encodedFileName +
     // extra field
     extraFields +
     // file comment
-    utfEncodedComment;
+    encodedComment;
 
     return {
         fileRecord: fileRecord,
@@ -8382,7 +10241,7 @@ var out = {
             }
             file = this.files[filename];
             // return a new object, don't let the user mess with our internal objects :)
-            fileClone = new ZipObject(file.name, file._data, extend(file.options));
+            fileClone = new ZipObject(file.name, file._data, utils.extend(file.options));
             relativePath = filename.slice(this.root.length, filename.length);
             if (filename.slice(0, this.root.length) === this.root && // the file is in the current root
             search(relativePath, fileClone)) { // and the file matches the function
@@ -8489,14 +10348,15 @@ var out = {
      * @return {String|Uint8Array|ArrayBuffer|Buffer|Blob} the zip file
      */
     generate: function(options) {
-        options = extend(options || {}, {
+        options = utils.extend(options || {}, {
             base64: true,
             compression: "STORE",
             compressionOptions : null,
             type: "base64",
             platform: "DOS",
             comment: null,
-            mimeType: 'application/zip'
+            mimeType: 'application/zip',
+            encodeFileName: utf8.utf8encode
         });
 
         utils.checkSupport(options.type);
@@ -8518,7 +10378,7 @@ var out = {
             localDirLength = 0,
             centralDirLength = 0,
             writer, i,
-            utfEncodedComment = utils.transformTo("string", this.utf8encode(options.comment || this.comment || ""));
+            encodedComment = utils.transformTo("string", options.encodeFileName(options.comment || this.comment || ""));
 
         // first, generate all the zip parts.
         for (var name in this.files) {
@@ -8536,7 +10396,7 @@ var out = {
 
             var compressedObject = generateCompressedObjectFrom.call(this, file, compression, compressionOptions);
 
-            var zipPart = generateZipParts.call(this, name, file, compressedObject, localDirLength, options.platform);
+            var zipPart = generateZipParts.call(this, name, file, compressedObject, localDirLength, options.platform, options.encodeFileName);
             localDirLength += zipPart.fileRecord.length + compressedObject.compressedSize;
             centralDirLength += zipPart.dirRecord.length;
             zipData.push(zipPart);
@@ -8559,9 +10419,9 @@ var out = {
         // offset of start of central directory with respect to the starting disk number
         decToHex(localDirLength, 4) +
         // .ZIP file comment length
-        decToHex(utfEncodedComment.length, 2) +
+        decToHex(encodedComment.length, 2) +
         // .ZIP file comment
-        utfEncodedComment;
+        encodedComment;
 
 
         // we have all the parts (and the total length)
@@ -8630,7 +10490,7 @@ var out = {
 };
 module.exports = out;
 
-},{"./base64":44,"./compressedObject":45,"./compressions":46,"./crc32":47,"./defaults":49,"./nodeBuffer":54,"./signature":57,"./stringWriter":59,"./support":60,"./uint8ArrayWriter":62,"./utf8":63,"./utils":64}],57:[function(require,module,exports){
+},{"./base64":47,"./compressedObject":48,"./compressions":49,"./crc32":50,"./defaults":52,"./nodeBuffer":57,"./signature":60,"./stringWriter":62,"./support":63,"./uint8ArrayWriter":65,"./utf8":66,"./utils":67}],60:[function(require,module,exports){
 'use strict';
 exports.LOCAL_FILE_HEADER = "PK\x03\x04";
 exports.CENTRAL_FILE_HEADER = "PK\x01\x02";
@@ -8639,7 +10499,7 @@ exports.ZIP64_CENTRAL_DIRECTORY_LOCATOR = "PK\x06\x07";
 exports.ZIP64_CENTRAL_DIRECTORY_END = "PK\x06\x06";
 exports.DATA_DESCRIPTOR = "PK\x07\x08";
 
-},{}],58:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 var utils = require('./utils');
@@ -8651,19 +10511,20 @@ function StringReader(data, optimizedBinaryString) {
     }
     this.length = this.data.length;
     this.index = 0;
+    this.zero = 0;
 }
 StringReader.prototype = new DataReader();
 /**
  * @see DataReader.byteAt
  */
 StringReader.prototype.byteAt = function(i) {
-    return this.data.charCodeAt(i);
+    return this.data.charCodeAt(this.zero + i);
 };
 /**
  * @see DataReader.lastIndexOfSignature
  */
 StringReader.prototype.lastIndexOfSignature = function(sig) {
-    return this.data.lastIndexOf(sig);
+    return this.data.lastIndexOf(sig) - this.zero;
 };
 /**
  * @see DataReader.readData
@@ -8671,13 +10532,13 @@ StringReader.prototype.lastIndexOfSignature = function(sig) {
 StringReader.prototype.readData = function(size) {
     this.checkOffset(size);
     // this will work because the constructor applied the "& 0xff" mask.
-    var result = this.data.slice(this.index, this.index + size);
+    var result = this.data.slice(this.zero + this.index, this.zero + this.index + size);
     this.index += size;
     return result;
 };
 module.exports = StringReader;
 
-},{"./dataReader":48,"./utils":64}],59:[function(require,module,exports){
+},{"./dataReader":51,"./utils":67}],62:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -8709,7 +10570,7 @@ StringWriter.prototype = {
 
 module.exports = StringWriter;
 
-},{"./utils":64}],60:[function(require,module,exports){
+},{"./utils":67}],63:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 exports.base64 = true;
@@ -8747,40 +10608,19 @@ else {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":7}],61:[function(require,module,exports){
+},{"buffer":8}],64:[function(require,module,exports){
 'use strict';
-var DataReader = require('./dataReader');
+var ArrayReader = require('./arrayReader');
 
 function Uint8ArrayReader(data) {
     if (data) {
         this.data = data;
         this.length = this.data.length;
         this.index = 0;
+        this.zero = 0;
     }
 }
-Uint8ArrayReader.prototype = new DataReader();
-/**
- * @see DataReader.byteAt
- */
-Uint8ArrayReader.prototype.byteAt = function(i) {
-    return this.data[i];
-};
-/**
- * @see DataReader.lastIndexOfSignature
- */
-Uint8ArrayReader.prototype.lastIndexOfSignature = function(sig) {
-    var sig0 = sig.charCodeAt(0),
-        sig1 = sig.charCodeAt(1),
-        sig2 = sig.charCodeAt(2),
-        sig3 = sig.charCodeAt(3);
-    for (var i = this.length - 4; i >= 0; --i) {
-        if (this.data[i] === sig0 && this.data[i + 1] === sig1 && this.data[i + 2] === sig2 && this.data[i + 3] === sig3) {
-            return i;
-        }
-    }
-
-    return -1;
-};
+Uint8ArrayReader.prototype = new ArrayReader();
 /**
  * @see DataReader.readData
  */
@@ -8790,13 +10630,13 @@ Uint8ArrayReader.prototype.readData = function(size) {
         // in IE10, when using subarray(idx, idx), we get the array [0x00] instead of [].
         return new Uint8Array(0);
     }
-    var result = this.data.subarray(this.index, this.index + size);
+    var result = this.data.subarray(this.zero + this.index, this.zero + this.index + size);
     this.index += size;
     return result;
 };
 module.exports = Uint8ArrayReader;
 
-},{"./dataReader":48}],62:[function(require,module,exports){
+},{"./arrayReader":46}],65:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -8834,7 +10674,7 @@ Uint8ArrayWriter.prototype = {
 
 module.exports = Uint8ArrayWriter;
 
-},{"./utils":64}],63:[function(require,module,exports){
+},{"./utils":67}],66:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -9043,7 +10883,7 @@ exports.utf8decode = function utf8decode(buf) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./nodeBuffer":54,"./support":60,"./utils":64}],64:[function(require,module,exports){
+},{"./nodeBuffer":57,"./support":63,"./utils":67}],67:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var compressions = require('./compressions');
@@ -9370,12 +11210,31 @@ exports.isRegExp = function (object) {
     return Object.prototype.toString.call(object) === "[object RegExp]";
 };
 
+/**
+ * Merge the objects passed as parameters into a new one.
+ * @private
+ * @param {...Object} var_args All objects to merge.
+ * @return {Object} a new object with the data of the others.
+ */
+exports.extend = function() {
+    var result = {}, i, attr;
+    for (i = 0; i < arguments.length; i++) { // arguments is not enumerable in some browsers
+        for (attr in arguments[i]) {
+            if (arguments[i].hasOwnProperty(attr) && typeof result[attr] === "undefined") {
+                result[attr] = arguments[i][attr];
+            }
+        }
+    }
+    return result;
+};
 
-},{"./compressions":46,"./nodeBuffer":54,"./support":60}],65:[function(require,module,exports){
+
+},{"./compressions":49,"./nodeBuffer":57,"./support":63}],68:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var NodeBufferReader = require('./nodeBufferReader');
 var Uint8ArrayReader = require('./uint8ArrayReader');
+var ArrayReader = require('./arrayReader');
 var utils = require('./utils');
 var sig = require('./signature');
 var ZipEntry = require('./zipEntry');
@@ -9408,6 +11267,20 @@ ZipEntries.prototype = {
         }
     },
     /**
+     * Check if the given signature is at the given index.
+     * @param {number} askedIndex the index to check.
+     * @param {string} expectedSignature the signature to expect.
+     * @return {boolean} true if the signature is here, false otherwise.
+     */
+    isSignature: function(askedIndex, expectedSignature) {
+        var currentIndex = this.reader.index;
+        this.reader.setIndex(askedIndex);
+        var signature = this.reader.readString(4);
+        var result = signature === expectedSignature;
+        this.reader.setIndex(currentIndex);
+        return result;
+    },
+    /**
      * Read the end of the central directory.
      */
     readBlockEndOfCentral: function() {
@@ -9422,10 +11295,12 @@ ZipEntries.prototype = {
         // warning : the encoding depends of the system locale
         // On a linux machine with LANG=en_US.utf8, this field is utf8 encoded.
         // On a windows machine, this field is encoded with the localized windows code page.
-        this.zipComment = this.reader.readString(this.zipCommentLength);
+        var zipComment = this.reader.readData(this.zipCommentLength);
+        var decodeParamType = support.uint8array ? "uint8array" : "array";
         // To get consistent behavior with the generation part, we will assume that
-        // this is utf8 encoded.
-        this.zipComment = jszipProto.utf8decode(this.zipComment);
+        // this is utf8 encoded unless specified otherwise.
+        var decodeContent = utils.transformTo(decodeParamType, zipComment);
+        this.zipComment = this.loadOptions.decodeFileName(decodeContent);
     },
     /**
      * Read the end of the Zip 64 central directory.
@@ -9500,24 +11375,31 @@ ZipEntries.prototype = {
             file.readCentralPart(this.reader);
             this.files.push(file);
         }
+
+        if (this.centralDirRecords !== this.files.length) {
+            if (this.centralDirRecords !== 0 && this.files.length === 0) {
+                // We expected some records but couldn't find ANY.
+                // This is really suspicious, as if something went wrong.
+                throw new Error("Corrupted zip or bug: expected " + this.centralDirRecords + " records in central dir, got " + this.files.length);
+            } else {
+                // We found some records but not all.
+                // Something is wrong but we got something for the user: no error here.
+                // console.warn("expected", this.centralDirRecords, "records in central dir, got", this.files.length);
+            }
+        }
     },
     /**
      * Read the end of central directory.
      */
     readEndOfCentral: function() {
         var offset = this.reader.lastIndexOfSignature(sig.CENTRAL_DIRECTORY_END);
-        if (offset === -1) {
+        if (offset < 0) {
             // Check if the content is a truncated zip or complete garbage.
             // A "LOCAL_FILE_HEADER" is not required at the beginning (auto
             // extractible zip for example) but it can give a good hint.
             // If an ajax request was used without responseType, we will also
             // get unreadable data.
-            var isGarbage = true;
-            try {
-                this.reader.setIndex(0);
-                this.checkSignature(sig.LOCAL_FILE_HEADER);
-                isGarbage = false;
-            } catch (e) {}
+            var isGarbage = !this.isSignature(0, sig.LOCAL_FILE_HEADER);
 
             if (isGarbage) {
                 throw new Error("Can't find end of central directory : is this a zip file ? " +
@@ -9527,6 +11409,7 @@ ZipEntries.prototype = {
             }
         }
         this.reader.setIndex(offset);
+        var endOfCentralDirOffset = offset;
         this.checkSignature(sig.CENTRAL_DIRECTORY_END);
         this.readBlockEndOfCentral();
 
@@ -9555,7 +11438,7 @@ ZipEntries.prototype = {
 
             // should look for a zip64 EOCD locator
             offset = this.reader.lastIndexOfSignature(sig.ZIP64_CENTRAL_DIRECTORY_LOCATOR);
-            if (offset === -1) {
+            if (offset < 0) {
                 throw new Error("Corrupted zip : can't find the ZIP64 end of central directory locator");
             }
             this.reader.setIndex(offset);
@@ -9563,21 +11446,55 @@ ZipEntries.prototype = {
             this.readBlockZip64EndOfCentralLocator();
 
             // now the zip64 EOCD record
+            if (!this.isSignature(this.relativeOffsetEndOfZip64CentralDir, sig.ZIP64_CENTRAL_DIRECTORY_END)) {
+                // console.warn("ZIP64 end of central directory not where expected.");
+                this.relativeOffsetEndOfZip64CentralDir = this.reader.lastIndexOfSignature(sig.ZIP64_CENTRAL_DIRECTORY_END);
+                if (this.relativeOffsetEndOfZip64CentralDir < 0) {
+                    throw new Error("Corrupted zip : can't find the ZIP64 end of central directory");
+                }
+            }
             this.reader.setIndex(this.relativeOffsetEndOfZip64CentralDir);
             this.checkSignature(sig.ZIP64_CENTRAL_DIRECTORY_END);
             this.readBlockZip64EndOfCentral();
         }
+
+        var expectedEndOfCentralDirOffset = this.centralDirOffset + this.centralDirSize;
+        if (this.zip64) {
+            expectedEndOfCentralDirOffset += 20; // end of central dir 64 locator
+            expectedEndOfCentralDirOffset += 12 /* should not include the leading 12 bytes */ + this.zip64EndOfCentralSize;
+        }
+
+        var extraBytes = endOfCentralDirOffset - expectedEndOfCentralDirOffset;
+
+        if (extraBytes > 0) {
+            // console.warn(extraBytes, "extra bytes at beginning or within zipfile");
+            if (this.isSignature(endOfCentralDirOffset, sig.CENTRAL_FILE_HEADER)) {
+                // The offsets seem wrong, but we have something at the specified offset.
+                // So… we keep it.
+            } else {
+                // the offset is wrong, update the "zero" of the reader
+                // this happens if data has been prepended (crx files for example)
+                this.reader.zero = extraBytes;
+            }
+        } else if (extraBytes < 0) {
+            throw new Error("Corrupted zip: missing " + Math.abs(extraBytes) + " bytes.");
+        }
     },
     prepareReader: function(data) {
         var type = utils.getTypeOf(data);
+        utils.checkSupport(type);
         if (type === "string" && !support.uint8array) {
             this.reader = new StringReader(data, this.loadOptions.optimizedBinaryString);
         }
         else if (type === "nodebuffer") {
             this.reader = new NodeBufferReader(data);
         }
-        else {
+        else if (support.uint8array) {
             this.reader = new Uint8ArrayReader(utils.transformTo("uint8array", data));
+        } else if (support.array) {
+            this.reader = new ArrayReader(utils.transformTo("array", data));
+        } else {
+            throw new Error("Unexpected error: unsupported type '" + type + "'");
         }
     },
     /**
@@ -9594,12 +11511,13 @@ ZipEntries.prototype = {
 // }}} end of ZipEntries
 module.exports = ZipEntries;
 
-},{"./nodeBufferReader":55,"./object":56,"./signature":57,"./stringReader":58,"./support":60,"./uint8ArrayReader":61,"./utils":64,"./zipEntry":66}],66:[function(require,module,exports){
+},{"./arrayReader":46,"./nodeBufferReader":58,"./object":59,"./signature":60,"./stringReader":61,"./support":63,"./uint8ArrayReader":64,"./utils":67,"./zipEntry":69}],69:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var utils = require('./utils');
 var CompressedObject = require('./compressedObject');
 var jszipProto = require('./object');
+var support = require('./support');
 
 var MADE_BY_DOS = 0x00;
 var MADE_BY_UNIX = 0x03;
@@ -9697,7 +11615,7 @@ ZipEntry.prototype = {
         // Unfortunately, this lead also to some issues : http://seclists.org/fulldisclosure/2009/Sep/394
         this.fileNameLength = reader.readInt(2);
         localExtraFieldsLength = reader.readInt(2); // can't be sure this will be the same as the central dir
-        this.fileName = reader.readString(this.fileNameLength);
+        this.fileName = reader.readData(this.fileNameLength);
         reader.skip(localExtraFieldsLength);
 
         if (this.compressedSize == -1 || this.uncompressedSize == -1) {
@@ -9706,7 +11624,7 @@ ZipEntry.prototype = {
 
         compression = utils.findCompression(this.compressionMethod);
         if (compression === null) { // no compression found
-            throw new Error("Corrupted zip : compression " + utils.pretty(this.compressionMethod) + " unknown (inner file : " + this.fileName + ")");
+            throw new Error("Corrupted zip : compression " + utils.pretty(this.compressionMethod) + " unknown (inner file : " +  utils.transformTo("string", this.fileName) + ")");
         }
         this.decompressed = new CompressedObject();
         this.decompressed.compressedSize = this.compressedSize;
@@ -9750,10 +11668,10 @@ ZipEntry.prototype = {
             throw new Error("Encrypted zip are not supported");
         }
 
-        this.fileName = reader.readString(this.fileNameLength);
+        this.fileName = reader.readData(this.fileNameLength);
         this.readExtraFields(reader);
         this.parseZIP64ExtraField(reader);
-        this.fileComment = reader.readString(this.fileCommentLength);
+        this.fileComment = reader.readData(this.fileCommentLength);
     },
 
     /**
@@ -9780,7 +11698,7 @@ ZipEntry.prototype = {
         }
 
         // fail safe : if the name ends with a / it probably means a folder
-        if (!this.dir && this.fileName.slice(-1) === '/') {
+        if (!this.dir && this.fileNameStr.slice(-1) === '/') {
             this.dir = true;
         }
     },
@@ -9841,17 +11759,25 @@ ZipEntry.prototype = {
      * Apply an UTF8 transformation if needed.
      */
     handleUTF8: function() {
+        var decodeParamType = support.uint8array ? "uint8array" : "array";
         if (this.useUTF8()) {
-            this.fileName = jszipProto.utf8decode(this.fileName);
-            this.fileComment = jszipProto.utf8decode(this.fileComment);
+            this.fileNameStr = jszipProto.utf8decode(this.fileName);
+            this.fileCommentStr = jszipProto.utf8decode(this.fileComment);
         } else {
             var upath = this.findExtraFieldUnicodePath();
             if (upath !== null) {
-                this.fileName = upath;
+                this.fileNameStr = upath;
+            } else {
+                var fileNameByteArray =  utils.transformTo(decodeParamType, this.fileName);
+                this.fileNameStr = this.loadOptions.decodeFileName(fileNameByteArray);
             }
+
             var ucomment = this.findExtraFieldUnicodeComment();
             if (ucomment !== null) {
-                this.fileComment = ucomment;
+                this.fileCommentStr = ucomment;
+            } else {
+                var commentByteArray =  utils.transformTo(decodeParamType, this.fileComment);
+                this.fileCommentStr = this.loadOptions.decodeFileName(commentByteArray);
             }
         }
     },
@@ -9906,7 +11832,598 @@ ZipEntry.prototype = {
 };
 module.exports = ZipEntry;
 
-},{"./compressedObject":45,"./object":56,"./stringReader":58,"./utils":64}],67:[function(require,module,exports){
+},{"./compressedObject":48,"./object":59,"./stringReader":61,"./support":63,"./utils":67}],70:[function(require,module,exports){
+'use strict';
+var immediate = require('immediate');
+
+/* istanbul ignore next */
+function INTERNAL() {}
+
+var handlers = {};
+
+var REJECTED = ['REJECTED'];
+var FULFILLED = ['FULFILLED'];
+var PENDING = ['PENDING'];
+
+module.exports = Promise;
+
+function Promise(resolver) {
+  if (typeof resolver !== 'function') {
+    throw new TypeError('resolver must be a function');
+  }
+  this.state = PENDING;
+  this.queue = [];
+  this.outcome = void 0;
+  if (resolver !== INTERNAL) {
+    safelyResolveThenable(this, resolver);
+  }
+}
+
+Promise.prototype["catch"] = function (onRejected) {
+  return this.then(null, onRejected);
+};
+Promise.prototype.then = function (onFulfilled, onRejected) {
+  if (typeof onFulfilled !== 'function' && this.state === FULFILLED ||
+    typeof onRejected !== 'function' && this.state === REJECTED) {
+    return this;
+  }
+  var promise = new this.constructor(INTERNAL);
+  if (this.state !== PENDING) {
+    var resolver = this.state === FULFILLED ? onFulfilled : onRejected;
+    unwrap(promise, resolver, this.outcome);
+  } else {
+    this.queue.push(new QueueItem(promise, onFulfilled, onRejected));
+  }
+
+  return promise;
+};
+function QueueItem(promise, onFulfilled, onRejected) {
+  this.promise = promise;
+  if (typeof onFulfilled === 'function') {
+    this.onFulfilled = onFulfilled;
+    this.callFulfilled = this.otherCallFulfilled;
+  }
+  if (typeof onRejected === 'function') {
+    this.onRejected = onRejected;
+    this.callRejected = this.otherCallRejected;
+  }
+}
+QueueItem.prototype.callFulfilled = function (value) {
+  handlers.resolve(this.promise, value);
+};
+QueueItem.prototype.otherCallFulfilled = function (value) {
+  unwrap(this.promise, this.onFulfilled, value);
+};
+QueueItem.prototype.callRejected = function (value) {
+  handlers.reject(this.promise, value);
+};
+QueueItem.prototype.otherCallRejected = function (value) {
+  unwrap(this.promise, this.onRejected, value);
+};
+
+function unwrap(promise, func, value) {
+  immediate(function () {
+    var returnValue;
+    try {
+      returnValue = func(value);
+    } catch (e) {
+      return handlers.reject(promise, e);
+    }
+    if (returnValue === promise) {
+      handlers.reject(promise, new TypeError('Cannot resolve promise with itself'));
+    } else {
+      handlers.resolve(promise, returnValue);
+    }
+  });
+}
+
+handlers.resolve = function (self, value) {
+  var result = tryCatch(getThen, value);
+  if (result.status === 'error') {
+    return handlers.reject(self, result.value);
+  }
+  var thenable = result.value;
+
+  if (thenable) {
+    safelyResolveThenable(self, thenable);
+  } else {
+    self.state = FULFILLED;
+    self.outcome = value;
+    var i = -1;
+    var len = self.queue.length;
+    while (++i < len) {
+      self.queue[i].callFulfilled(value);
+    }
+  }
+  return self;
+};
+handlers.reject = function (self, error) {
+  self.state = REJECTED;
+  self.outcome = error;
+  var i = -1;
+  var len = self.queue.length;
+  while (++i < len) {
+    self.queue[i].callRejected(error);
+  }
+  return self;
+};
+
+function getThen(obj) {
+  // Make sure we only access the accessor once as required by the spec
+  var then = obj && obj.then;
+  if (obj && (typeof obj === 'object' || typeof obj === 'function') && typeof then === 'function') {
+    return function appyThen() {
+      then.apply(obj, arguments);
+    };
+  }
+}
+
+function safelyResolveThenable(self, thenable) {
+  // Either fulfill, reject or reject with error
+  var called = false;
+  function onError(value) {
+    if (called) {
+      return;
+    }
+    called = true;
+    handlers.reject(self, value);
+  }
+
+  function onSuccess(value) {
+    if (called) {
+      return;
+    }
+    called = true;
+    handlers.resolve(self, value);
+  }
+
+  function tryToUnwrap() {
+    thenable(onSuccess, onError);
+  }
+
+  var result = tryCatch(tryToUnwrap);
+  if (result.status === 'error') {
+    onError(result.value);
+  }
+}
+
+function tryCatch(func, value) {
+  var out = {};
+  try {
+    out.value = func(value);
+    out.status = 'success';
+  } catch (e) {
+    out.status = 'error';
+    out.value = e;
+  }
+  return out;
+}
+
+Promise.resolve = resolve;
+function resolve(value) {
+  if (value instanceof this) {
+    return value;
+  }
+  return handlers.resolve(new this(INTERNAL), value);
+}
+
+Promise.reject = reject;
+function reject(reason) {
+  var promise = new this(INTERNAL);
+  return handlers.reject(promise, reason);
+}
+
+Promise.all = all;
+function all(iterable) {
+  var self = this;
+  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
+    return this.reject(new TypeError('must be an array'));
+  }
+
+  var len = iterable.length;
+  var called = false;
+  if (!len) {
+    return this.resolve([]);
+  }
+
+  var values = new Array(len);
+  var resolved = 0;
+  var i = -1;
+  var promise = new this(INTERNAL);
+
+  while (++i < len) {
+    allResolver(iterable[i], i);
+  }
+  return promise;
+  function allResolver(value, i) {
+    self.resolve(value).then(resolveFromAll, function (error) {
+      if (!called) {
+        called = true;
+        handlers.reject(promise, error);
+      }
+    });
+    function resolveFromAll(outValue) {
+      values[i] = outValue;
+      if (++resolved === len && !called) {
+        called = true;
+        handlers.resolve(promise, values);
+      }
+    }
+  }
+}
+
+Promise.race = race;
+function race(iterable) {
+  var self = this;
+  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
+    return this.reject(new TypeError('must be an array'));
+  }
+
+  var len = iterable.length;
+  var called = false;
+  if (!len) {
+    return this.resolve([]);
+  }
+
+  var i = -1;
+  var promise = new this(INTERNAL);
+
+  while (++i < len) {
+    resolver(iterable[i]);
+  }
+  return promise;
+  function resolver(value) {
+    self.resolve(value).then(function (response) {
+      if (!called) {
+        called = true;
+        handlers.resolve(promise, response);
+      }
+    }, function (error) {
+      if (!called) {
+        called = true;
+        handlers.reject(promise, error);
+      }
+    });
+  }
+}
+
+},{"immediate":44}],71:[function(require,module,exports){
+;(function () { // closure for web browsers
+
+if (typeof module === 'object' && module.exports) {
+  module.exports = LRUCache
+} else {
+  // just set the global for non-node platforms.
+  this.LRUCache = LRUCache
+}
+
+function hOP (obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key)
+}
+
+function naiveLength () { return 1 }
+
+var didTypeWarning = false
+function typeCheckKey(key) {
+  if (!didTypeWarning && typeof key !== 'string' && typeof key !== 'number') {
+    didTypeWarning = true
+    console.error(new TypeError("LRU: key must be a string or number. Almost certainly a bug! " + typeof key).stack)
+  }
+}
+
+function LRUCache (options) {
+  if (!(this instanceof LRUCache))
+    return new LRUCache(options)
+
+  if (typeof options === 'number')
+    options = { max: options }
+
+  if (!options)
+    options = {}
+
+  this._max = options.max
+  // Kind of weird to have a default max of Infinity, but oh well.
+  if (!this._max || !(typeof this._max === "number") || this._max <= 0 )
+    this._max = Infinity
+
+  this._lengthCalculator = options.length || naiveLength
+  if (typeof this._lengthCalculator !== "function")
+    this._lengthCalculator = naiveLength
+
+  this._allowStale = options.stale || false
+  this._maxAge = options.maxAge || null
+  this._dispose = options.dispose
+  this.reset()
+}
+
+// resize the cache when the max changes.
+Object.defineProperty(LRUCache.prototype, "max",
+  { set : function (mL) {
+      if (!mL || !(typeof mL === "number") || mL <= 0 ) mL = Infinity
+      this._max = mL
+      if (this._length > this._max) trim(this)
+    }
+  , get : function () { return this._max }
+  , enumerable : true
+  })
+
+// resize the cache when the lengthCalculator changes.
+Object.defineProperty(LRUCache.prototype, "lengthCalculator",
+  { set : function (lC) {
+      if (typeof lC !== "function") {
+        this._lengthCalculator = naiveLength
+        this._length = this._itemCount
+        for (var key in this._cache) {
+          this._cache[key].length = 1
+        }
+      } else {
+        this._lengthCalculator = lC
+        this._length = 0
+        for (var key in this._cache) {
+          this._cache[key].length = this._lengthCalculator(this._cache[key].value)
+          this._length += this._cache[key].length
+        }
+      }
+
+      if (this._length > this._max) trim(this)
+    }
+  , get : function () { return this._lengthCalculator }
+  , enumerable : true
+  })
+
+Object.defineProperty(LRUCache.prototype, "length",
+  { get : function () { return this._length }
+  , enumerable : true
+  })
+
+
+Object.defineProperty(LRUCache.prototype, "itemCount",
+  { get : function () { return this._itemCount }
+  , enumerable : true
+  })
+
+LRUCache.prototype.forEach = function (fn, thisp) {
+  thisp = thisp || this
+  var i = 0
+  var itemCount = this._itemCount
+
+  for (var k = this._mru - 1; k >= 0 && i < itemCount; k--) if (this._lruList[k]) {
+    i++
+    var hit = this._lruList[k]
+    if (isStale(this, hit)) {
+      del(this, hit)
+      if (!this._allowStale) hit = undefined
+    }
+    if (hit) {
+      fn.call(thisp, hit.value, hit.key, this)
+    }
+  }
+}
+
+LRUCache.prototype.keys = function () {
+  var keys = new Array(this._itemCount)
+  var i = 0
+  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
+    var hit = this._lruList[k]
+    keys[i++] = hit.key
+  }
+  return keys
+}
+
+LRUCache.prototype.values = function () {
+  var values = new Array(this._itemCount)
+  var i = 0
+  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
+    var hit = this._lruList[k]
+    values[i++] = hit.value
+  }
+  return values
+}
+
+LRUCache.prototype.reset = function () {
+  if (this._dispose && this._cache) {
+    for (var k in this._cache) {
+      this._dispose(k, this._cache[k].value)
+    }
+  }
+
+  this._cache = Object.create(null) // hash of items by key
+  this._lruList = Object.create(null) // list of items in order of use recency
+  this._mru = 0 // most recently used
+  this._lru = 0 // least recently used
+  this._length = 0 // number of items in the list
+  this._itemCount = 0
+}
+
+LRUCache.prototype.dump = function () {
+  var arr = []
+  var i = 0
+
+  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
+    var hit = this._lruList[k]
+    if (!isStale(this, hit)) {
+      //Do not store staled hits
+      ++i
+      arr.push({
+        k: hit.key,
+        v: hit.value,
+        e: hit.now + (hit.maxAge || 0)
+      });
+    }
+  }
+  //arr has the most read first
+  return arr
+}
+
+LRUCache.prototype.dumpLru = function () {
+  return this._lruList
+}
+
+LRUCache.prototype.set = function (key, value, maxAge) {
+  maxAge = maxAge || this._maxAge
+  typeCheckKey(key)
+
+  var now = maxAge ? Date.now() : 0
+  var len = this._lengthCalculator(value)
+
+  if (hOP(this._cache, key)) {
+    if (len > this._max) {
+      del(this, this._cache[key])
+      return false
+    }
+    // dispose of the old one before overwriting
+    if (this._dispose)
+      this._dispose(key, this._cache[key].value)
+
+    this._cache[key].now = now
+    this._cache[key].maxAge = maxAge
+    this._cache[key].value = value
+    this._length += (len - this._cache[key].length)
+    this._cache[key].length = len
+    this.get(key)
+
+    if (this._length > this._max)
+      trim(this)
+
+    return true
+  }
+
+  var hit = new Entry(key, value, this._mru++, len, now, maxAge)
+
+  // oversized objects fall out of cache automatically.
+  if (hit.length > this._max) {
+    if (this._dispose) this._dispose(key, value)
+    return false
+  }
+
+  this._length += hit.length
+  this._lruList[hit.lu] = this._cache[key] = hit
+  this._itemCount ++
+
+  if (this._length > this._max)
+    trim(this)
+
+  return true
+}
+
+LRUCache.prototype.has = function (key) {
+  typeCheckKey(key)
+  if (!hOP(this._cache, key)) return false
+  var hit = this._cache[key]
+  if (isStale(this, hit)) {
+    return false
+  }
+  return true
+}
+
+LRUCache.prototype.get = function (key) {
+  typeCheckKey(key)
+  return get(this, key, true)
+}
+
+LRUCache.prototype.peek = function (key) {
+  typeCheckKey(key)
+  return get(this, key, false)
+}
+
+LRUCache.prototype.pop = function () {
+  var hit = this._lruList[this._lru]
+  del(this, hit)
+  return hit || null
+}
+
+LRUCache.prototype.del = function (key) {
+  typeCheckKey(key)
+  del(this, this._cache[key])
+}
+
+LRUCache.prototype.load = function (arr) {
+  //reset the cache
+  this.reset();
+
+  var now = Date.now()
+  //A previous serialized cache has the most recent items first
+  for (var l = arr.length - 1; l >= 0; l-- ) {
+    var hit = arr[l]
+    typeCheckKey(hit.k)
+    var expiresAt = hit.e || 0
+    if (expiresAt === 0) {
+      //the item was created without expiration in a non aged cache
+      this.set(hit.k, hit.v)
+    } else {
+      var maxAge = expiresAt - now
+      //dont add already expired items
+      if (maxAge > 0) this.set(hit.k, hit.v, maxAge)
+    }
+  }
+}
+
+function get (self, key, doUse) {
+  typeCheckKey(key)
+  var hit = self._cache[key]
+  if (hit) {
+    if (isStale(self, hit)) {
+      del(self, hit)
+      if (!self._allowStale) hit = undefined
+    } else {
+      if (doUse) use(self, hit)
+    }
+    if (hit) hit = hit.value
+  }
+  return hit
+}
+
+function isStale(self, hit) {
+  if (!hit || (!hit.maxAge && !self._maxAge)) return false
+  var stale = false;
+  var diff = Date.now() - hit.now
+  if (hit.maxAge) {
+    stale = diff > hit.maxAge
+  } else {
+    stale = self._maxAge && (diff > self._maxAge)
+  }
+  return stale;
+}
+
+function use (self, hit) {
+  shiftLU(self, hit)
+  hit.lu = self._mru ++
+  self._lruList[hit.lu] = hit
+}
+
+function trim (self) {
+  while (self._lru < self._mru && self._length > self._max)
+    del(self, self._lruList[self._lru])
+}
+
+function shiftLU (self, hit) {
+  delete self._lruList[ hit.lu ]
+  while (self._lru < self._mru && !self._lruList[self._lru]) self._lru ++
+}
+
+function del (self, hit) {
+  if (hit) {
+    if (self._dispose) self._dispose(hit.key, hit.value)
+    self._length -= hit.length
+    self._itemCount --
+    delete self._cache[ hit.key ]
+    shiftLU(self, hit)
+  }
+}
+
+// classy, since V8 prefers predictable objects.
+function Entry (key, value, lu, length, now, maxAge) {
+  this.key = key
+  this.value = value
+  this.lu = lu
+  this.length = length
+  this.now = now
+  if (maxAge) this.maxAge = maxAge
+}
+
+})()
+
+},{}],72:[function(require,module,exports){
 // Top level file is just a mixin of submodules & constants
 'use strict';
 
@@ -9922,15 +12439,15 @@ assign(pako, deflate, inflate, constants);
 
 module.exports = pako;
 
-},{"./lib/deflate":68,"./lib/inflate":69,"./lib/utils/common":70,"./lib/zlib/constants":73}],68:[function(require,module,exports){
+},{"./lib/deflate":73,"./lib/inflate":74,"./lib/utils/common":75,"./lib/zlib/constants":78}],73:[function(require,module,exports){
 'use strict';
 
 
-var zlib_deflate = require('./zlib/deflate.js');
-var utils = require('./utils/common');
-var strings = require('./utils/strings');
-var msg = require('./zlib/messages');
-var zstream = require('./zlib/zstream');
+var zlib_deflate = require('./zlib/deflate');
+var utils        = require('./utils/common');
+var strings      = require('./utils/strings');
+var msg          = require('./zlib/messages');
+var ZStream      = require('./zlib/zstream');
 
 var toString = Object.prototype.toString;
 
@@ -10004,6 +12521,7 @@ var Z_DEFLATED  = 8;
  * - `windowBits`
  * - `memLevel`
  * - `strategy`
+ * - `dictionary`
  *
  * [http://zlib.net/manual.html#Advanced](http://zlib.net/manual.html#Advanced)
  * for more information on these.
@@ -10041,7 +12559,8 @@ var Z_DEFLATED  = 8;
  * console.log(deflate.result);
  * ```
  **/
-var Deflate = function(options) {
+function Deflate(options) {
+  if (!(this instanceof Deflate)) return new Deflate(options);
 
   this.options = utils.assign({
     level: Z_DEFAULT_COMPRESSION,
@@ -10068,7 +12587,7 @@ var Deflate = function(options) {
   this.ended  = false;  // used to avoid multiple onEnd() calls
   this.chunks = [];     // chunks of compressed data
 
-  this.strm = new zstream();
+  this.strm = new ZStream();
   this.strm.avail_out = 0;
 
   var status = zlib_deflate.deflateInit2(
@@ -10087,7 +12606,28 @@ var Deflate = function(options) {
   if (opt.header) {
     zlib_deflate.deflateSetHeader(this.strm, opt.header);
   }
-};
+
+  if (opt.dictionary) {
+    var dict;
+    // Convert data if needed
+    if (typeof opt.dictionary === 'string') {
+      // If we need to compress text, change encoding to utf8.
+      dict = strings.string2buf(opt.dictionary);
+    } else if (toString.call(opt.dictionary) === '[object ArrayBuffer]') {
+      dict = new Uint8Array(opt.dictionary);
+    } else {
+      dict = opt.dictionary;
+    }
+
+    status = zlib_deflate.deflateSetDictionary(this.strm, dict);
+
+    if (status !== Z_OK) {
+      throw new Error(msg[status]);
+    }
+
+    this._dict_set = true;
+  }
+}
 
 /**
  * Deflate#push(data[, mode]) -> Boolean
@@ -10118,7 +12658,7 @@ var Deflate = function(options) {
  * push(chunk, true);  // push last chunk
  * ```
  **/
-Deflate.prototype.push = function(data, mode) {
+Deflate.prototype.push = function (data, mode) {
   var strm = this.strm;
   var chunkSize = this.options.chunkSize;
   var status, _mode;
@@ -10190,7 +12730,7 @@ Deflate.prototype.push = function(data, mode) {
  * By default, stores data blocks in `chunks[]` property and glue
  * those in `onEnd`. Override this handler, if you need another behaviour.
  **/
-Deflate.prototype.onData = function(chunk) {
+Deflate.prototype.onData = function (chunk) {
   this.chunks.push(chunk);
 };
 
@@ -10205,7 +12745,7 @@ Deflate.prototype.onData = function(chunk) {
  * or if an error happened. By default - join collected chunks,
  * free memory and fill `results` / `err` properties.
  **/
-Deflate.prototype.onEnd = function(status) {
+Deflate.prototype.onEnd = function (status) {
   // On success - join
   if (status === Z_OK) {
     if (this.options.to === 'string') {
@@ -10225,7 +12765,7 @@ Deflate.prototype.onEnd = function(status) {
  * - data (Uint8Array|Array|String): input data to compress.
  * - options (Object): zlib deflate options.
  *
- * Compress `data` with deflate alrorythm and `options`.
+ * Compress `data` with deflate algorithm and `options`.
  *
  * Supported options are:
  *
@@ -10233,6 +12773,7 @@ Deflate.prototype.onEnd = function(status) {
  * - windowBits
  * - memLevel
  * - strategy
+ * - dictionary
  *
  * [http://zlib.net/manual.html#Advanced](http://zlib.net/manual.html#Advanced)
  * for more information on these.
@@ -10259,7 +12800,7 @@ function deflate(input, options) {
   deflator.push(input, true);
 
   // That will never happens, if you don't cheat with options :)
-  if (deflator.err) { throw deflator.msg; }
+  if (deflator.err) { throw deflator.msg || msg[deflator.err]; }
 
   return deflator.result;
 }
@@ -10300,17 +12841,17 @@ exports.deflate = deflate;
 exports.deflateRaw = deflateRaw;
 exports.gzip = gzip;
 
-},{"./utils/common":70,"./utils/strings":71,"./zlib/deflate.js":75,"./zlib/messages":80,"./zlib/zstream":82}],69:[function(require,module,exports){
+},{"./utils/common":75,"./utils/strings":76,"./zlib/deflate":80,"./zlib/messages":85,"./zlib/zstream":87}],74:[function(require,module,exports){
 'use strict';
 
 
-var zlib_inflate = require('./zlib/inflate.js');
-var utils = require('./utils/common');
-var strings = require('./utils/strings');
-var c = require('./zlib/constants');
-var msg = require('./zlib/messages');
-var zstream = require('./zlib/zstream');
-var gzheader = require('./zlib/gzheader');
+var zlib_inflate = require('./zlib/inflate');
+var utils        = require('./utils/common');
+var strings      = require('./utils/strings');
+var c            = require('./zlib/constants');
+var msg          = require('./zlib/messages');
+var ZStream      = require('./zlib/zstream');
+var GZheader     = require('./zlib/gzheader');
 
 var toString = Object.prototype.toString;
 
@@ -10360,6 +12901,7 @@ var toString = Object.prototype.toString;
  * on bad params. Supported options:
  *
  * - `windowBits`
+ * - `dictionary`
  *
  * [http://zlib.net/manual.html#Advanced](http://zlib.net/manual.html#Advanced)
  * for more information on these.
@@ -10392,7 +12934,8 @@ var toString = Object.prototype.toString;
  * console.log(inflate.result);
  * ```
  **/
-var Inflate = function(options) {
+function Inflate(options) {
+  if (!(this instanceof Inflate)) return new Inflate(options);
 
   this.options = utils.assign({
     chunkSize: 16384,
@@ -10430,7 +12973,7 @@ var Inflate = function(options) {
   this.ended  = false;  // used to avoid multiple onEnd() calls
   this.chunks = [];     // chunks of compressed data
 
-  this.strm   = new zstream();
+  this.strm   = new ZStream();
   this.strm.avail_out = 0;
 
   var status  = zlib_inflate.inflateInit2(
@@ -10442,10 +12985,10 @@ var Inflate = function(options) {
     throw new Error(msg[status]);
   }
 
-  this.header = new gzheader();
+  this.header = new GZheader();
 
   zlib_inflate.inflateGetHeader(this.strm, this.header);
-};
+}
 
 /**
  * Inflate#push(data[, mode]) -> Boolean
@@ -10475,11 +13018,17 @@ var Inflate = function(options) {
  * push(chunk, true);  // push last chunk
  * ```
  **/
-Inflate.prototype.push = function(data, mode) {
+Inflate.prototype.push = function (data, mode) {
   var strm = this.strm;
   var chunkSize = this.options.chunkSize;
+  var dictionary = this.options.dictionary;
   var status, _mode;
   var next_out_utf8, tail, utf8str;
+  var dict;
+
+  // Flag to properly process Z_BUF_ERROR on testing inflate call
+  // when we check that all output data was flushed.
+  var allowBufError = false;
 
   if (this.ended) { return false; }
   _mode = (mode === ~~mode) ? mode : ((mode === true) ? c.Z_FINISH : c.Z_NO_FLUSH);
@@ -10505,6 +13054,25 @@ Inflate.prototype.push = function(data, mode) {
     }
 
     status = zlib_inflate.inflate(strm, c.Z_NO_FLUSH);    /* no bad return value */
+
+    if (status === c.Z_NEED_DICT && dictionary) {
+      // Convert data if needed
+      if (typeof dictionary === 'string') {
+        dict = strings.string2buf(dictionary);
+      } else if (toString.call(dictionary) === '[object ArrayBuffer]') {
+        dict = new Uint8Array(dictionary);
+      } else {
+        dict = dictionary;
+      }
+
+      status = zlib_inflate.inflateSetDictionary(this.strm, dict);
+
+    }
+
+    if (status === c.Z_BUF_ERROR && allowBufError === true) {
+      status = c.Z_OK;
+      allowBufError = false;
+    }
 
     if (status !== c.Z_STREAM_END && status !== c.Z_OK) {
       this.onEnd(status);
@@ -10534,7 +13102,19 @@ Inflate.prototype.push = function(data, mode) {
         }
       }
     }
-  } while ((strm.avail_in > 0) && status !== c.Z_STREAM_END);
+
+    // When no more input data, we should check that internal inflate buffers
+    // are flushed. The only way to do it when avail_out = 0 - run one more
+    // inflate pass. But if output data not exists, inflate return Z_BUF_ERROR.
+    // Here we set flag to process this error properly.
+    //
+    // NOTE. Deflate does not return error in this case and does not needs such
+    // logic.
+    if (strm.avail_in === 0 && strm.avail_out === 0) {
+      allowBufError = true;
+    }
+
+  } while ((strm.avail_in > 0 || strm.avail_out === 0) && status !== c.Z_STREAM_END);
 
   if (status === c.Z_STREAM_END) {
     _mode = c.Z_FINISH;
@@ -10568,7 +13148,7 @@ Inflate.prototype.push = function(data, mode) {
  * By default, stores data blocks in `chunks[]` property and glue
  * those in `onEnd`. Override this handler, if you need another behaviour.
  **/
-Inflate.prototype.onData = function(chunk) {
+Inflate.prototype.onData = function (chunk) {
   this.chunks.push(chunk);
 };
 
@@ -10583,7 +13163,7 @@ Inflate.prototype.onData = function(chunk) {
  * or if an error happened. By default - join collected chunks,
  * free memory and fill `results` / `err` properties.
  **/
-Inflate.prototype.onEnd = function(status) {
+Inflate.prototype.onEnd = function (status) {
   // On success - join
   if (status === c.Z_OK) {
     if (this.options.to === 'string') {
@@ -10645,7 +13225,7 @@ function inflate(input, options) {
   inflator.push(input, true);
 
   // That will never happens, if you don't cheat with options :)
-  if (inflator.err) { throw inflator.msg; }
+  if (inflator.err) { throw inflator.msg || msg[inflator.err]; }
 
   return inflator.result;
 }
@@ -10681,7 +13261,7 @@ exports.inflate = inflate;
 exports.inflateRaw = inflateRaw;
 exports.ungzip  = inflate;
 
-},{"./utils/common":70,"./utils/strings":71,"./zlib/constants":73,"./zlib/gzheader":76,"./zlib/inflate.js":78,"./zlib/messages":80,"./zlib/zstream":82}],70:[function(require,module,exports){
+},{"./utils/common":75,"./utils/strings":76,"./zlib/constants":78,"./zlib/gzheader":81,"./zlib/inflate":83,"./zlib/messages":85,"./zlib/zstream":87}],75:[function(require,module,exports){
 'use strict';
 
 
@@ -10723,28 +13303,28 @@ exports.shrinkBuf = function (buf, size) {
 var fnTyped = {
   arraySet: function (dest, src, src_offs, len, dest_offs) {
     if (src.subarray && dest.subarray) {
-      dest.set(src.subarray(src_offs, src_offs+len), dest_offs);
+      dest.set(src.subarray(src_offs, src_offs + len), dest_offs);
       return;
     }
     // Fallback to ordinary array
-    for (var i=0; i<len; i++) {
+    for (var i = 0; i < len; i++) {
       dest[dest_offs + i] = src[src_offs + i];
     }
   },
   // Join array of chunks to single array.
-  flattenChunks: function(chunks) {
+  flattenChunks: function (chunks) {
     var i, l, len, pos, chunk, result;
 
     // calculate data length
     len = 0;
-    for (i=0, l=chunks.length; i<l; i++) {
+    for (i = 0, l = chunks.length; i < l; i++) {
       len += chunks[i].length;
     }
 
     // join chunks
     result = new Uint8Array(len);
     pos = 0;
-    for (i=0, l=chunks.length; i<l; i++) {
+    for (i = 0, l = chunks.length; i < l; i++) {
       chunk = chunks[i];
       result.set(chunk, pos);
       pos += chunk.length;
@@ -10756,12 +13336,12 @@ var fnTyped = {
 
 var fnUntyped = {
   arraySet: function (dest, src, src_offs, len, dest_offs) {
-    for (var i=0; i<len; i++) {
+    for (var i = 0; i < len; i++) {
       dest[dest_offs + i] = src[src_offs + i];
     }
   },
   // Join array of chunks to single array.
-  flattenChunks: function(chunks) {
+  flattenChunks: function (chunks) {
     return [].concat.apply([], chunks);
   }
 };
@@ -10785,7 +13365,7 @@ exports.setTyped = function (on) {
 
 exports.setTyped(TYPED_OK);
 
-},{}],71:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 // String encode/decode helpers
 'use strict';
 
@@ -10801,18 +13381,18 @@ var utils = require('./common');
 var STR_APPLY_OK = true;
 var STR_APPLY_UIA_OK = true;
 
-try { String.fromCharCode.apply(null, [0]); } catch(__) { STR_APPLY_OK = false; }
-try { String.fromCharCode.apply(null, new Uint8Array(1)); } catch(__) { STR_APPLY_UIA_OK = false; }
+try { String.fromCharCode.apply(null, [ 0 ]); } catch (__) { STR_APPLY_OK = false; }
+try { String.fromCharCode.apply(null, new Uint8Array(1)); } catch (__) { STR_APPLY_UIA_OK = false; }
 
 
 // Table with utf8 lengths (calculated by first byte of sequence)
 // Note, that 5 & 6-byte values and some 4-byte values can not be represented in JS,
 // because max possible codepoint is 0x10ffff
 var _utf8len = new utils.Buf8(256);
-for (var q=0; q<256; q++) {
+for (var q = 0; q < 256; q++) {
   _utf8len[q] = (q >= 252 ? 6 : q >= 248 ? 5 : q >= 240 ? 4 : q >= 224 ? 3 : q >= 192 ? 2 : 1);
 }
-_utf8len[254]=_utf8len[254]=1; // Invalid sequence start
+_utf8len[254] = _utf8len[254] = 1; // Invalid sequence start
 
 
 // convert string to array (typed, when possible)
@@ -10822,8 +13402,8 @@ exports.string2buf = function (str) {
   // count binary size
   for (m_pos = 0; m_pos < str_len; m_pos++) {
     c = str.charCodeAt(m_pos);
-    if ((c & 0xfc00) === 0xd800 && (m_pos+1 < str_len)) {
-      c2 = str.charCodeAt(m_pos+1);
+    if ((c & 0xfc00) === 0xd800 && (m_pos + 1 < str_len)) {
+      c2 = str.charCodeAt(m_pos + 1);
       if ((c2 & 0xfc00) === 0xdc00) {
         c = 0x10000 + ((c - 0xd800) << 10) + (c2 - 0xdc00);
         m_pos++;
@@ -10836,10 +13416,10 @@ exports.string2buf = function (str) {
   buf = new utils.Buf8(buf_len);
 
   // convert
-  for (i=0, m_pos = 0; i < buf_len; m_pos++) {
+  for (i = 0, m_pos = 0; i < buf_len; m_pos++) {
     c = str.charCodeAt(m_pos);
-    if ((c & 0xfc00) === 0xd800 && (m_pos+1 < str_len)) {
-      c2 = str.charCodeAt(m_pos+1);
+    if ((c & 0xfc00) === 0xd800 && (m_pos + 1 < str_len)) {
+      c2 = str.charCodeAt(m_pos + 1);
       if ((c2 & 0xfc00) === 0xdc00) {
         c = 0x10000 + ((c - 0xd800) << 10) + (c2 - 0xdc00);
         m_pos++;
@@ -10879,7 +13459,7 @@ function buf2binstring(buf, len) {
   }
 
   var result = '';
-  for (var i=0; i < len; i++) {
+  for (var i = 0; i < len; i++) {
     result += String.fromCharCode(buf[i]);
   }
   return result;
@@ -10887,15 +13467,15 @@ function buf2binstring(buf, len) {
 
 
 // Convert byte array to binary string
-exports.buf2binstring = function(buf) {
+exports.buf2binstring = function (buf) {
   return buf2binstring(buf, buf.length);
 };
 
 
 // Convert binary string (typed, when possible)
-exports.binstring2buf = function(str) {
+exports.binstring2buf = function (str) {
   var buf = new utils.Buf8(str.length);
-  for (var i=0, len=buf.length; i < len; i++) {
+  for (var i = 0, len = buf.length; i < len; i++) {
     buf[i] = str.charCodeAt(i);
   }
   return buf;
@@ -10910,16 +13490,16 @@ exports.buf2string = function (buf, max) {
   // Reserve max possible length (2 words per char)
   // NB: by unknown reasons, Array is significantly faster for
   //     String.fromCharCode.apply than Uint16Array.
-  var utf16buf = new Array(len*2);
+  var utf16buf = new Array(len * 2);
 
-  for (out=0, i=0; i<len;) {
+  for (out = 0, i = 0; i < len;) {
     c = buf[i++];
     // quick process ascii
     if (c < 0x80) { utf16buf[out++] = c; continue; }
 
     c_len = _utf8len[c];
     // skip 5 & 6 byte codes
-    if (c_len > 4) { utf16buf[out++] = 0xfffd; i += c_len-1; continue; }
+    if (c_len > 4) { utf16buf[out++] = 0xfffd; i += c_len - 1; continue; }
 
     // apply mask on first byte
     c &= c_len === 2 ? 0x1f : c_len === 3 ? 0x0f : 0x07;
@@ -10951,14 +13531,14 @@ exports.buf2string = function (buf, max) {
 //
 // buf[] - utf8 bytes array
 // max   - length limit (mandatory);
-exports.utf8border = function(buf, max) {
+exports.utf8border = function (buf, max) {
   var pos;
 
   max = max || buf.length;
   if (max > buf.length) { max = buf.length; }
 
   // go back from last position, until start of sequence found
-  pos = max-1;
+  pos = max - 1;
   while (pos >= 0 && (buf[pos] & 0xC0) === 0x80) { pos--; }
 
   // Fuckup - very small and broken sequence,
@@ -10972,12 +13552,31 @@ exports.utf8border = function(buf, max) {
   return (pos + _utf8len[buf[pos]] > max) ? pos : max;
 };
 
-},{"./common":70}],72:[function(require,module,exports){
+},{"./common":75}],77:[function(require,module,exports){
 'use strict';
 
 // Note: adler32 takes 12% for level 0 and 2% for level 6.
 // It doesn't worth to make additional optimizationa as in original.
 // Small size is preferable.
+
+// (C) 1995-2013 Jean-loup Gailly and Mark Adler
+// (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//   claim that you wrote the original software. If you use this software
+//   in a product, an acknowledgment in the product documentation would be
+//   appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//   misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
 
 function adler32(adler, buf, len, pos) {
   var s1 = (adler & 0xffff) |0,
@@ -11006,7 +13605,28 @@ function adler32(adler, buf, len, pos) {
 
 module.exports = adler32;
 
-},{}],73:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
+'use strict';
+
+// (C) 1995-2013 Jean-loup Gailly and Mark Adler
+// (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//   claim that you wrote the original software. If you use this software
+//   in a product, an acknowledgment in the product documentation would be
+//   appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//   misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
+
 module.exports = {
 
   /* Allowed flush values; see deflate() and inflate() below for details */
@@ -11055,22 +13675,40 @@ module.exports = {
   //Z_NULL:                 null // Use -1 or null inline, depending on var type
 };
 
-},{}],74:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 'use strict';
 
 // Note: we can't get significant speed boost here.
 // So write code to minimize size - no pregenerated tables
 // and array tools dependencies.
 
+// (C) 1995-2013 Jean-loup Gailly and Mark Adler
+// (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//   claim that you wrote the original software. If you use this software
+//   in a product, an acknowledgment in the product documentation would be
+//   appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//   misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
 
 // Use ordinary array, since untyped makes no boost here
 function makeTable() {
   var c, table = [];
 
-  for (var n =0; n < 256; n++) {
+  for (var n = 0; n < 256; n++) {
     c = n;
-    for (var k =0; k < 8; k++) {
-      c = ((c&1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
+    for (var k = 0; k < 8; k++) {
+      c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
     }
     table[n] = c;
   }
@@ -11086,7 +13724,7 @@ function crc32(crc, buf, len, pos) {
   var t = crcTable,
       end = pos + len;
 
-  crc = crc ^ (-1);
+  crc ^= -1;
 
   for (var i = pos; i < end; i++) {
     crc = (crc >>> 8) ^ t[(crc ^ buf[i]) & 0xFF];
@@ -11098,14 +13736,33 @@ function crc32(crc, buf, len, pos) {
 
 module.exports = crc32;
 
-},{}],75:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 'use strict';
+
+// (C) 1995-2013 Jean-loup Gailly and Mark Adler
+// (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//   claim that you wrote the original software. If you use this software
+//   in a product, an acknowledgment in the product documentation would be
+//   appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//   misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
 
 var utils   = require('../utils/common');
 var trees   = require('./trees');
 var adler32 = require('./adler32');
 var crc32   = require('./crc32');
-var msg   = require('./messages');
+var msg     = require('./messages');
 
 /* Public constants ==========================================================*/
 /* ===========================================================================*/
@@ -11178,7 +13835,7 @@ var D_CODES       = 30;
 /* number of distance codes */
 var BL_CODES      = 19;
 /* number of codes used to transfer the bit lengths */
-var HEAP_SIZE     = 2*L_CODES + 1;
+var HEAP_SIZE     = 2 * L_CODES + 1;
 /* maximum heap size */
 var MAX_BITS  = 15;
 /* All codes must not exceed MAX_BITS bits */
@@ -11244,7 +13901,7 @@ function flush_pending(strm) {
 }
 
 
-function flush_block_only (s, last) {
+function flush_block_only(s, last) {
   trees._tr_flush_block(s, (s.block_start >= 0 ? s.block_start : -1), s.strstart - s.block_start, last);
   s.block_start = s.strstart;
   flush_pending(s.strm);
@@ -11284,6 +13941,7 @@ function read_buf(strm, buf, start, size) {
 
   strm.avail_in -= len;
 
+  // zmemcpy(buf, strm->next_in, len);
   utils.arraySet(buf, strm.input, strm.next_in, len, start);
   if (strm.state.wrap === 1) {
     strm.adler = adler32(strm.adler, buf, len, start);
@@ -11514,7 +14172,7 @@ function fill_window(s) {
 //#endif
       while (s.insert) {
         /* UPDATE_HASH(s, s->ins_h, s->window[str + MIN_MATCH-1]); */
-        s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[str + MIN_MATCH-1]) & s.hash_mask;
+        s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[str + MIN_MATCH - 1]) & s.hash_mask;
 
         s.prev[str & s.w_mask] = s.head[s.ins_h];
         s.head[s.ins_h] = str;
@@ -11778,7 +14436,7 @@ function deflate_fast(s, flush) {
       /***/
     }
   }
-  s.insert = ((s.strstart < (MIN_MATCH-1)) ? s.strstart : MIN_MATCH-1);
+  s.insert = ((s.strstart < (MIN_MATCH - 1)) ? s.strstart : MIN_MATCH - 1);
   if (flush === Z_FINISH) {
     /*** FLUSH_BLOCK(s, 1); ***/
     flush_block_only(s, true);
@@ -11841,10 +14499,10 @@ function deflate_slow(s, flush) {
      */
     s.prev_length = s.match_length;
     s.prev_match = s.match_start;
-    s.match_length = MIN_MATCH-1;
+    s.match_length = MIN_MATCH - 1;
 
     if (hash_head !== 0/*NIL*/ && s.prev_length < s.max_lazy_match &&
-        s.strstart - hash_head <= (s.w_size-MIN_LOOKAHEAD)/*MAX_DIST(s)*/) {
+        s.strstart - hash_head <= (s.w_size - MIN_LOOKAHEAD)/*MAX_DIST(s)*/) {
       /* To simplify the code, we prevent matches with the string
        * of window index 0 (in particular we have to avoid a match
        * of the string with itself at the start of the input file).
@@ -11858,7 +14516,7 @@ function deflate_slow(s, flush) {
         /* If prev_match is also MIN_MATCH, match_start is garbage
          * but we will ignore the current match anyway.
          */
-        s.match_length = MIN_MATCH-1;
+        s.match_length = MIN_MATCH - 1;
       }
     }
     /* If there was a match at the previous step and the current
@@ -11872,13 +14530,13 @@ function deflate_slow(s, flush) {
 
       /***_tr_tally_dist(s, s.strstart - 1 - s.prev_match,
                      s.prev_length - MIN_MATCH, bflush);***/
-      bflush = trees._tr_tally(s, s.strstart - 1- s.prev_match, s.prev_length - MIN_MATCH);
+      bflush = trees._tr_tally(s, s.strstart - 1 - s.prev_match, s.prev_length - MIN_MATCH);
       /* Insert in hash table all strings up to the end of the match.
        * strstart-1 and strstart are already inserted. If there is not
        * enough lookahead, the last two strings are not inserted in
        * the hash table.
        */
-      s.lookahead -= s.prev_length-1;
+      s.lookahead -= s.prev_length - 1;
       s.prev_length -= 2;
       do {
         if (++s.strstart <= max_insert) {
@@ -11890,7 +14548,7 @@ function deflate_slow(s, flush) {
         }
       } while (--s.prev_length !== 0);
       s.match_available = 0;
-      s.match_length = MIN_MATCH-1;
+      s.match_length = MIN_MATCH - 1;
       s.strstart++;
 
       if (bflush) {
@@ -11909,7 +14567,7 @@ function deflate_slow(s, flush) {
        */
       //Tracevv((stderr,"%c", s->window[s->strstart-1]));
       /*** _tr_tally_lit(s, s.window[s.strstart-1], bflush); ***/
-      bflush = trees._tr_tally(s, 0, s.window[s.strstart-1]);
+      bflush = trees._tr_tally(s, 0, s.window[s.strstart - 1]);
 
       if (bflush) {
         /*** FLUSH_BLOCK_ONLY(s, 0) ***/
@@ -11934,11 +14592,11 @@ function deflate_slow(s, flush) {
   if (s.match_available) {
     //Tracevv((stderr,"%c", s->window[s->strstart-1]));
     /*** _tr_tally_lit(s, s.window[s.strstart-1], bflush); ***/
-    bflush = trees._tr_tally(s, 0, s.window[s.strstart-1]);
+    bflush = trees._tr_tally(s, 0, s.window[s.strstart - 1]);
 
     s.match_available = 0;
   }
-  s.insert = s.strstart < MIN_MATCH-1 ? s.strstart : MIN_MATCH-1;
+  s.insert = s.strstart < MIN_MATCH - 1 ? s.strstart : MIN_MATCH - 1;
   if (flush === Z_FINISH) {
     /*** FLUSH_BLOCK(s, 1); ***/
     flush_block_only(s, true);
@@ -12118,13 +14776,13 @@ function deflate_huff(s, flush) {
  * exclude worst case performance for pathological files. Better values may be
  * found for specific files.
  */
-var Config = function (good_length, max_lazy, nice_length, max_chain, func) {
+function Config(good_length, max_lazy, nice_length, max_chain, func) {
   this.good_length = good_length;
   this.max_lazy = max_lazy;
   this.nice_length = nice_length;
   this.max_chain = max_chain;
   this.func = func;
-};
+}
 
 var configuration_table;
 
@@ -12274,8 +14932,8 @@ function DeflateState() {
   // Use flat array of DOUBLE size, with interleaved fata,
   // because JS does not support effective
   this.dyn_ltree  = new utils.Buf16(HEAP_SIZE * 2);
-  this.dyn_dtree  = new utils.Buf16((2*D_CODES+1) * 2);
-  this.bl_tree    = new utils.Buf16((2*BL_CODES+1) * 2);
+  this.dyn_dtree  = new utils.Buf16((2 * D_CODES + 1) * 2);
+  this.bl_tree    = new utils.Buf16((2 * BL_CODES + 1) * 2);
   zero(this.dyn_ltree);
   zero(this.dyn_dtree);
   zero(this.bl_tree);
@@ -12285,11 +14943,11 @@ function DeflateState() {
   this.bl_desc  = null;         /* desc. for bit length tree */
 
   //ush bl_count[MAX_BITS+1];
-  this.bl_count = new utils.Buf16(MAX_BITS+1);
+  this.bl_count = new utils.Buf16(MAX_BITS + 1);
   /* number of codes at each bit length for an optimal tree */
 
   //int heap[2*L_CODES+1];      /* heap used to build the Huffman trees */
-  this.heap = new utils.Buf16(2*L_CODES+1);  /* heap used to build the Huffman trees */
+  this.heap = new utils.Buf16(2 * L_CODES + 1);  /* heap used to build the Huffman trees */
   zero(this.heap);
 
   this.heap_len = 0;               /* number of elements in the heap */
@@ -12298,7 +14956,7 @@ function DeflateState() {
    * The same heap array is used to build all trees.
    */
 
-  this.depth = new utils.Buf16(2*L_CODES+1); //uch depth[2*L_CODES+1];
+  this.depth = new utils.Buf16(2 * L_CODES + 1); //uch depth[2*L_CODES+1];
   zero(this.depth);
   /* Depth of each subtree used as tie breaker for trees of equal frequency
    */
@@ -12464,9 +15122,16 @@ function deflateInit2(strm, level, method, windowBits, memLevel, strategy) {
   s.lit_bufsize = 1 << (memLevel + 6); /* 16K elements by default */
 
   s.pending_buf_size = s.lit_bufsize * 4;
+
+  //overlay = (ushf *) ZALLOC(strm, s->lit_bufsize, sizeof(ush)+2);
+  //s->pending_buf = (uchf *) overlay;
   s.pending_buf = new utils.Buf8(s.pending_buf_size);
 
-  s.d_buf = s.lit_bufsize >> 1;
+  // It is offset from `s.pending_buf` (size is `s.lit_bufsize * 2`)
+  //s->d_buf = overlay + s->lit_bufsize/sizeof(ush);
+  s.d_buf = 1 * s.lit_bufsize;
+
+  //s->l_buf = s->pending_buf + (1+sizeof(ush))*s->lit_bufsize;
   s.l_buf = (1 + 2) * s.lit_bufsize;
 
   s.level = level;
@@ -12839,12 +15504,94 @@ function deflateEnd(strm) {
   return status === BUSY_STATE ? err(strm, Z_DATA_ERROR) : Z_OK;
 }
 
+
 /* =========================================================================
- * Copy the source state to the destination state
+ * Initializes the compression dictionary from the given byte
+ * sequence without producing any compressed output.
  */
-//function deflateCopy(dest, source) {
-//
-//}
+function deflateSetDictionary(strm, dictionary) {
+  var dictLength = dictionary.length;
+
+  var s;
+  var str, n;
+  var wrap;
+  var avail;
+  var next;
+  var input;
+  var tmpDict;
+
+  if (!strm/*== Z_NULL*/ || !strm.state/*== Z_NULL*/) {
+    return Z_STREAM_ERROR;
+  }
+
+  s = strm.state;
+  wrap = s.wrap;
+
+  if (wrap === 2 || (wrap === 1 && s.status !== INIT_STATE) || s.lookahead) {
+    return Z_STREAM_ERROR;
+  }
+
+  /* when using zlib wrappers, compute Adler-32 for provided dictionary */
+  if (wrap === 1) {
+    /* adler32(strm->adler, dictionary, dictLength); */
+    strm.adler = adler32(strm.adler, dictionary, dictLength, 0);
+  }
+
+  s.wrap = 0;   /* avoid computing Adler-32 in read_buf */
+
+  /* if dictionary would fill window, just replace the history */
+  if (dictLength >= s.w_size) {
+    if (wrap === 0) {            /* already empty otherwise */
+      /*** CLEAR_HASH(s); ***/
+      zero(s.head); // Fill with NIL (= 0);
+      s.strstart = 0;
+      s.block_start = 0;
+      s.insert = 0;
+    }
+    /* use the tail */
+    // dictionary = dictionary.slice(dictLength - s.w_size);
+    tmpDict = new utils.Buf8(s.w_size);
+    utils.arraySet(tmpDict, dictionary, dictLength - s.w_size, s.w_size, 0);
+    dictionary = tmpDict;
+    dictLength = s.w_size;
+  }
+  /* insert dictionary into window and hash */
+  avail = strm.avail_in;
+  next = strm.next_in;
+  input = strm.input;
+  strm.avail_in = dictLength;
+  strm.next_in = 0;
+  strm.input = dictionary;
+  fill_window(s);
+  while (s.lookahead >= MIN_MATCH) {
+    str = s.strstart;
+    n = s.lookahead - (MIN_MATCH - 1);
+    do {
+      /* UPDATE_HASH(s, s->ins_h, s->window[str + MIN_MATCH-1]); */
+      s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[str + MIN_MATCH - 1]) & s.hash_mask;
+
+      s.prev[str & s.w_mask] = s.head[s.ins_h];
+
+      s.head[s.ins_h] = str;
+      str++;
+    } while (--n);
+    s.strstart = str;
+    s.lookahead = MIN_MATCH - 1;
+    fill_window(s);
+  }
+  s.strstart += s.lookahead;
+  s.block_start = s.strstart;
+  s.insert = s.lookahead;
+  s.lookahead = 0;
+  s.match_length = s.prev_length = MIN_MATCH - 1;
+  s.match_available = 0;
+  strm.next_in = next;
+  strm.input = input;
+  strm.avail_in = avail;
+  s.wrap = wrap;
+  return Z_OK;
+}
+
 
 exports.deflateInit = deflateInit;
 exports.deflateInit2 = deflateInit2;
@@ -12853,21 +15600,39 @@ exports.deflateResetKeep = deflateResetKeep;
 exports.deflateSetHeader = deflateSetHeader;
 exports.deflate = deflate;
 exports.deflateEnd = deflateEnd;
+exports.deflateSetDictionary = deflateSetDictionary;
 exports.deflateInfo = 'pako deflate (from Nodeca project)';
 
 /* Not implemented
 exports.deflateBound = deflateBound;
 exports.deflateCopy = deflateCopy;
-exports.deflateSetDictionary = deflateSetDictionary;
 exports.deflateParams = deflateParams;
 exports.deflatePending = deflatePending;
 exports.deflatePrime = deflatePrime;
 exports.deflateTune = deflateTune;
 */
 
-},{"../utils/common":70,"./adler32":72,"./crc32":74,"./messages":80,"./trees":81}],76:[function(require,module,exports){
+},{"../utils/common":75,"./adler32":77,"./crc32":79,"./messages":85,"./trees":86}],81:[function(require,module,exports){
 'use strict';
 
+// (C) 1995-2013 Jean-loup Gailly and Mark Adler
+// (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//   claim that you wrote the original software. If you use this software
+//   in a product, an acknowledgment in the product documentation would be
+//   appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//   misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
 
 function GZheader() {
   /* true if compressed data believed to be text */
@@ -12907,8 +15672,27 @@ function GZheader() {
 
 module.exports = GZheader;
 
-},{}],77:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 'use strict';
+
+// (C) 1995-2013 Jean-loup Gailly and Mark Adler
+// (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//   claim that you wrote the original software. If you use this software
+//   in a product, an acknowledgment in the product documentation would be
+//   appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//   misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
 
 // See state defs from inflate.js
 var BAD = 30;       /* got a data error -- remain here until reset */
@@ -12962,7 +15746,8 @@ module.exports = function inflate_fast(strm, start) {
   var wsize;                  /* window size or zero if not using window */
   var whave;                  /* valid bytes in the window */
   var wnext;                  /* window write index */
-  var window;                 /* allocated sliding window, if wsize != 0 */
+  // Use `s_window` instead `window`, avoid conflict with instrumentation tools
+  var s_window;               /* allocated sliding window, if wsize != 0 */
   var hold;                   /* local strm.hold */
   var bits;                   /* local strm.bits */
   var lcode;                  /* local strm.lencode */
@@ -12996,7 +15781,7 @@ module.exports = function inflate_fast(strm, start) {
   wsize = state.wsize;
   whave = state.whave;
   wnext = state.wnext;
-  window = state.window;
+  s_window = state.window;
   hold = state.hold;
   bits = state.bits;
   lcode = state.lencode;
@@ -13114,13 +15899,13 @@ module.exports = function inflate_fast(strm, start) {
 //#endif
               }
               from = 0; // window index
-              from_source = window;
+              from_source = s_window;
               if (wnext === 0) {           /* very common case */
                 from += wsize - op;
                 if (op < len) {         /* some from window */
                   len -= op;
                   do {
-                    output[_out++] = window[from++];
+                    output[_out++] = s_window[from++];
                   } while (--op);
                   from = _out - dist;  /* rest from output */
                   from_source = output;
@@ -13132,14 +15917,14 @@ module.exports = function inflate_fast(strm, start) {
                 if (op < len) {         /* some from end of window */
                   len -= op;
                   do {
-                    output[_out++] = window[from++];
+                    output[_out++] = s_window[from++];
                   } while (--op);
                   from = 0;
                   if (wnext < len) {  /* some from start of window */
                     op = wnext;
                     len -= op;
                     do {
-                      output[_out++] = window[from++];
+                      output[_out++] = s_window[from++];
                     } while (--op);
                     from = _out - dist;      /* rest from output */
                     from_source = output;
@@ -13151,7 +15936,7 @@ module.exports = function inflate_fast(strm, start) {
                 if (op < len) {         /* some from window */
                   len -= op;
                   do {
-                    output[_out++] = window[from++];
+                    output[_out++] = s_window[from++];
                   } while (--op);
                   from = _out - dist;  /* rest from output */
                   from_source = output;
@@ -13234,14 +16019,32 @@ module.exports = function inflate_fast(strm, start) {
   return;
 };
 
-},{}],78:[function(require,module,exports){
+},{}],83:[function(require,module,exports){
 'use strict';
 
+// (C) 1995-2013 Jean-loup Gailly and Mark Adler
+// (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//   claim that you wrote the original software. If you use this software
+//   in a product, an acknowledgment in the product documentation would be
+//   appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//   misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
 
-var utils = require('../utils/common');
-var adler32 = require('./adler32');
-var crc32   = require('./crc32');
-var inflate_fast = require('./inffast');
+var utils         = require('../utils/common');
+var adler32       = require('./adler32');
+var crc32         = require('./crc32');
+var inflate_fast  = require('./inffast');
 var inflate_table = require('./inftrees');
 
 var CODES = 0;
@@ -13329,7 +16132,7 @@ var MAX_WBITS = 15;
 var DEF_WBITS = MAX_WBITS;
 
 
-function ZSWAP32(q) {
+function zswap32(q) {
   return  (((q >>> 24) & 0xff) +
           ((q >>> 8) & 0xff00) +
           ((q & 0xff00) << 8) +
@@ -13522,13 +16325,13 @@ function fixedtables(state) {
     while (sym < 280) { state.lens[sym++] = 7; }
     while (sym < 288) { state.lens[sym++] = 8; }
 
-    inflate_table(LENS,  state.lens, 0, 288, lenfix,   0, state.work, {bits: 9});
+    inflate_table(LENS,  state.lens, 0, 288, lenfix,   0, state.work, { bits: 9 });
 
     /* distance table */
     sym = 0;
     while (sym < 32) { state.lens[sym++] = 5; }
 
-    inflate_table(DISTS, state.lens, 0, 32,   distfix, 0, state.work, {bits: 5});
+    inflate_table(DISTS, state.lens, 0, 32,   distfix, 0, state.work, { bits: 5 });
 
     /* do this just once */
     virgin = false;
@@ -13570,7 +16373,7 @@ function updatewindow(strm, src, end, copy) {
 
   /* copy state->wsize or less output bytes into the circular window */
   if (copy >= state.wsize) {
-    utils.arraySet(state.window,src, end - state.wsize, state.wsize, 0);
+    utils.arraySet(state.window, src, end - state.wsize, state.wsize, 0);
     state.wnext = 0;
     state.whave = state.wsize;
   }
@@ -13580,11 +16383,11 @@ function updatewindow(strm, src, end, copy) {
       dist = copy;
     }
     //zmemcpy(state->window + state->wnext, end - copy, dist);
-    utils.arraySet(state.window,src, end - copy, dist, state.wnext);
+    utils.arraySet(state.window, src, end - copy, dist, state.wnext);
     copy -= dist;
     if (copy) {
       //zmemcpy(state->window, end - copy, copy);
-      utils.arraySet(state.window,src, end - copy, copy, 0);
+      utils.arraySet(state.window, src, end - copy, copy, 0);
       state.wnext = copy;
       state.whave = state.wsize;
     }
@@ -13621,7 +16424,7 @@ function inflate(strm, flush) {
   var n; // temporary var for NEED_BITS
 
   var order = /* permutation of code lengths */
-    [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+    [ 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 ];
 
 
   if (!strm || !strm.state || !strm.output ||
@@ -13948,7 +16751,7 @@ function inflate(strm, flush) {
         state.head.hcrc = ((state.flags >> 9) & 1);
         state.head.done = true;
       }
-      strm.adler = state.check = 0 /*crc32(0L, Z_NULL, 0)*/;
+      strm.adler = state.check = 0;
       state.mode = TYPE;
       break;
     case DICTID:
@@ -13960,7 +16763,7 @@ function inflate(strm, flush) {
         bits += 8;
       }
       //===//
-      strm.adler = state.check = ZSWAP32(hold);
+      strm.adler = state.check = zswap32(hold);
       //=== INITBITS();
       hold = 0;
       bits = 0;
@@ -14152,7 +16955,7 @@ function inflate(strm, flush) {
       state.lencode = state.lendyn;
       state.lenbits = 7;
 
-      opts = {bits: state.lenbits};
+      opts = { bits: state.lenbits };
       ret = inflate_table(CODES, state.lens, 0, 19, state.lencode, 0, state.work, opts);
       state.lenbits = opts.bits;
 
@@ -14283,7 +17086,7 @@ function inflate(strm, flush) {
          concerning the ENOUGH constants, which depend on those values */
       state.lenbits = 9;
 
-      opts = {bits: state.lenbits};
+      opts = { bits: state.lenbits };
       ret = inflate_table(LENS, state.lens, 0, state.nlen, state.lencode, 0, state.work, opts);
       // We have separate tables & no pointers. 2 commented lines below not needed.
       // state.next_index = opts.table_index;
@@ -14300,7 +17103,7 @@ function inflate(strm, flush) {
       //state.distcode.copy(state.codes);
       // Switch to use dynamic table
       state.distcode = state.distdyn;
-      opts = {bits: state.distbits};
+      opts = { bits: state.distbits };
       ret = inflate_table(DISTS, state.lens, state.nlen, state.ndist, state.distcode, 0, state.work, opts);
       // We have separate tables & no pointers. 2 commented lines below not needed.
       // state.next_index = opts.table_index;
@@ -14348,7 +17151,7 @@ function inflate(strm, flush) {
       }
       state.back = 0;
       for (;;) {
-        here = state.lencode[hold & ((1 << state.lenbits) -1)];  /*BITS(state.lenbits)*/
+        here = state.lencode[hold & ((1 << state.lenbits) - 1)];  /*BITS(state.lenbits)*/
         here_bits = here >>> 24;
         here_op = (here >>> 16) & 0xff;
         here_val = here & 0xffff;
@@ -14367,7 +17170,7 @@ function inflate(strm, flush) {
         last_val = here_val;
         for (;;) {
           here = state.lencode[last_val +
-                  ((hold & ((1 << (last_bits + last_op)) -1))/*BITS(last.bits + last.op)*/ >> last_bits)];
+                  ((hold & ((1 << (last_bits + last_op)) - 1))/*BITS(last.bits + last.op)*/ >> last_bits)];
           here_bits = here >>> 24;
           here_op = (here >>> 16) & 0xff;
           here_val = here & 0xffff;
@@ -14424,7 +17227,7 @@ function inflate(strm, flush) {
           bits += 8;
         }
         //===//
-        state.length += hold & ((1 << state.extra) -1)/*BITS(state.extra)*/;
+        state.length += hold & ((1 << state.extra) - 1)/*BITS(state.extra)*/;
         //--- DROPBITS(state.extra) ---//
         hold >>>= state.extra;
         bits -= state.extra;
@@ -14437,7 +17240,7 @@ function inflate(strm, flush) {
       /* falls through */
     case DIST:
       for (;;) {
-        here = state.distcode[hold & ((1 << state.distbits) -1)];/*BITS(state.distbits)*/
+        here = state.distcode[hold & ((1 << state.distbits) - 1)];/*BITS(state.distbits)*/
         here_bits = here >>> 24;
         here_op = (here >>> 16) & 0xff;
         here_val = here & 0xffff;
@@ -14456,7 +17259,7 @@ function inflate(strm, flush) {
         last_val = here_val;
         for (;;) {
           here = state.distcode[last_val +
-                  ((hold & ((1 << (last_bits + last_op)) -1))/*BITS(last.bits + last.op)*/ >> last_bits)];
+                  ((hold & ((1 << (last_bits + last_op)) - 1))/*BITS(last.bits + last.op)*/ >> last_bits)];
           here_bits = here >>> 24;
           here_op = (here >>> 16) & 0xff;
           here_val = here & 0xffff;
@@ -14500,7 +17303,7 @@ function inflate(strm, flush) {
           bits += 8;
         }
         //===//
-        state.offset += hold & ((1 << state.extra) -1)/*BITS(state.extra)*/;
+        state.offset += hold & ((1 << state.extra) - 1)/*BITS(state.extra)*/;
         //--- DROPBITS(state.extra) ---//
         hold >>>= state.extra;
         bits -= state.extra;
@@ -14594,8 +17397,8 @@ function inflate(strm, flush) {
 
         }
         _out = left;
-        // NB: crc32 stored as signed 32-bit int, ZSWAP32 returns signed too
-        if ((state.flags ? hold : ZSWAP32(hold)) !== state.check) {
+        // NB: crc32 stored as signed 32-bit int, zswap32 returns signed too
+        if ((state.flags ? hold : zswap32(hold)) !== state.check) {
           strm.msg = 'incorrect data check';
           state.mode = BAD;
           break;
@@ -14717,6 +17520,41 @@ function inflateGetHeader(strm, head) {
   return Z_OK;
 }
 
+function inflateSetDictionary(strm, dictionary) {
+  var dictLength = dictionary.length;
+
+  var state;
+  var dictid;
+  var ret;
+
+  /* check state */
+  if (!strm /* == Z_NULL */ || !strm.state /* == Z_NULL */) { return Z_STREAM_ERROR; }
+  state = strm.state;
+
+  if (state.wrap !== 0 && state.mode !== DICT) {
+    return Z_STREAM_ERROR;
+  }
+
+  /* check for correct dictionary identifier */
+  if (state.mode === DICT) {
+    dictid = 1; /* adler32(0, null, 0)*/
+    /* dictid = adler32(dictid, dictionary, dictLength); */
+    dictid = adler32(dictid, dictionary, dictLength, 0);
+    if (dictid !== state.check) {
+      return Z_DATA_ERROR;
+    }
+  }
+  /* copy dictionary to window using updatewindow(), which will amend the
+   existing dictionary if appropriate */
+  ret = updatewindow(strm, dictionary, dictLength, dictLength);
+  if (ret) {
+    state.mode = MEM;
+    return Z_MEM_ERROR;
+  }
+  state.havedict = 1;
+  // Tracev((stderr, "inflate:   dictionary set\n"));
+  return Z_OK;
+}
 
 exports.inflateReset = inflateReset;
 exports.inflateReset2 = inflateReset2;
@@ -14726,6 +17564,7 @@ exports.inflateInit2 = inflateInit2;
 exports.inflate = inflate;
 exports.inflateEnd = inflateEnd;
 exports.inflateGetHeader = inflateGetHeader;
+exports.inflateSetDictionary = inflateSetDictionary;
 exports.inflateInfo = 'pako inflate (from Nodeca project)';
 
 /* Not implemented
@@ -14733,15 +17572,32 @@ exports.inflateCopy = inflateCopy;
 exports.inflateGetDictionary = inflateGetDictionary;
 exports.inflateMark = inflateMark;
 exports.inflatePrime = inflatePrime;
-exports.inflateSetDictionary = inflateSetDictionary;
 exports.inflateSync = inflateSync;
 exports.inflateSyncPoint = inflateSyncPoint;
 exports.inflateUndermine = inflateUndermine;
 */
 
-},{"../utils/common":70,"./adler32":72,"./crc32":74,"./inffast":77,"./inftrees":79}],79:[function(require,module,exports){
+},{"../utils/common":75,"./adler32":77,"./crc32":79,"./inffast":82,"./inftrees":84}],84:[function(require,module,exports){
 'use strict';
 
+// (C) 1995-2013 Jean-loup Gailly and Mark Adler
+// (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//   claim that you wrote the original software. If you use this software
+//   in a product, an acknowledgment in the product documentation would be
+//   appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//   misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
 
 var utils = require('../utils/common');
 
@@ -14799,8 +17655,8 @@ module.exports = function inflate_table(type, lens, lens_index, codes, table, ta
   var base_index = 0;
 //  var shoextra;    /* extra bits table to use */
   var end;                    /* use base and extra for symbol > end */
-  var count = new utils.Buf16(MAXBITS+1); //[MAXBITS+1];    /* number of codes of each length */
-  var offs = new utils.Buf16(MAXBITS+1); //[MAXBITS+1];     /* offsets in table for each length */
+  var count = new utils.Buf16(MAXBITS + 1); //[MAXBITS+1];    /* number of codes of each length */
+  var offs = new utils.Buf16(MAXBITS + 1); //[MAXBITS+1];     /* offsets in table for each length */
   var extra = null;
   var extra_index = 0;
 
@@ -14969,10 +17825,8 @@ module.exports = function inflate_table(type, lens, lens_index, codes, table, ta
     return 1;
   }
 
-  var i=0;
   /* process all codes and make table entries */
   for (;;) {
-    i++;
     /* create table entry */
     here_bits = len - drop;
     if (work[sym] < end) {
@@ -15068,13 +17922,32 @@ module.exports = function inflate_table(type, lens, lens_index, codes, table, ta
   return 0;
 };
 
-},{"../utils/common":70}],80:[function(require,module,exports){
+},{"../utils/common":75}],85:[function(require,module,exports){
 'use strict';
 
+// (C) 1995-2013 Jean-loup Gailly and Mark Adler
+// (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//   claim that you wrote the original software. If you use this software
+//   in a product, an acknowledgment in the product documentation would be
+//   appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//   misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
+
 module.exports = {
-  '2':    'need dictionary',     /* Z_NEED_DICT       2  */
-  '1':    'stream end',          /* Z_STREAM_END      1  */
-  '0':    '',                    /* Z_OK              0  */
+  2:      'need dictionary',     /* Z_NEED_DICT       2  */
+  1:      'stream end',          /* Z_STREAM_END      1  */
+  0:      '',                    /* Z_OK              0  */
   '-1':   'file error',          /* Z_ERRNO         (-1) */
   '-2':   'stream error',        /* Z_STREAM_ERROR  (-2) */
   '-3':   'data error',          /* Z_DATA_ERROR    (-3) */
@@ -15083,9 +17956,27 @@ module.exports = {
   '-6':   'incompatible version' /* Z_VERSION_ERROR (-6) */
 };
 
-},{}],81:[function(require,module,exports){
+},{}],86:[function(require,module,exports){
 'use strict';
 
+// (C) 1995-2013 Jean-loup Gailly and Mark Adler
+// (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//   claim that you wrote the original software. If you use this software
+//   in a product, an acknowledgment in the product documentation would be
+//   appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//   misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
 
 var utils = require('../utils/common');
 
@@ -15141,7 +18032,7 @@ var D_CODES       = 30;
 var BL_CODES      = 19;
 /* number of codes used to transfer the bit lengths */
 
-var HEAP_SIZE     = 2*L_CODES + 1;
+var HEAP_SIZE     = 2 * L_CODES + 1;
 /* maximum heap size */
 
 var MAX_BITS      = 15;
@@ -15170,6 +18061,7 @@ var REPZ_3_10   = 17;
 var REPZ_11_138 = 18;
 /* repeat a zero length 11-138 times  (7 bits of repeat count) */
 
+/* eslint-disable comma-spacing,array-bracket-spacing */
 var extra_lbits =   /* extra bits for each length code */
   [0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0];
 
@@ -15181,6 +18073,8 @@ var extra_blbits =  /* extra bits for each bit length code */
 
 var bl_order =
   [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];
+/* eslint-enable comma-spacing,array-bracket-spacing */
+
 /* The lengths of the bit length codes are sent in order of decreasing
  * probability, to avoid transmitting the lengths for unused bit length codes.
  */
@@ -15194,7 +18088,7 @@ var bl_order =
 var DIST_CODE_LEN = 512; /* see definition of array dist_code below */
 
 // !!!! Use flat array insdead of structure, Freq = i*2, Len = i*2+1
-var static_ltree  = new Array((L_CODES+2) * 2);
+var static_ltree  = new Array((L_CODES + 2) * 2);
 zero(static_ltree);
 /* The static literal tree. Since the bit lengths are imposed, there is no
  * need for the L_CODES extra codes used during heap construction. However
@@ -15215,7 +18109,7 @@ zero(_dist_code);
  * the 15 bit distances.
  */
 
-var _length_code  = new Array(MAX_MATCH-MIN_MATCH+1);
+var _length_code  = new Array(MAX_MATCH - MIN_MATCH + 1);
 zero(_length_code);
 /* length code for each normalized match length (0 == MIN_MATCH) */
 
@@ -15228,7 +18122,7 @@ zero(base_dist);
 /* First normalized distance for each code (0 = distance of 1) */
 
 
-var StaticTreeDesc = function (static_tree, extra_bits, extra_base, elems, max_length) {
+function StaticTreeDesc(static_tree, extra_bits, extra_base, elems, max_length) {
 
   this.static_tree  = static_tree;  /* static tree or NULL */
   this.extra_bits   = extra_bits;   /* extra bits for each code or NULL */
@@ -15238,7 +18132,7 @@ var StaticTreeDesc = function (static_tree, extra_bits, extra_base, elems, max_l
 
   // show if `static_tree` has data or dummy - needed for monomorphic objects
   this.has_stree    = static_tree && static_tree.length;
-};
+}
 
 
 var static_l_desc;
@@ -15246,11 +18140,11 @@ var static_d_desc;
 var static_bl_desc;
 
 
-var TreeDesc = function(dyn_tree, stat_desc) {
+function TreeDesc(dyn_tree, stat_desc) {
   this.dyn_tree = dyn_tree;     /* the dynamic tree */
   this.max_code = 0;            /* largest code with non zero frequency */
   this.stat_desc = stat_desc;   /* the corresponding static tree */
-};
+}
 
 
 
@@ -15263,7 +18157,7 @@ function d_code(dist) {
  * Output a short LSB first on the stream.
  * IN assertion: there is enough room in pendingBuf.
  */
-function put_short (s, w) {
+function put_short(s, w) {
 //    put_byte(s, (uch)((w) & 0xff));
 //    put_byte(s, (uch)((ush)(w) >> 8));
   s.pending_buf[s.pending++] = (w) & 0xff;
@@ -15289,7 +18183,7 @@ function send_bits(s, value, length) {
 
 
 function send_code(s, c, tree) {
-  send_bits(s, tree[c*2]/*.Code*/, tree[c*2 + 1]/*.Len*/);
+  send_bits(s, tree[c * 2]/*.Code*/, tree[c * 2 + 1]/*.Len*/);
 }
 
 
@@ -15361,16 +18255,16 @@ function gen_bitlen(s, desc)
   /* In a first pass, compute the optimal bit lengths (which may
    * overflow in the case of the bit length tree).
    */
-  tree[s.heap[s.heap_max]*2 + 1]/*.Len*/ = 0; /* root of the heap */
+  tree[s.heap[s.heap_max] * 2 + 1]/*.Len*/ = 0; /* root of the heap */
 
-  for (h = s.heap_max+1; h < HEAP_SIZE; h++) {
+  for (h = s.heap_max + 1; h < HEAP_SIZE; h++) {
     n = s.heap[h];
-    bits = tree[tree[n*2 +1]/*.Dad*/ * 2 + 1]/*.Len*/ + 1;
+    bits = tree[tree[n * 2 + 1]/*.Dad*/ * 2 + 1]/*.Len*/ + 1;
     if (bits > max_length) {
       bits = max_length;
       overflow++;
     }
-    tree[n*2 + 1]/*.Len*/ = bits;
+    tree[n * 2 + 1]/*.Len*/ = bits;
     /* We overwrite tree[n].Dad which is no longer needed */
 
     if (n > max_code) { continue; } /* not a leaf node */
@@ -15378,12 +18272,12 @@ function gen_bitlen(s, desc)
     s.bl_count[bits]++;
     xbits = 0;
     if (n >= base) {
-      xbits = extra[n-base];
+      xbits = extra[n - base];
     }
     f = tree[n * 2]/*.Freq*/;
     s.opt_len += f * (bits + xbits);
     if (has_stree) {
-      s.static_len += f * (stree[n*2 + 1]/*.Len*/ + xbits);
+      s.static_len += f * (stree[n * 2 + 1]/*.Len*/ + xbits);
     }
   }
   if (overflow === 0) { return; }
@@ -15393,10 +18287,10 @@ function gen_bitlen(s, desc)
 
   /* Find the first bit length which could increase: */
   do {
-    bits = max_length-1;
+    bits = max_length - 1;
     while (s.bl_count[bits] === 0) { bits--; }
     s.bl_count[bits]--;      /* move one leaf down the tree */
-    s.bl_count[bits+1] += 2; /* move one overflow item as its brother */
+    s.bl_count[bits + 1] += 2; /* move one overflow item as its brother */
     s.bl_count[max_length]--;
     /* The brother of the overflow item also moves one step up,
      * but this does not affect bl_count[max_length]
@@ -15414,10 +18308,10 @@ function gen_bitlen(s, desc)
     while (n !== 0) {
       m = s.heap[--h];
       if (m > max_code) { continue; }
-      if (tree[m*2 + 1]/*.Len*/ !== bits) {
+      if (tree[m * 2 + 1]/*.Len*/ !== bits) {
         // Trace((stderr,"code %d bits %d->%d\n", m, tree[m].Len, bits));
-        s.opt_len += (bits - tree[m*2 + 1]/*.Len*/)*tree[m*2]/*.Freq*/;
-        tree[m*2 + 1]/*.Len*/ = bits;
+        s.opt_len += (bits - tree[m * 2 + 1]/*.Len*/) * tree[m * 2]/*.Freq*/;
+        tree[m * 2 + 1]/*.Len*/ = bits;
       }
       n--;
     }
@@ -15438,7 +18332,7 @@ function gen_codes(tree, max_code, bl_count)
 //    int max_code;              /* largest code with non zero frequency */
 //    ushf *bl_count;            /* number of codes at each bit length */
 {
-  var next_code = new Array(MAX_BITS+1); /* next code value for each bit length */
+  var next_code = new Array(MAX_BITS + 1); /* next code value for each bit length */
   var code = 0;              /* running code value */
   var bits;                  /* bit index */
   var n;                     /* code index */
@@ -15447,7 +18341,7 @@ function gen_codes(tree, max_code, bl_count)
    * without bit reversal.
    */
   for (bits = 1; bits <= MAX_BITS; bits++) {
-    next_code[bits] = code = (code + bl_count[bits-1]) << 1;
+    next_code[bits] = code = (code + bl_count[bits - 1]) << 1;
   }
   /* Check that the bit counts in bl_count are consistent. The last code
    * must be all ones.
@@ -15457,10 +18351,10 @@ function gen_codes(tree, max_code, bl_count)
   //Tracev((stderr,"\ngen_codes: max_code %d ", max_code));
 
   for (n = 0;  n <= max_code; n++) {
-    var len = tree[n*2 + 1]/*.Len*/;
+    var len = tree[n * 2 + 1]/*.Len*/;
     if (len === 0) { continue; }
     /* Now reverse the bits */
-    tree[n*2]/*.Code*/ = bi_reverse(next_code[len]++, len);
+    tree[n * 2]/*.Code*/ = bi_reverse(next_code[len]++, len);
 
     //Tracecv(tree != static_ltree, (stderr,"\nn %3d %c l %2d c %4x (%x) ",
     //     n, (isgraph(n) ? n : ' '), len, tree[n].Code, next_code[len]-1));
@@ -15477,7 +18371,7 @@ function tr_static_init() {
   var length;   /* length value */
   var code;     /* code value */
   var dist;     /* distance index */
-  var bl_count = new Array(MAX_BITS+1);
+  var bl_count = new Array(MAX_BITS + 1);
   /* number of codes at each bit length for an optimal tree */
 
   // do check in _tr_init()
@@ -15494,9 +18388,9 @@ function tr_static_init() {
 
   /* Initialize the mapping length (0..255) -> length code (0..28) */
   length = 0;
-  for (code = 0; code < LENGTH_CODES-1; code++) {
+  for (code = 0; code < LENGTH_CODES - 1; code++) {
     base_length[code] = length;
-    for (n = 0; n < (1<<extra_lbits[code]); n++) {
+    for (n = 0; n < (1 << extra_lbits[code]); n++) {
       _length_code[length++] = code;
     }
   }
@@ -15505,13 +18399,13 @@ function tr_static_init() {
    * in two different ways: code 284 + 5 bits or code 285, so we
    * overwrite length_code[255] to use the best encoding:
    */
-  _length_code[length-1] = code;
+  _length_code[length - 1] = code;
 
   /* Initialize the mapping dist (0..32K) -> dist code (0..29) */
   dist = 0;
-  for (code = 0 ; code < 16; code++) {
+  for (code = 0; code < 16; code++) {
     base_dist[code] = dist;
-    for (n = 0; n < (1<<extra_dbits[code]); n++) {
+    for (n = 0; n < (1 << extra_dbits[code]); n++) {
       _dist_code[dist++] = code;
     }
   }
@@ -15519,7 +18413,7 @@ function tr_static_init() {
   dist >>= 7; /* from now on, all distances are divided by 128 */
   for (; code < D_CODES; code++) {
     base_dist[code] = dist << 7;
-    for (n = 0; n < (1<<(extra_dbits[code]-7)); n++) {
+    for (n = 0; n < (1 << (extra_dbits[code] - 7)); n++) {
       _dist_code[256 + dist++] = code;
     }
   }
@@ -15532,22 +18426,22 @@ function tr_static_init() {
 
   n = 0;
   while (n <= 143) {
-    static_ltree[n*2 + 1]/*.Len*/ = 8;
+    static_ltree[n * 2 + 1]/*.Len*/ = 8;
     n++;
     bl_count[8]++;
   }
   while (n <= 255) {
-    static_ltree[n*2 + 1]/*.Len*/ = 9;
+    static_ltree[n * 2 + 1]/*.Len*/ = 9;
     n++;
     bl_count[9]++;
   }
   while (n <= 279) {
-    static_ltree[n*2 + 1]/*.Len*/ = 7;
+    static_ltree[n * 2 + 1]/*.Len*/ = 7;
     n++;
     bl_count[7]++;
   }
   while (n <= 287) {
-    static_ltree[n*2 + 1]/*.Len*/ = 8;
+    static_ltree[n * 2 + 1]/*.Len*/ = 8;
     n++;
     bl_count[8]++;
   }
@@ -15555,18 +18449,18 @@ function tr_static_init() {
    * tree construction to get a canonical Huffman tree (longest code
    * all ones)
    */
-  gen_codes(static_ltree, L_CODES+1, bl_count);
+  gen_codes(static_ltree, L_CODES + 1, bl_count);
 
   /* The static distance tree is trivial: */
   for (n = 0; n < D_CODES; n++) {
-    static_dtree[n*2 + 1]/*.Len*/ = 5;
-    static_dtree[n*2]/*.Code*/ = bi_reverse(n, 5);
+    static_dtree[n * 2 + 1]/*.Len*/ = 5;
+    static_dtree[n * 2]/*.Code*/ = bi_reverse(n, 5);
   }
 
   // Now data ready and we can init static trees
-  static_l_desc = new StaticTreeDesc(static_ltree, extra_lbits, LITERALS+1, L_CODES, MAX_BITS);
+  static_l_desc = new StaticTreeDesc(static_ltree, extra_lbits, LITERALS + 1, L_CODES, MAX_BITS);
   static_d_desc = new StaticTreeDesc(static_dtree, extra_dbits, 0,          D_CODES, MAX_BITS);
-  static_bl_desc =new StaticTreeDesc(new Array(0), extra_blbits, 0,         BL_CODES, MAX_BL_BITS);
+  static_bl_desc = new StaticTreeDesc(new Array(0), extra_blbits, 0,         BL_CODES, MAX_BL_BITS);
 
   //static_init_done = true;
 }
@@ -15579,11 +18473,11 @@ function init_block(s) {
   var n; /* iterates over tree elements */
 
   /* Initialize the trees. */
-  for (n = 0; n < L_CODES;  n++) { s.dyn_ltree[n*2]/*.Freq*/ = 0; }
-  for (n = 0; n < D_CODES;  n++) { s.dyn_dtree[n*2]/*.Freq*/ = 0; }
-  for (n = 0; n < BL_CODES; n++) { s.bl_tree[n*2]/*.Freq*/ = 0; }
+  for (n = 0; n < L_CODES;  n++) { s.dyn_ltree[n * 2]/*.Freq*/ = 0; }
+  for (n = 0; n < D_CODES;  n++) { s.dyn_dtree[n * 2]/*.Freq*/ = 0; }
+  for (n = 0; n < BL_CODES; n++) { s.bl_tree[n * 2]/*.Freq*/ = 0; }
 
-  s.dyn_ltree[END_BLOCK*2]/*.Freq*/ = 1;
+  s.dyn_ltree[END_BLOCK * 2]/*.Freq*/ = 1;
   s.opt_len = s.static_len = 0;
   s.last_lit = s.matches = 0;
 }
@@ -15632,8 +18526,8 @@ function copy_block(s, buf, len, header)
  * the subtrees have equal frequency. This minimizes the worst case length.
  */
 function smaller(tree, n, m, depth) {
-  var _n2 = n*2;
-  var _m2 = m*2;
+  var _n2 = n * 2;
+  var _m2 = m * 2;
   return (tree[_n2]/*.Freq*/ < tree[_m2]/*.Freq*/ ||
          (tree[_n2]/*.Freq*/ === tree[_m2]/*.Freq*/ && depth[n] <= depth[m]));
 }
@@ -15654,7 +18548,7 @@ function pqdownheap(s, tree, k)
   while (j <= s.heap_len) {
     /* Set j to the smallest of the two sons: */
     if (j < s.heap_len &&
-      smaller(tree, s.heap[j+1], s.heap[j], s.depth)) {
+      smaller(tree, s.heap[j + 1], s.heap[j], s.depth)) {
       j++;
     }
     /* Exit if v is smaller than both sons */
@@ -15690,7 +18584,7 @@ function compress_block(s, ltree, dtree)
 
   if (s.last_lit !== 0) {
     do {
-      dist = (s.pending_buf[s.d_buf + lx*2] << 8) | (s.pending_buf[s.d_buf + lx*2 + 1]);
+      dist = (s.pending_buf[s.d_buf + lx * 2] << 8) | (s.pending_buf[s.d_buf + lx * 2 + 1]);
       lc = s.pending_buf[s.l_buf + lx];
       lx++;
 
@@ -15700,7 +18594,7 @@ function compress_block(s, ltree, dtree)
       } else {
         /* Here, lc is the match length - MIN_MATCH */
         code = _length_code[lc];
-        send_code(s, code+LITERALS+1, ltree); /* send the length code */
+        send_code(s, code + LITERALS + 1, ltree); /* send the length code */
         extra = extra_lbits[code];
         if (extra !== 0) {
           lc -= base_length[code];
@@ -15762,7 +18656,7 @@ function build_tree(s, desc)
       s.depth[n] = 0;
 
     } else {
-      tree[n*2 + 1]/*.Len*/ = 0;
+      tree[n * 2 + 1]/*.Len*/ = 0;
     }
   }
 
@@ -15778,7 +18672,7 @@ function build_tree(s, desc)
     s.opt_len--;
 
     if (has_stree) {
-      s.static_len -= stree[node*2 + 1]/*.Len*/;
+      s.static_len -= stree[node * 2 + 1]/*.Len*/;
     }
     /* node is 0 or 1 so it does not have extra bits */
   }
@@ -15809,7 +18703,7 @@ function build_tree(s, desc)
     /* Create a new node father of n and m */
     tree[node * 2]/*.Freq*/ = tree[n * 2]/*.Freq*/ + tree[m * 2]/*.Freq*/;
     s.depth[node] = (s.depth[n] >= s.depth[m] ? s.depth[n] : s.depth[m]) + 1;
-    tree[n*2 + 1]/*.Dad*/ = tree[m*2 + 1]/*.Dad*/ = node;
+    tree[n * 2 + 1]/*.Dad*/ = tree[m * 2 + 1]/*.Dad*/ = node;
 
     /* and insert the new node in the heap */
     s.heap[1/*SMALLEST*/] = node++;
@@ -15842,7 +18736,7 @@ function scan_tree(s, tree, max_code)
   var prevlen = -1;          /* last emitted length */
   var curlen;                /* length of current code */
 
-  var nextlen = tree[0*2 + 1]/*.Len*/; /* length of next code */
+  var nextlen = tree[0 * 2 + 1]/*.Len*/; /* length of next code */
 
   var count = 0;             /* repeat count of the current code */
   var max_count = 7;         /* max repeat count */
@@ -15852,11 +18746,11 @@ function scan_tree(s, tree, max_code)
     max_count = 138;
     min_count = 3;
   }
-  tree[(max_code+1)*2 + 1]/*.Len*/ = 0xffff; /* guard */
+  tree[(max_code + 1) * 2 + 1]/*.Len*/ = 0xffff; /* guard */
 
   for (n = 0; n <= max_code; n++) {
     curlen = nextlen;
-    nextlen = tree[(n+1)*2 + 1]/*.Len*/;
+    nextlen = tree[(n + 1) * 2 + 1]/*.Len*/;
 
     if (++count < max_count && curlen === nextlen) {
       continue;
@@ -15867,13 +18761,13 @@ function scan_tree(s, tree, max_code)
     } else if (curlen !== 0) {
 
       if (curlen !== prevlen) { s.bl_tree[curlen * 2]/*.Freq*/++; }
-      s.bl_tree[REP_3_6*2]/*.Freq*/++;
+      s.bl_tree[REP_3_6 * 2]/*.Freq*/++;
 
     } else if (count <= 10) {
-      s.bl_tree[REPZ_3_10*2]/*.Freq*/++;
+      s.bl_tree[REPZ_3_10 * 2]/*.Freq*/++;
 
     } else {
-      s.bl_tree[REPZ_11_138*2]/*.Freq*/++;
+      s.bl_tree[REPZ_11_138 * 2]/*.Freq*/++;
     }
 
     count = 0;
@@ -15908,7 +18802,7 @@ function send_tree(s, tree, max_code)
   var prevlen = -1;          /* last emitted length */
   var curlen;                /* length of current code */
 
-  var nextlen = tree[0*2 + 1]/*.Len*/; /* length of next code */
+  var nextlen = tree[0 * 2 + 1]/*.Len*/; /* length of next code */
 
   var count = 0;             /* repeat count of the current code */
   var max_count = 7;         /* max repeat count */
@@ -15922,7 +18816,7 @@ function send_tree(s, tree, max_code)
 
   for (n = 0; n <= max_code; n++) {
     curlen = nextlen;
-    nextlen = tree[(n+1)*2 + 1]/*.Len*/;
+    nextlen = tree[(n + 1) * 2 + 1]/*.Len*/;
 
     if (++count < max_count && curlen === nextlen) {
       continue;
@@ -15937,15 +18831,15 @@ function send_tree(s, tree, max_code)
       }
       //Assert(count >= 3 && count <= 6, " 3_6?");
       send_code(s, REP_3_6, s.bl_tree);
-      send_bits(s, count-3, 2);
+      send_bits(s, count - 3, 2);
 
     } else if (count <= 10) {
       send_code(s, REPZ_3_10, s.bl_tree);
-      send_bits(s, count-3, 3);
+      send_bits(s, count - 3, 3);
 
     } else {
       send_code(s, REPZ_11_138, s.bl_tree);
-      send_bits(s, count-11, 7);
+      send_bits(s, count - 11, 7);
     }
 
     count = 0;
@@ -15987,13 +18881,13 @@ function build_bl_tree(s) {
    * requires that at least 4 bit length codes be sent. (appnote.txt says
    * 3 but the actual value used is 4.)
    */
-  for (max_blindex = BL_CODES-1; max_blindex >= 3; max_blindex--) {
-    if (s.bl_tree[bl_order[max_blindex]*2 + 1]/*.Len*/ !== 0) {
+  for (max_blindex = BL_CODES - 1; max_blindex >= 3; max_blindex--) {
+    if (s.bl_tree[bl_order[max_blindex] * 2 + 1]/*.Len*/ !== 0) {
       break;
     }
   }
   /* Update opt_len to include the bit length tree and counts */
-  s.opt_len += 3*(max_blindex+1) + 5+5+4;
+  s.opt_len += 3 * (max_blindex + 1) + 5 + 5 + 4;
   //Tracev((stderr, "\ndyn trees: dyn %ld, stat %ld",
   //        s->opt_len, s->static_len));
 
@@ -16016,19 +18910,19 @@ function send_all_trees(s, lcodes, dcodes, blcodes)
   //Assert (lcodes <= L_CODES && dcodes <= D_CODES && blcodes <= BL_CODES,
   //        "too many codes");
   //Tracev((stderr, "\nbl counts: "));
-  send_bits(s, lcodes-257, 5); /* not +255 as stated in appnote.txt */
-  send_bits(s, dcodes-1,   5);
-  send_bits(s, blcodes-4,  4); /* not -3 as stated in appnote.txt */
+  send_bits(s, lcodes - 257, 5); /* not +255 as stated in appnote.txt */
+  send_bits(s, dcodes - 1,   5);
+  send_bits(s, blcodes - 4,  4); /* not -3 as stated in appnote.txt */
   for (rank = 0; rank < blcodes; rank++) {
     //Tracev((stderr, "\nbl code %2d ", bl_order[rank]));
-    send_bits(s, s.bl_tree[bl_order[rank]*2 + 1]/*.Len*/, 3);
+    send_bits(s, s.bl_tree[bl_order[rank] * 2 + 1]/*.Len*/, 3);
   }
   //Tracev((stderr, "\nbl tree: sent %ld", s->bits_sent));
 
-  send_tree(s, s.dyn_ltree, lcodes-1); /* literal tree */
+  send_tree(s, s.dyn_ltree, lcodes - 1); /* literal tree */
   //Tracev((stderr, "\nlit tree: sent %ld", s->bits_sent));
 
-  send_tree(s, s.dyn_dtree, dcodes-1); /* distance tree */
+  send_tree(s, s.dyn_dtree, dcodes - 1); /* distance tree */
   //Tracev((stderr, "\ndist tree: sent %ld", s->bits_sent));
 }
 
@@ -16056,7 +18950,7 @@ function detect_data_type(s) {
 
   /* Check for non-textual ("black-listed") bytes. */
   for (n = 0; n <= 31; n++, black_mask >>>= 1) {
-    if ((black_mask & 1) && (s.dyn_ltree[n*2]/*.Freq*/ !== 0)) {
+    if ((black_mask & 1) && (s.dyn_ltree[n * 2]/*.Freq*/ !== 0)) {
       return Z_BINARY;
     }
   }
@@ -16113,7 +19007,7 @@ function _tr_stored_block(s, buf, stored_len, last)
 //ulg stored_len;   /* length of input block */
 //int last;         /* one if this is the last block for a file */
 {
-  send_bits(s, (STORED_BLOCK<<1)+(last ? 1 : 0), 3);    /* send block type */
+  send_bits(s, (STORED_BLOCK << 1) + (last ? 1 : 0), 3);    /* send block type */
   copy_block(s, buf, stored_len, true); /* with header */
 }
 
@@ -16123,7 +19017,7 @@ function _tr_stored_block(s, buf, stored_len, last)
  * This takes 10 bits, of which 7 may remain in the bit buffer.
  */
 function _tr_align(s) {
-  send_bits(s, STATIC_TREES<<1, 3);
+  send_bits(s, STATIC_TREES << 1, 3);
   send_code(s, END_BLOCK, static_ltree);
   bi_flush(s);
 }
@@ -16168,8 +19062,8 @@ function _tr_flush_block(s, buf, stored_len, last)
     max_blindex = build_bl_tree(s);
 
     /* Determine the best encoding. Compute the block lengths in bytes. */
-    opt_lenb = (s.opt_len+3+7) >>> 3;
-    static_lenb = (s.static_len+3+7) >>> 3;
+    opt_lenb = (s.opt_len + 3 + 7) >>> 3;
+    static_lenb = (s.static_len + 3 + 7) >>> 3;
 
     // Tracev((stderr, "\nopt %lu(%lu) stat %lu(%lu) stored %lu lit %u ",
     //        opt_lenb, s->opt_len, static_lenb, s->static_len, stored_len,
@@ -16182,7 +19076,7 @@ function _tr_flush_block(s, buf, stored_len, last)
     opt_lenb = static_lenb = stored_len + 5; /* force a stored block */
   }
 
-  if ((stored_len+4 <= opt_lenb) && (buf !== -1)) {
+  if ((stored_len + 4 <= opt_lenb) && (buf !== -1)) {
     /* 4: two words for the lengths */
 
     /* The test buf != NULL is only necessary if LIT_BUFSIZE > WSIZE.
@@ -16195,12 +19089,12 @@ function _tr_flush_block(s, buf, stored_len, last)
 
   } else if (s.strategy === Z_FIXED || static_lenb === opt_lenb) {
 
-    send_bits(s, (STATIC_TREES<<1) + (last ? 1 : 0), 3);
+    send_bits(s, (STATIC_TREES << 1) + (last ? 1 : 0), 3);
     compress_block(s, static_ltree, static_dtree);
 
   } else {
-    send_bits(s, (DYN_TREES<<1) + (last ? 1 : 0), 3);
-    send_all_trees(s, s.l_desc.max_code+1, s.d_desc.max_code+1, max_blindex+1);
+    send_bits(s, (DYN_TREES << 1) + (last ? 1 : 0), 3);
+    send_all_trees(s, s.l_desc.max_code + 1, s.d_desc.max_code + 1, max_blindex + 1);
     compress_block(s, s.dyn_ltree, s.dyn_dtree);
   }
   // Assert (s->compressed_len == s->bits_sent, "bad compressed size");
@@ -16235,7 +19129,7 @@ function _tr_tally(s, dist, lc)
 
   if (dist === 0) {
     /* lc is the unmatched char */
-    s.dyn_ltree[lc*2]/*.Freq*/++;
+    s.dyn_ltree[lc * 2]/*.Freq*/++;
   } else {
     s.matches++;
     /* Here, lc is the match length - MIN_MATCH */
@@ -16244,7 +19138,7 @@ function _tr_tally(s, dist, lc)
     //       (ush)lc <= (ush)(MAX_MATCH-MIN_MATCH) &&
     //       (ush)d_code(dist) < (ush)D_CODES,  "_tr_tally: bad match");
 
-    s.dyn_ltree[(_length_code[lc]+LITERALS+1) * 2]/*.Freq*/++;
+    s.dyn_ltree[(_length_code[lc] + LITERALS + 1) * 2]/*.Freq*/++;
     s.dyn_dtree[d_code(dist) * 2]/*.Freq*/++;
   }
 
@@ -16271,7 +19165,7 @@ function _tr_tally(s, dist, lc)
 //  }
 //#endif
 
-  return (s.last_lit === s.lit_bufsize-1);
+  return (s.last_lit === s.lit_bufsize - 1);
   /* We avoid equality with lit_bufsize because of wraparound at 64K
    * on 16 bit machines and because stored blocks are restricted to
    * 64K-1 bytes.
@@ -16284,9 +19178,27 @@ exports._tr_flush_block  = _tr_flush_block;
 exports._tr_tally = _tr_tally;
 exports._tr_align = _tr_align;
 
-},{"../utils/common":70}],82:[function(require,module,exports){
+},{"../utils/common":75}],87:[function(require,module,exports){
 'use strict';
 
+// (C) 1995-2013 Jean-loup Gailly and Mark Adler
+// (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//   claim that you wrote the original software. If you use this software
+//   in a product, an acknowledgment in the product documentation would be
+//   appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//   misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
 
 function ZStream() {
   /* next input byte */
@@ -16315,6315 +19227,9721 @@ function ZStream() {
 
 module.exports = ZStream;
 
-},{}],83:[function(require,module,exports){
-'use strict';
-
-module.exports = INTERNAL;
-
-function INTERNAL() {}
-},{}],84:[function(require,module,exports){
-'use strict';
-var Promise = require('./promise');
-var reject = require('./reject');
-var resolve = require('./resolve');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = all;
-function all(iterable) {
-  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
-    return reject(new TypeError('must be an array'));
-  }
-
-  var len = iterable.length;
-  var called = false;
-  if (!len) {
-    return resolve([]);
-  }
-
-  var values = new Array(len);
-  var resolved = 0;
-  var i = -1;
-  var promise = new Promise(INTERNAL);
-  
-  while (++i < len) {
-    allResolver(iterable[i], i);
-  }
-  return promise;
-  function allResolver(value, i) {
-    resolve(value).then(resolveFromAll, function (error) {
-      if (!called) {
-        called = true;
-        handlers.reject(promise, error);
-      }
-    });
-    function resolveFromAll(outValue) {
-      values[i] = outValue;
-      if (++resolved === len & !called) {
-        called = true;
-        handlers.resolve(promise, values);
-      }
-    }
-  }
+},{}],88:[function(require,module,exports){
+require('text-encoding-polyfill');
+var StringDecoder = require('string_decoder').StringDecoder;
+function defaultDecoder(data) {
+  var decoder = new StringDecoder();
+  var out = decoder.write(data) + decoder.end();
+  return out.replace(/\0/g, '').trim();
 }
-},{"./INTERNAL":83,"./handlers":85,"./promise":87,"./reject":90,"./resolve":91}],85:[function(require,module,exports){
-'use strict';
-var tryCatch = require('./tryCatch');
-var resolveThenable = require('./resolveThenable');
-var states = require('./states');
-
-exports.resolve = function (self, value) {
-  var result = tryCatch(getThen, value);
-  if (result.status === 'error') {
-    return exports.reject(self, result.value);
+module.exports = createDecoder;
+var regex = /^(?:ASNI\s)?(\d+)$/m;
+function createDecoder(encoding) {
+  if (!encoding) {
+    return defaultDecoder;
   }
-  var thenable = result.value;
-
-  if (thenable) {
-    resolveThenable.safely(self, thenable);
-  } else {
-    self.state = states.FULFILLED;
-    self.outcome = value;
-    var i = -1;
-    var len = self.queue.length;
-    while (++i < len) {
-      self.queue[i].callFulfilled(value);
-    }
-  }
-  return self;
-};
-exports.reject = function (self, error) {
-  self.state = states.REJECTED;
-  self.outcome = error;
-  var i = -1;
-  var len = self.queue.length;
-  while (++i < len) {
-    self.queue[i].callRejected(error);
-  }
-  return self;
-};
-
-function getThen(obj) {
-  // Make sure we only access the accessor once as required by the spec
-  var then = obj && obj.then;
-  if (obj && typeof obj === 'object' && typeof then === 'function') {
-    return function appyThen() {
-      then.apply(obj, arguments);
-    };
-  }
-}
-
-},{"./resolveThenable":92,"./states":93,"./tryCatch":94}],86:[function(require,module,exports){
-module.exports = exports = require('./promise');
-
-exports.resolve = require('./resolve');
-exports.reject = require('./reject');
-exports.all = require('./all');
-exports.race = require('./race');
-
-},{"./all":84,"./promise":87,"./race":89,"./reject":90,"./resolve":91}],87:[function(require,module,exports){
-'use strict';
-
-var unwrap = require('./unwrap');
-var INTERNAL = require('./INTERNAL');
-var resolveThenable = require('./resolveThenable');
-var states = require('./states');
-var QueueItem = require('./queueItem');
-
-module.exports = Promise;
-function Promise(resolver) {
-  if (!(this instanceof Promise)) {
-    return new Promise(resolver);
-  }
-  if (typeof resolver !== 'function') {
-    throw new TypeError('resolver must be a function');
-  }
-  this.state = states.PENDING;
-  this.queue = [];
-  this.outcome = void 0;
-  if (resolver !== INTERNAL) {
-    resolveThenable.safely(this, resolver);
-  }
-}
-
-Promise.prototype['catch'] = function (onRejected) {
-  return this.then(null, onRejected);
-};
-Promise.prototype.then = function (onFulfilled, onRejected) {
-  if (typeof onFulfilled !== 'function' && this.state === states.FULFILLED ||
-    typeof onRejected !== 'function' && this.state === states.REJECTED) {
-    return this;
-  }
-  var promise = new Promise(INTERNAL);
-  if (this.state !== states.PENDING) {
-    var resolver = this.state === states.FULFILLED ? onFulfilled : onRejected;
-    unwrap(promise, resolver, this.outcome);
-  } else {
-    this.queue.push(new QueueItem(promise, onFulfilled, onRejected));
-  }
-
-  return promise;
-};
-
-},{"./INTERNAL":83,"./queueItem":88,"./resolveThenable":92,"./states":93,"./unwrap":95}],88:[function(require,module,exports){
-'use strict';
-var handlers = require('./handlers');
-var unwrap = require('./unwrap');
-
-module.exports = QueueItem;
-function QueueItem(promise, onFulfilled, onRejected) {
-  this.promise = promise;
-  if (typeof onFulfilled === 'function') {
-    this.onFulfilled = onFulfilled;
-    this.callFulfilled = this.otherCallFulfilled;
-  }
-  if (typeof onRejected === 'function') {
-    this.onRejected = onRejected;
-    this.callRejected = this.otherCallRejected;
-  }
-}
-QueueItem.prototype.callFulfilled = function (value) {
-  handlers.resolve(this.promise, value);
-};
-QueueItem.prototype.otherCallFulfilled = function (value) {
-  unwrap(this.promise, this.onFulfilled, value);
-};
-QueueItem.prototype.callRejected = function (value) {
-  handlers.reject(this.promise, value);
-};
-QueueItem.prototype.otherCallRejected = function (value) {
-  unwrap(this.promise, this.onRejected, value);
-};
-
-},{"./handlers":85,"./unwrap":95}],89:[function(require,module,exports){
-'use strict';
-var Promise = require('./promise');
-var reject = require('./reject');
-var resolve = require('./resolve');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = race;
-function race(iterable) {
-  if (Object.prototype.toString.call(iterable) !== '[object Array]') {
-    return reject(new TypeError('must be an array'));
-  }
-
-  var len = iterable.length;
-  var called = false;
-  if (!len) {
-    return resolve([]);
-  }
-
-  var i = -1;
-  var promise = new Promise(INTERNAL);
-
-  while (++i < len) {
-    resolver(iterable[i]);
-  }
-  return promise;
-  function resolver(value) {
-    resolve(value).then(function (response) {
-      if (!called) {
-        called = true;
-        handlers.resolve(promise, response);
-      }
-    }, function (error) {
-      if (!called) {
-        called = true;
-        handlers.reject(promise, error);
-      }
-    });
-  }
-}
-
-},{"./INTERNAL":83,"./handlers":85,"./promise":87,"./reject":90,"./resolve":91}],90:[function(require,module,exports){
-'use strict';
-
-var Promise = require('./promise');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = reject;
-
-function reject(reason) {
-	var promise = new Promise(INTERNAL);
-	return handlers.reject(promise, reason);
-}
-},{"./INTERNAL":83,"./handlers":85,"./promise":87}],91:[function(require,module,exports){
-'use strict';
-
-var Promise = require('./promise');
-var INTERNAL = require('./INTERNAL');
-var handlers = require('./handlers');
-module.exports = resolve;
-
-var FALSE = handlers.resolve(new Promise(INTERNAL), false);
-var NULL = handlers.resolve(new Promise(INTERNAL), null);
-var UNDEFINED = handlers.resolve(new Promise(INTERNAL), void 0);
-var ZERO = handlers.resolve(new Promise(INTERNAL), 0);
-var EMPTYSTRING = handlers.resolve(new Promise(INTERNAL), '');
-
-function resolve(value) {
-  if (value) {
-    if (value instanceof Promise) {
-      return value;
-    }
-    return handlers.resolve(new Promise(INTERNAL), value);
-  }
-  var valueType = typeof value;
-  switch (valueType) {
-    case 'boolean':
-      return FALSE;
-    case 'undefined':
-      return UNDEFINED;
-    case 'object':
-      return NULL;
-    case 'number':
-      return ZERO;
-    case 'string':
-      return EMPTYSTRING;
-  }
-}
-},{"./INTERNAL":83,"./handlers":85,"./promise":87}],92:[function(require,module,exports){
-'use strict';
-var handlers = require('./handlers');
-var tryCatch = require('./tryCatch');
-function safelyResolveThenable(self, thenable) {
-  // Either fulfill, reject or reject with error
-  var called = false;
-  function onError(value) {
-    if (called) {
-      return;
-    }
-    called = true;
-    handlers.reject(self, value);
-  }
-
-  function onSuccess(value) {
-    if (called) {
-      return;
-    }
-    called = true;
-    handlers.resolve(self, value);
-  }
-
-  function tryToUnwrap() {
-    thenable(onSuccess, onError);
-  }
-  
-  var result = tryCatch(tryToUnwrap);
-  if (result.status === 'error') {
-    onError(result.value);
-  }
-}
-exports.safely = safelyResolveThenable;
-},{"./handlers":85,"./tryCatch":94}],93:[function(require,module,exports){
-// Lazy man's symbols for states
-
-exports.REJECTED = ['REJECTED'];
-exports.FULFILLED = ['FULFILLED'];
-exports.PENDING = ['PENDING'];
-
-},{}],94:[function(require,module,exports){
-'use strict';
-
-module.exports = tryCatch;
-
-function tryCatch(func, value) {
-  var out = {};
   try {
-    out.value = func(value);
-    out.status = 'success';
-  } catch (e) {
-    out.status = 'error';
-    out.value = e;
+    new TextDecoder(encoding.trim());
+  } catch(e) {
+    var match = regex.exec(encoding);
+    if (match) {
+      encoding = 'windows-' + match[1];
+    }
   }
+  return browserDecoder;
+  function browserDecoder(buffer) {
+    var decoder = new TextDecoder(encoding);
+    var out = decoder.decode(buffer, {
+      stream: true
+    }) + decoder.decode();
+    return out.replace(/\0/g, '').trim();
+  }
+}
+
+},{"string_decoder":91,"text-encoding-polyfill":92}],89:[function(require,module,exports){
+var createDecoder = require('./decoder');
+function dbfHeader(data) {
+  var out = {};
+  out.lastUpdated = new Date(data.readUInt8(1) + 1900, data.readUInt8(2), data.readUInt8(3));
+  out.records = data.readUInt32LE(4);
+  out.headerLen = data.readUInt16LE(8);
+  out.recLen = data.readUInt16LE(10);
   return out;
 }
-},{}],95:[function(require,module,exports){
-'use strict';
 
-var immediate = require('immediate');
-var handlers = require('./handlers');
-module.exports = unwrap;
-
-function unwrap(promise, func, value) {
-  immediate(function () {
-    var returnValue;
-    try {
-      returnValue = func(value);
-    } catch (e) {
-      return handlers.reject(promise, e);
-    }
-    if (returnValue === promise) {
-      handlers.reject(promise, new TypeError('Cannot resolve promise with itself'));
-    } else {
-      handlers.resolve(promise, returnValue);
-    }
-  });
-}
-},{"./handlers":85,"immediate":96}],96:[function(require,module,exports){
-'use strict';
-var types = [
-  require('./nextTick'),
-  require('./mutation.js'),
-  require('./messageChannel'),
-  require('./stateChange'),
-  require('./timeout')
-];
-var draining;
-var queue = [];
-//named nextTick for less confusing stack traces
-function nextTick() {
-  draining = true;
-  var i, oldQueue;
-  var len = queue.length;
-  while (len) {
-    oldQueue = queue;
-    queue = [];
-    i = -1;
-    while (++i < len) {
-      oldQueue[i]();
-    }
-    len = queue.length;
-  }
-  draining = false;
-}
-var scheduleDrain;
-var i = -1;
-var len = types.length;
-while (++ i < len) {
-  if (types[i] && types[i].test && types[i].test()) {
-    scheduleDrain = types[i].install(nextTick);
-    break;
-  }
-}
-module.exports = immediate;
-function immediate(task) {
-  if (queue.push(task) === 1 && !draining) {
-    scheduleDrain();
-  }
-}
-},{"./messageChannel":97,"./mutation.js":98,"./nextTick":6,"./stateChange":99,"./timeout":100}],97:[function(require,module,exports){
-(function (global){
-'use strict';
-
-exports.test = function () {
-  if (global.setImmediate) {
-    // we can only get here in IE10
-    // which doesn't handel postMessage well
-    return false;
-  }
-  return typeof global.MessageChannel !== 'undefined';
-};
-
-exports.install = function (func) {
-  var channel = new global.MessageChannel();
-  channel.port1.onmessage = func;
-  return function () {
-    channel.port2.postMessage(0);
-  };
-};
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],98:[function(require,module,exports){
-(function (global){
-'use strict';
-//based off rsvp https://github.com/tildeio/rsvp.js
-//license https://github.com/tildeio/rsvp.js/blob/master/LICENSE
-//https://github.com/tildeio/rsvp.js/blob/master/lib/rsvp/asap.js
-
-var Mutation = global.MutationObserver || global.WebKitMutationObserver;
-
-exports.test = function () {
-  return Mutation;
-};
-
-exports.install = function (handle) {
-  var called = 0;
-  var observer = new Mutation(handle);
-  var element = global.document.createTextNode('');
-  observer.observe(element, {
-    characterData: true
-  });
-  return function () {
-    element.data = (called = ++called % 2);
-  };
-};
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],99:[function(require,module,exports){
-(function (global){
-'use strict';
-
-exports.test = function () {
-  return 'document' in global && 'onreadystatechange' in global.document.createElement('script');
-};
-
-exports.install = function (handle) {
-  return function () {
-
-    // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
-    // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
-    var scriptEl = global.document.createElement('script');
-    scriptEl.onreadystatechange = function () {
-      handle();
-
-      scriptEl.onreadystatechange = null;
-      scriptEl.parentNode.removeChild(scriptEl);
-      scriptEl = null;
-    };
-    global.document.documentElement.appendChild(scriptEl);
-
-    return handle;
-  };
-};
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],100:[function(require,module,exports){
-'use strict';
-exports.test = function () {
-  return true;
-};
-
-exports.install = function (t) {
-  return function () {
-    setTimeout(t, 0);
-  };
-};
-},{}],101:[function(require,module,exports){
-;(function () { // closure for web browsers
-
-if (typeof module === 'object' && module.exports) {
-  module.exports = LRUCache
-} else {
-  // just set the global for non-node platforms.
-  this.LRUCache = LRUCache
-}
-
-function hOP (obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key)
-}
-
-function naiveLength () { return 1 }
-
-function LRUCache (options) {
-  if (!(this instanceof LRUCache))
-    return new LRUCache(options)
-
-  if (typeof options === 'number')
-    options = { max: options }
-
-  if (!options)
-    options = {}
-
-  this._max = options.max
-  // Kind of weird to have a default max of Infinity, but oh well.
-  if (!this._max || !(typeof this._max === "number") || this._max <= 0 )
-    this._max = Infinity
-
-  this._lengthCalculator = options.length || naiveLength
-  if (typeof this._lengthCalculator !== "function")
-    this._lengthCalculator = naiveLength
-
-  this._allowStale = options.stale || false
-  this._maxAge = options.maxAge || null
-  this._dispose = options.dispose
-  this.reset()
-}
-
-// resize the cache when the max changes.
-Object.defineProperty(LRUCache.prototype, "max",
-  { set : function (mL) {
-      if (!mL || !(typeof mL === "number") || mL <= 0 ) mL = Infinity
-      this._max = mL
-      if (this._length > this._max) trim(this)
-    }
-  , get : function () { return this._max }
-  , enumerable : true
-  })
-
-// resize the cache when the lengthCalculator changes.
-Object.defineProperty(LRUCache.prototype, "lengthCalculator",
-  { set : function (lC) {
-      if (typeof lC !== "function") {
-        this._lengthCalculator = naiveLength
-        this._length = this._itemCount
-        for (var key in this._cache) {
-          this._cache[key].length = 1
-        }
-      } else {
-        this._lengthCalculator = lC
-        this._length = 0
-        for (var key in this._cache) {
-          this._cache[key].length = this._lengthCalculator(this._cache[key].value)
-          this._length += this._cache[key].length
-        }
-      }
-
-      if (this._length > this._max) trim(this)
-    }
-  , get : function () { return this._lengthCalculator }
-  , enumerable : true
-  })
-
-Object.defineProperty(LRUCache.prototype, "length",
-  { get : function () { return this._length }
-  , enumerable : true
-  })
-
-
-Object.defineProperty(LRUCache.prototype, "itemCount",
-  { get : function () { return this._itemCount }
-  , enumerable : true
-  })
-
-LRUCache.prototype.forEach = function (fn, thisp) {
-  thisp = thisp || this
-  var i = 0
-  var itemCount = this._itemCount
-
-  for (var k = this._mru - 1; k >= 0 && i < itemCount; k--) if (this._lruList[k]) {
-    i++
-    var hit = this._lruList[k]
-    if (isStale(this, hit)) {
-      del(this, hit)
-      if (!this._allowStale) hit = undefined
-    }
-    if (hit) {
-      fn.call(thisp, hit.value, hit.key, this)
-    }
-  }
-}
-
-LRUCache.prototype.keys = function () {
-  var keys = new Array(this._itemCount)
-  var i = 0
-  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
-    var hit = this._lruList[k]
-    keys[i++] = hit.key
-  }
-  return keys
-}
-
-LRUCache.prototype.values = function () {
-  var values = new Array(this._itemCount)
-  var i = 0
-  for (var k = this._mru - 1; k >= 0 && i < this._itemCount; k--) if (this._lruList[k]) {
-    var hit = this._lruList[k]
-    values[i++] = hit.value
-  }
-  return values
-}
-
-LRUCache.prototype.reset = function () {
-  if (this._dispose && this._cache) {
-    for (var k in this._cache) {
-      this._dispose(k, this._cache[k].value)
-    }
-  }
-
-  this._cache = Object.create(null) // hash of items by key
-  this._lruList = Object.create(null) // list of items in order of use recency
-  this._mru = 0 // most recently used
-  this._lru = 0 // least recently used
-  this._length = 0 // number of items in the list
-  this._itemCount = 0
-}
-
-// Provided for debugging/dev purposes only. No promises whatsoever that
-// this API stays stable.
-LRUCache.prototype.dump = function () {
-  return this._cache
-}
-
-LRUCache.prototype.dumpLru = function () {
-  return this._lruList
-}
-
-LRUCache.prototype.set = function (key, value, maxAge) {
-  maxAge = maxAge || this._maxAge
-  var now = maxAge ? Date.now() : 0
-
-  if (hOP(this._cache, key)) {
-    // dispose of the old one before overwriting
-    if (this._dispose)
-      this._dispose(key, this._cache[key].value)
-
-    this._cache[key].now = now
-    this._cache[key].maxAge = maxAge
-    this._cache[key].value = value
-    this.get(key)
-    return true
-  }
-
-  var len = this._lengthCalculator(value)
-  var hit = new Entry(key, value, this._mru++, len, now, maxAge)
-
-  // oversized objects fall out of cache automatically.
-  if (hit.length > this._max) {
-    if (this._dispose) this._dispose(key, value)
-    return false
-  }
-
-  this._length += hit.length
-  this._lruList[hit.lu] = this._cache[key] = hit
-  this._itemCount ++
-
-  if (this._length > this._max)
-    trim(this)
-
-  return true
-}
-
-LRUCache.prototype.has = function (key) {
-  if (!hOP(this._cache, key)) return false
-  var hit = this._cache[key]
-  if (isStale(this, hit)) {
-    return false
-  }
-  return true
-}
-
-LRUCache.prototype.get = function (key) {
-  return get(this, key, true)
-}
-
-LRUCache.prototype.peek = function (key) {
-  return get(this, key, false)
-}
-
-LRUCache.prototype.pop = function () {
-  var hit = this._lruList[this._lru]
-  del(this, hit)
-  return hit || null
-}
-
-LRUCache.prototype.del = function (key) {
-  del(this, this._cache[key])
-}
-
-function get (self, key, doUse) {
-  var hit = self._cache[key]
-  if (hit) {
-    if (isStale(self, hit)) {
-      del(self, hit)
-      if (!self._allowStale) hit = undefined
-    } else {
-      if (doUse) use(self, hit)
-    }
-    if (hit) hit = hit.value
-  }
-  return hit
-}
-
-function isStale(self, hit) {
-  if (!hit || (!hit.maxAge && !self._maxAge)) return false
-  var stale = false;
-  var diff = Date.now() - hit.now
-  if (hit.maxAge) {
-    stale = diff > hit.maxAge
-  } else {
-    stale = self._maxAge && (diff > self._maxAge)
-  }
-  return stale;
-}
-
-function use (self, hit) {
-  shiftLU(self, hit)
-  hit.lu = self._mru ++
-  self._lruList[hit.lu] = hit
-}
-
-function trim (self) {
-  while (self._lru < self._mru && self._length > self._max)
-    del(self, self._lruList[self._lru])
-}
-
-function shiftLU (self, hit) {
-  delete self._lruList[ hit.lu ]
-  while (self._lru < self._mru && !self._lruList[self._lru]) self._lru ++
-}
-
-function del (self, hit) {
-  if (hit) {
-    if (self._dispose) self._dispose(hit.key, hit.value)
-    self._length -= hit.length
-    self._itemCount --
-    delete self._cache[ hit.key ]
-    shiftLU(self, hit)
-  }
-}
-
-// classy, since V8 prefers predictable objects.
-function Entry (key, value, lu, length, now, maxAge) {
-  this.key = key
-  this.value = value
-  this.lu = lu
-  this.length = length
-  this.now = now
-  if (maxAge) this.maxAge = maxAge
-}
-
-})()
-
-},{}],102:[function(require,module,exports){
-function dbfHeader(buffer){
-	var data = new DataView(buffer);
-	var out = {};
-	out.lastUpdated = new Date(data.getUint8(1,true)+1900,data.getUint8(2,true),data.getUint8(3,true));
-	out.records = data.getUint32(4,true);
-	out.headerLen = data.getUint16(8,true);
-	out.recLen = data.getUint16(10,true);
-	return out;
-}
-
-function dbfRowHeader(buffer){
-	var data = new DataView(buffer);
-	var out = [];
-	var offset = 32;
-	while(true){
-		out.push({
-			name : String.fromCharCode.apply(this,(new Uint8Array(buffer,offset,10))).replace(/\0|\s+$/g,''),
-			dataType : String.fromCharCode(data.getUint8(offset+11)),
-			len : data.getUint8(offset+16),
-			decimal : data.getUint8(offset+17)
-		});
-		if(data.getUint8(offset+32)===13){
-			break;
-		}else{
-			offset+=32;
-		}
-	}
-	return out;
-}
-function rowFuncs(buffer,offset,len,type){
-	var data = (new Uint8Array(buffer,offset,len));
-	var textData = String.fromCharCode.apply(this,data).replace(/\0|\s+$/g,'');
-	switch(type){
-		case 'N':
-		case 'F':
-		case 'O':
-			return parseFloat(textData,10);
-		case 'D':
-			return new Date(textData.slice(0,4), parseInt(textData.slice(4,6),10)-1, textData.slice(6,8));
-		case 'L':
-			return textData.toLowerCase() === 'y' || textData.toLowerCase() === 't';
-		default:
-			return textData;
-	}
-}
-function parseRow(buffer,offset,rowHeaders){
-	var out={};
-	var i = 0;
-	var len = rowHeaders.length;
-	var field;
-	var header;
-	while(i<len){
-		header = rowHeaders[i];
-		field = rowFuncs(buffer,offset,header.len,header.dataType);
-		offset += header.len;
-		if(typeof field !== 'undefined'){
-			out[header.name]=field;
-		}
-		i++;
-	}
-	return out;
-}
-module.exports = function(buffer){
-	var rowHeaders = dbfRowHeader(buffer);
-	var header = dbfHeader(buffer);
-	var offset = ((rowHeaders.length+1)<<5)+2;
-	var recLen = header.recLen;
-	var records = header.records;
-	var out = [];
-	while(records){
-		out.push(parseRow(buffer,offset,rowHeaders));
-		offset += recLen;
-		records--;
-	}
-	return out;
-};
-
-},{}],103:[function(require,module,exports){
-var mgrs = require('mgrs');
-
-function Point(x, y, z) {
-  if (!(this instanceof Point)) {
-    return new Point(x, y, z);
-  }
-  if (Array.isArray(x)) {
-    this.x = x[0];
-    this.y = x[1];
-    this.z = x[2] || 0.0;
-  }else if(typeof x === 'object'){
-    this.x = x.x;
-    this.y = x.y;
-    this.z = x.z || 0.0;
-  } else if (typeof x === 'string' && typeof y === 'undefined') {
-    var coords = x.split(',');
-    this.x = parseFloat(coords[0], 10);
-    this.y = parseFloat(coords[1], 10);
-    this.z = parseFloat(coords[2], 10) || 0.0;
-  }
-  else {
-    this.x = x;
-    this.y = y;
-    this.z = z || 0.0;
-  }
-  console.warn('proj4.Point will be removed in version 3, use proj4.toPoint');
-}
-
-Point.fromMGRS = function(mgrsStr) {
-  return new Point(mgrs.toPoint(mgrsStr));
-};
-Point.prototype.toMGRS = function(accuracy) {
-  return mgrs.forward([this.x, this.y], accuracy);
-};
-module.exports = Point;
-},{"mgrs":169}],104:[function(require,module,exports){
-var parseCode = require("./parseCode");
-var extend = require('./extend');
-var projections = require('./projections');
-var deriveConstants = require('./deriveConstants');
-
-function Projection(srsCode,callback) {
-  if (!(this instanceof Projection)) {
-    return new Projection(srsCode);
-  }
-  callback = callback || function(error){
-    if(error){
-      throw error;
-    }
-  };
-  var json = parseCode(srsCode);
-  if(typeof json !== 'object'){
-    callback(srsCode);
-    return;
-  }
-  var modifiedJSON = deriveConstants(json);
-  var ourProj = Projection.projections.get(modifiedJSON.projName);
-  if(ourProj){
-    extend(this, modifiedJSON);
-    extend(this, ourProj);
-    this.init();
-    callback(null, this);
-  }else{
-    callback(srsCode);
-  }
-}
-Projection.projections = projections;
-Projection.projections.start();
-module.exports = Projection;
-
-},{"./deriveConstants":134,"./extend":135,"./parseCode":139,"./projections":141}],105:[function(require,module,exports){
-module.exports = function(crs, denorm, point) {
-  var xin = point.x,
-    yin = point.y,
-    zin = point.z || 0.0;
-  var v, t, i;
-  for (i = 0; i < 3; i++) {
-    if (denorm && i === 2 && point.z === undefined) {
-      continue;
-    }
-    if (i === 0) {
-      v = xin;
-      t = 'x';
-    }
-    else if (i === 1) {
-      v = yin;
-      t = 'y';
-    }
-    else {
-      v = zin;
-      t = 'z';
-    }
-    switch (crs.axis[i]) {
-    case 'e':
-      point[t] = v;
-      break;
-    case 'w':
-      point[t] = -v;
-      break;
-    case 'n':
-      point[t] = v;
-      break;
-    case 's':
-      point[t] = -v;
-      break;
-    case 'u':
-      if (point[t] !== undefined) {
-        point.z = v;
-      }
-      break;
-    case 'd':
-      if (point[t] !== undefined) {
-        point.z = -v;
-      }
-      break;
-    default:
-      //console.log("ERROR: unknow axis ("+crs.axis[i]+") - check definition of "+crs.projName);
-      return null;
-    }
-  }
-  return point;
-};
-
-},{}],106:[function(require,module,exports){
-var HALF_PI = Math.PI/2;
-var sign = require('./sign');
-
-module.exports = function(x) {
-  return (Math.abs(x) < HALF_PI) ? x : (x - (sign(x) * Math.PI));
-};
-},{"./sign":123}],107:[function(require,module,exports){
-var TWO_PI = Math.PI * 2;
-var sign = require('./sign');
-
-module.exports = function(x) {
-  return (Math.abs(x) < Math.PI) ? x : (x - (sign(x) * TWO_PI));
-};
-},{"./sign":123}],108:[function(require,module,exports){
-module.exports = function(x) {
-  if (Math.abs(x) > 1) {
-    x = (x > 1) ? 1 : -1;
-  }
-  return Math.asin(x);
-};
-},{}],109:[function(require,module,exports){
-module.exports = function(x) {
-  return (1 - 0.25 * x * (1 + x / 16 * (3 + 1.25 * x)));
-};
-},{}],110:[function(require,module,exports){
-module.exports = function(x) {
-  return (0.375 * x * (1 + 0.25 * x * (1 + 0.46875 * x)));
-};
-},{}],111:[function(require,module,exports){
-module.exports = function(x) {
-  return (0.05859375 * x * x * (1 + 0.75 * x));
-};
-},{}],112:[function(require,module,exports){
-module.exports = function(x) {
-  return (x * x * x * (35 / 3072));
-};
-},{}],113:[function(require,module,exports){
-module.exports = function(a, e, sinphi) {
-  var temp = e * sinphi;
-  return a / Math.sqrt(1 - temp * temp);
-};
-},{}],114:[function(require,module,exports){
-module.exports = function(ml, e0, e1, e2, e3) {
-  var phi;
-  var dphi;
-
-  phi = ml / e0;
-  for (var i = 0; i < 15; i++) {
-    dphi = (ml - (e0 * phi - e1 * Math.sin(2 * phi) + e2 * Math.sin(4 * phi) - e3 * Math.sin(6 * phi))) / (e0 - 2 * e1 * Math.cos(2 * phi) + 4 * e2 * Math.cos(4 * phi) - 6 * e3 * Math.cos(6 * phi));
-    phi += dphi;
-    if (Math.abs(dphi) <= 0.0000000001) {
-      return phi;
-    }
-  }
-
-  //..reportError("IMLFN-CONV:Latitude failed to converge after 15 iterations");
-  return NaN;
-};
-},{}],115:[function(require,module,exports){
-var HALF_PI = Math.PI/2;
-
-module.exports = function(eccent, q) {
-  var temp = 1 - (1 - eccent * eccent) / (2 * eccent) * Math.log((1 - eccent) / (1 + eccent));
-  if (Math.abs(Math.abs(q) - temp) < 1.0E-6) {
-    if (q < 0) {
-      return (-1 * HALF_PI);
-    }
-    else {
-      return HALF_PI;
-    }
-  }
-  //var phi = 0.5* q/(1-eccent*eccent);
-  var phi = Math.asin(0.5 * q);
-  var dphi;
-  var sin_phi;
-  var cos_phi;
-  var con;
-  for (var i = 0; i < 30; i++) {
-    sin_phi = Math.sin(phi);
-    cos_phi = Math.cos(phi);
-    con = eccent * sin_phi;
-    dphi = Math.pow(1 - con * con, 2) / (2 * cos_phi) * (q / (1 - eccent * eccent) - sin_phi / (1 - con * con) + 0.5 / eccent * Math.log((1 - con) / (1 + con)));
-    phi += dphi;
-    if (Math.abs(dphi) <= 0.0000000001) {
-      return phi;
-    }
-  }
-
-  //console.log("IQSFN-CONV:Latitude failed to converge after 30 iterations");
-  return NaN;
-};
-},{}],116:[function(require,module,exports){
-module.exports = function(e0, e1, e2, e3, phi) {
-  return (e0 * phi - e1 * Math.sin(2 * phi) + e2 * Math.sin(4 * phi) - e3 * Math.sin(6 * phi));
-};
-},{}],117:[function(require,module,exports){
-module.exports = function(eccent, sinphi, cosphi) {
-  var con = eccent * sinphi;
-  return cosphi / (Math.sqrt(1 - con * con));
-};
-},{}],118:[function(require,module,exports){
-var HALF_PI = Math.PI/2;
-module.exports = function(eccent, ts) {
-  var eccnth = 0.5 * eccent;
-  var con, dphi;
-  var phi = HALF_PI - 2 * Math.atan(ts);
-  for (var i = 0; i <= 15; i++) {
-    con = eccent * Math.sin(phi);
-    dphi = HALF_PI - 2 * Math.atan(ts * (Math.pow(((1 - con) / (1 + con)), eccnth))) - phi;
-    phi += dphi;
-    if (Math.abs(dphi) <= 0.0000000001) {
-      return phi;
-    }
-  }
-  //console.log("phi2z has NoConvergence");
-  return -9999;
-};
-},{}],119:[function(require,module,exports){
-var C00 = 1;
-var C02 = 0.25;
-var C04 = 0.046875;
-var C06 = 0.01953125;
-var C08 = 0.01068115234375;
-var C22 = 0.75;
-var C44 = 0.46875;
-var C46 = 0.01302083333333333333;
-var C48 = 0.00712076822916666666;
-var C66 = 0.36458333333333333333;
-var C68 = 0.00569661458333333333;
-var C88 = 0.3076171875;
-
-module.exports = function(es) {
-  var en = [];
-  en[0] = C00 - es * (C02 + es * (C04 + es * (C06 + es * C08)));
-  en[1] = es * (C22 - es * (C04 + es * (C06 + es * C08)));
-  var t = es * es;
-  en[2] = t * (C44 - es * (C46 + es * C48));
-  t *= es;
-  en[3] = t * (C66 - es * C68);
-  en[4] = t * es * C88;
-  return en;
-};
-},{}],120:[function(require,module,exports){
-var pj_mlfn = require("./pj_mlfn");
-var EPSLN = 1.0e-10;
-var MAX_ITER = 20;
-module.exports = function(arg, es, en) {
-  var k = 1 / (1 - es);
-  var phi = arg;
-  for (var i = MAX_ITER; i; --i) { /* rarely goes over 2 iterations */
-    var s = Math.sin(phi);
-    var t = 1 - es * s * s;
-    //t = this.pj_mlfn(phi, s, Math.cos(phi), en) - arg;
-    //phi -= t * (t * Math.sqrt(t)) * k;
-    t = (pj_mlfn(phi, s, Math.cos(phi), en) - arg) * (t * Math.sqrt(t)) * k;
-    phi -= t;
-    if (Math.abs(t) < EPSLN) {
-      return phi;
-    }
-  }
-  //..reportError("cass:pj_inv_mlfn: Convergence error");
-  return phi;
-};
-},{"./pj_mlfn":121}],121:[function(require,module,exports){
-module.exports = function(phi, sphi, cphi, en) {
-  cphi *= sphi;
-  sphi *= sphi;
-  return (en[0] * phi - cphi * (en[1] + sphi * (en[2] + sphi * (en[3] + sphi * en[4]))));
-};
-},{}],122:[function(require,module,exports){
-module.exports = function(eccent, sinphi) {
-  var con;
-  if (eccent > 1.0e-7) {
-    con = eccent * sinphi;
-    return ((1 - eccent * eccent) * (sinphi / (1 - con * con) - (0.5 / eccent) * Math.log((1 - con) / (1 + con))));
-  }
-  else {
-    return (2 * sinphi);
-  }
-};
-},{}],123:[function(require,module,exports){
-module.exports = function(x) {
-  return x<0 ? -1 : 1;
-};
-},{}],124:[function(require,module,exports){
-module.exports = function(esinp, exp) {
-  return (Math.pow((1 - esinp) / (1 + esinp), exp));
-};
-},{}],125:[function(require,module,exports){
-module.exports = function (array){
-  var out = {
-    x: array[0],
-    y: array[1]
-  };
-  if (array.length>2) {
-    out.z = array[2];
-  }
-  if (array.length>3) {
-    out.m = array[3];
-  }
-  return out;
-};
-},{}],126:[function(require,module,exports){
-var HALF_PI = Math.PI/2;
-
-module.exports = function(eccent, phi, sinphi) {
-  var con = eccent * sinphi;
-  var com = 0.5 * eccent;
-  con = Math.pow(((1 - con) / (1 + con)), com);
-  return (Math.tan(0.5 * (HALF_PI - phi)) / con);
-};
-},{}],127:[function(require,module,exports){
-exports.wgs84 = {
-  towgs84: "0,0,0",
-  ellipse: "WGS84",
-  datumName: "WGS84"
-};
-exports.ch1903 = {
-  towgs84: "674.374,15.056,405.346",
-  ellipse: "bessel",
-  datumName: "swiss"
-};
-exports.ggrs87 = {
-  towgs84: "-199.87,74.79,246.62",
-  ellipse: "GRS80",
-  datumName: "Greek_Geodetic_Reference_System_1987"
-};
-exports.nad83 = {
-  towgs84: "0,0,0",
-  ellipse: "GRS80",
-  datumName: "North_American_Datum_1983"
-};
-exports.nad27 = {
-  nadgrids: "@conus,@alaska,@ntv2_0.gsb,@ntv1_can.dat",
-  ellipse: "clrk66",
-  datumName: "North_American_Datum_1927"
-};
-exports.potsdam = {
-  towgs84: "606.0,23.0,413.0",
-  ellipse: "bessel",
-  datumName: "Potsdam Rauenberg 1950 DHDN"
-};
-exports.carthage = {
-  towgs84: "-263.0,6.0,431.0",
-  ellipse: "clark80",
-  datumName: "Carthage 1934 Tunisia"
-};
-exports.hermannskogel = {
-  towgs84: "653.0,-212.0,449.0",
-  ellipse: "bessel",
-  datumName: "Hermannskogel"
-};
-exports.ire65 = {
-  towgs84: "482.530,-130.596,564.557,-1.042,-0.214,-0.631,8.15",
-  ellipse: "mod_airy",
-  datumName: "Ireland 1965"
-};
-exports.rassadiran = {
-  towgs84: "-133.63,-157.5,-158.62",
-  ellipse: "intl",
-  datumName: "Rassadiran"
-};
-exports.nzgd49 = {
-  towgs84: "59.47,-5.04,187.44,0.47,-0.1,1.024,-4.5993",
-  ellipse: "intl",
-  datumName: "New Zealand Geodetic Datum 1949"
-};
-exports.osgb36 = {
-  towgs84: "446.448,-125.157,542.060,0.1502,0.2470,0.8421,-20.4894",
-  ellipse: "airy",
-  datumName: "Airy 1830"
-};
-exports.s_jtsk = {
-  towgs84: "589,76,480",
-  ellipse: 'bessel',
-  datumName: 'S-JTSK (Ferro)'
-};
-exports.beduaram = {
-  towgs84: '-106,-87,188',
-  ellipse: 'clrk80',
-  datumName: 'Beduaram'
-};
-exports.gunung_segara = {
-  towgs84: '-403,684,41',
-  ellipse: 'bessel',
-  datumName: 'Gunung Segara Jakarta'
-};
-exports.rnb72 = {
-  towgs84: "106.869,-52.2978,103.724,-0.33657,0.456955,-1.84218,1",
-  ellipse: "intl",
-  datumName: "Reseau National Belge 1972"
-};
-},{}],128:[function(require,module,exports){
-exports.MERIT = {
-  a: 6378137.0,
-  rf: 298.257,
-  ellipseName: "MERIT 1983"
-};
-exports.SGS85 = {
-  a: 6378136.0,
-  rf: 298.257,
-  ellipseName: "Soviet Geodetic System 85"
-};
-exports.GRS80 = {
-  a: 6378137.0,
-  rf: 298.257222101,
-  ellipseName: "GRS 1980(IUGG, 1980)"
-};
-exports.IAU76 = {
-  a: 6378140.0,
-  rf: 298.257,
-  ellipseName: "IAU 1976"
-};
-exports.airy = {
-  a: 6377563.396,
-  b: 6356256.910,
-  ellipseName: "Airy 1830"
-};
-exports.APL4 = {
-  a: 6378137,
-  rf: 298.25,
-  ellipseName: "Appl. Physics. 1965"
-};
-exports.NWL9D = {
-  a: 6378145.0,
-  rf: 298.25,
-  ellipseName: "Naval Weapons Lab., 1965"
-};
-exports.mod_airy = {
-  a: 6377340.189,
-  b: 6356034.446,
-  ellipseName: "Modified Airy"
-};
-exports.andrae = {
-  a: 6377104.43,
-  rf: 300.0,
-  ellipseName: "Andrae 1876 (Den., Iclnd.)"
-};
-exports.aust_SA = {
-  a: 6378160.0,
-  rf: 298.25,
-  ellipseName: "Australian Natl & S. Amer. 1969"
-};
-exports.GRS67 = {
-  a: 6378160.0,
-  rf: 298.2471674270,
-  ellipseName: "GRS 67(IUGG 1967)"
-};
-exports.bessel = {
-  a: 6377397.155,
-  rf: 299.1528128,
-  ellipseName: "Bessel 1841"
-};
-exports.bess_nam = {
-  a: 6377483.865,
-  rf: 299.1528128,
-  ellipseName: "Bessel 1841 (Namibia)"
-};
-exports.clrk66 = {
-  a: 6378206.4,
-  b: 6356583.8,
-  ellipseName: "Clarke 1866"
-};
-exports.clrk80 = {
-  a: 6378249.145,
-  rf: 293.4663,
-  ellipseName: "Clarke 1880 mod."
-};
-exports.clrk58 = {
-  a: 6378293.645208759,
-  rf: 294.2606763692654,
-  ellipseName: "Clarke 1858"
-};
-exports.CPM = {
-  a: 6375738.7,
-  rf: 334.29,
-  ellipseName: "Comm. des Poids et Mesures 1799"
-};
-exports.delmbr = {
-  a: 6376428.0,
-  rf: 311.5,
-  ellipseName: "Delambre 1810 (Belgium)"
-};
-exports.engelis = {
-  a: 6378136.05,
-  rf: 298.2566,
-  ellipseName: "Engelis 1985"
-};
-exports.evrst30 = {
-  a: 6377276.345,
-  rf: 300.8017,
-  ellipseName: "Everest 1830"
-};
-exports.evrst48 = {
-  a: 6377304.063,
-  rf: 300.8017,
-  ellipseName: "Everest 1948"
-};
-exports.evrst56 = {
-  a: 6377301.243,
-  rf: 300.8017,
-  ellipseName: "Everest 1956"
-};
-exports.evrst69 = {
-  a: 6377295.664,
-  rf: 300.8017,
-  ellipseName: "Everest 1969"
-};
-exports.evrstSS = {
-  a: 6377298.556,
-  rf: 300.8017,
-  ellipseName: "Everest (Sabah & Sarawak)"
-};
-exports.fschr60 = {
-  a: 6378166.0,
-  rf: 298.3,
-  ellipseName: "Fischer (Mercury Datum) 1960"
-};
-exports.fschr60m = {
-  a: 6378155.0,
-  rf: 298.3,
-  ellipseName: "Fischer 1960"
-};
-exports.fschr68 = {
-  a: 6378150.0,
-  rf: 298.3,
-  ellipseName: "Fischer 1968"
-};
-exports.helmert = {
-  a: 6378200.0,
-  rf: 298.3,
-  ellipseName: "Helmert 1906"
-};
-exports.hough = {
-  a: 6378270.0,
-  rf: 297.0,
-  ellipseName: "Hough"
-};
-exports.intl = {
-  a: 6378388.0,
-  rf: 297.0,
-  ellipseName: "International 1909 (Hayford)"
-};
-exports.kaula = {
-  a: 6378163.0,
-  rf: 298.24,
-  ellipseName: "Kaula 1961"
-};
-exports.lerch = {
-  a: 6378139.0,
-  rf: 298.257,
-  ellipseName: "Lerch 1979"
-};
-exports.mprts = {
-  a: 6397300.0,
-  rf: 191.0,
-  ellipseName: "Maupertius 1738"
-};
-exports.new_intl = {
-  a: 6378157.5,
-  b: 6356772.2,
-  ellipseName: "New International 1967"
-};
-exports.plessis = {
-  a: 6376523.0,
-  rf: 6355863.0,
-  ellipseName: "Plessis 1817 (France)"
-};
-exports.krass = {
-  a: 6378245.0,
-  rf: 298.3,
-  ellipseName: "Krassovsky, 1942"
-};
-exports.SEasia = {
-  a: 6378155.0,
-  b: 6356773.3205,
-  ellipseName: "Southeast Asia"
-};
-exports.walbeck = {
-  a: 6376896.0,
-  b: 6355834.8467,
-  ellipseName: "Walbeck"
-};
-exports.WGS60 = {
-  a: 6378165.0,
-  rf: 298.3,
-  ellipseName: "WGS 60"
-};
-exports.WGS66 = {
-  a: 6378145.0,
-  rf: 298.25,
-  ellipseName: "WGS 66"
-};
-exports.WGS7 = {
-  a: 6378135.0,
-  rf: 298.26,
-  ellipseName: "WGS 72"
-};
-exports.WGS84 = {
-  a: 6378137.0,
-  rf: 298.257223563,
-  ellipseName: "WGS 84"
-};
-exports.sphere = {
-  a: 6370997.0,
-  b: 6370997.0,
-  ellipseName: "Normal Sphere (r=6370997)"
-};
-},{}],129:[function(require,module,exports){
-exports.greenwich = 0.0; //"0dE",
-exports.lisbon = -9.131906111111; //"9d07'54.862\"W",
-exports.paris = 2.337229166667; //"2d20'14.025\"E",
-exports.bogota = -74.080916666667; //"74d04'51.3\"W",
-exports.madrid = -3.687938888889; //"3d41'16.58\"W",
-exports.rome = 12.452333333333; //"12d27'8.4\"E",
-exports.bern = 7.439583333333; //"7d26'22.5\"E",
-exports.jakarta = 106.807719444444; //"106d48'27.79\"E",
-exports.ferro = -17.666666666667; //"17d40'W",
-exports.brussels = 4.367975; //"4d22'4.71\"E",
-exports.stockholm = 18.058277777778; //"18d3'29.8\"E",
-exports.athens = 23.7163375; //"23d42'58.815\"E",
-exports.oslo = 10.722916666667; //"10d43'22.5\"E"
-},{}],130:[function(require,module,exports){
-var proj = require('./Proj');
-var transform = require('./transform');
-var wgs84 = proj('WGS84');
-
-function transformer(from, to, coords) {
-  var transformedArray;
-  if (Array.isArray(coords)) {
-    transformedArray = transform(from, to, coords);
-    if (coords.length === 3) {
-      return [transformedArray.x, transformedArray.y, transformedArray.z];
-    }
-    else {
-      return [transformedArray.x, transformedArray.y];
-    }
-  }
-  else {
-    return transform(from, to, coords);
-  }
-}
-
-function checkProj(item) {
-  if (item instanceof proj) {
-    return item;
-  }
-  if (item.oProj) {
-    return item.oProj;
-  }
-  return proj(item);
-}
-function proj4(fromProj, toProj, coord) {
-  fromProj = checkProj(fromProj);
-  var single = false;
-  var obj;
-  if (typeof toProj === 'undefined') {
-    toProj = fromProj;
-    fromProj = wgs84;
-    single = true;
-  }
-  else if (typeof toProj.x !== 'undefined' || Array.isArray(toProj)) {
-    coord = toProj;
-    toProj = fromProj;
-    fromProj = wgs84;
-    single = true;
-  }
-  toProj = checkProj(toProj);
-  if (coord) {
-    return transformer(fromProj, toProj, coord);
-  }
-  else {
-    obj = {
-      forward: function(coords) {
-        return transformer(fromProj, toProj, coords);
-      },
-      inverse: function(coords) {
-        return transformer(toProj, fromProj, coords);
-      }
-    };
-    if (single) {
-      obj.oProj = toProj;
-    }
-    return obj;
-  }
-}
-module.exports = proj4;
-},{"./Proj":104,"./transform":167}],131:[function(require,module,exports){
-var HALF_PI = Math.PI/2;
-var PJD_3PARAM = 1;
-var PJD_7PARAM = 2;
-var PJD_GRIDSHIFT = 3;
-var PJD_WGS84 = 4; // WGS84 or equivalent
-var PJD_NODATUM = 5; // WGS84 or equivalent
-var SEC_TO_RAD = 4.84813681109535993589914102357e-6;
-var AD_C = 1.0026000;
-var COS_67P5 = 0.38268343236508977;
-var datum = function(proj) {
-  if (!(this instanceof datum)) {
-    return new datum(proj);
-  }
-  this.datum_type = PJD_WGS84; //default setting
-  if (!proj) {
-    return;
-  }
-  if (proj.datumCode && proj.datumCode === 'none') {
-    this.datum_type = PJD_NODATUM;
-  }
-  if (proj.datum_params) {
-    for (var i = 0; i < proj.datum_params.length; i++) {
-      proj.datum_params[i] = parseFloat(proj.datum_params[i]);
-    }
-    if (proj.datum_params[0] !== 0 || proj.datum_params[1] !== 0 || proj.datum_params[2] !== 0) {
-      this.datum_type = PJD_3PARAM;
-    }
-    if (proj.datum_params.length > 3) {
-      if (proj.datum_params[3] !== 0 || proj.datum_params[4] !== 0 || proj.datum_params[5] !== 0 || proj.datum_params[6] !== 0) {
-        this.datum_type = PJD_7PARAM;
-        proj.datum_params[3] *= SEC_TO_RAD;
-        proj.datum_params[4] *= SEC_TO_RAD;
-        proj.datum_params[5] *= SEC_TO_RAD;
-        proj.datum_params[6] = (proj.datum_params[6] / 1000000.0) + 1.0;
-      }
-    }
-  }
-  // DGR 2011-03-21 : nadgrids support
-  this.datum_type = proj.grids ? PJD_GRIDSHIFT : this.datum_type;
-
-  this.a = proj.a; //datum object also uses these values
-  this.b = proj.b;
-  this.es = proj.es;
-  this.ep2 = proj.ep2;
-  this.datum_params = proj.datum_params;
-  if (this.datum_type === PJD_GRIDSHIFT) {
-    this.grids = proj.grids;
-  }
-};
-datum.prototype = {
-
-
-  /****************************************************************/
-  // cs_compare_datums()
-  //   Returns TRUE if the two datums match, otherwise FALSE.
-  compare_datums: function(dest) {
-    if (this.datum_type !== dest.datum_type) {
-      return false; // false, datums are not equal
-    }
-    else if (this.a !== dest.a || Math.abs(this.es - dest.es) > 0.000000000050) {
-      // the tolerence for es is to ensure that GRS80 and WGS84
-      // are considered identical
-      return false;
-    }
-    else if (this.datum_type === PJD_3PARAM) {
-      return (this.datum_params[0] === dest.datum_params[0] && this.datum_params[1] === dest.datum_params[1] && this.datum_params[2] === dest.datum_params[2]);
-    }
-    else if (this.datum_type === PJD_7PARAM) {
-      return (this.datum_params[0] === dest.datum_params[0] && this.datum_params[1] === dest.datum_params[1] && this.datum_params[2] === dest.datum_params[2] && this.datum_params[3] === dest.datum_params[3] && this.datum_params[4] === dest.datum_params[4] && this.datum_params[5] === dest.datum_params[5] && this.datum_params[6] === dest.datum_params[6]);
-    }
-    else if (this.datum_type === PJD_GRIDSHIFT || dest.datum_type === PJD_GRIDSHIFT) {
-      //alert("ERROR: Grid shift transformations are not implemented.");
-      //return false
-      //DGR 2012-07-29 lazy ...
-      return this.nadgrids === dest.nadgrids;
-    }
-    else {
-      return true; // datums are equal
-    }
-  }, // cs_compare_datums()
-
-  /*
-   * The function Convert_Geodetic_To_Geocentric converts geodetic coordinates
-   * (latitude, longitude, and height) to geocentric coordinates (X, Y, Z),
-   * according to the current ellipsoid parameters.
-   *
-   *    Latitude  : Geodetic latitude in radians                     (input)
-   *    Longitude : Geodetic longitude in radians                    (input)
-   *    Height    : Geodetic height, in meters                       (input)
-   *    X         : Calculated Geocentric X coordinate, in meters    (output)
-   *    Y         : Calculated Geocentric Y coordinate, in meters    (output)
-   *    Z         : Calculated Geocentric Z coordinate, in meters    (output)
-   *
-   */
-  geodetic_to_geocentric: function(p) {
-    var Longitude = p.x;
-    var Latitude = p.y;
-    var Height = p.z ? p.z : 0; //Z value not always supplied
-    var X; // output
-    var Y;
-    var Z;
-
-    var Error_Code = 0; //  GEOCENT_NO_ERROR;
-    var Rn; /*  Earth radius at location  */
-    var Sin_Lat; /*  Math.sin(Latitude)  */
-    var Sin2_Lat; /*  Square of Math.sin(Latitude)  */
-    var Cos_Lat; /*  Math.cos(Latitude)  */
-
-    /*
-     ** Don't blow up if Latitude is just a little out of the value
-     ** range as it may just be a rounding issue.  Also removed longitude
-     ** test, it should be wrapped by Math.cos() and Math.sin().  NFW for PROJ.4, Sep/2001.
-     */
-    if (Latitude < -HALF_PI && Latitude > -1.001 * HALF_PI) {
-      Latitude = -HALF_PI;
-    }
-    else if (Latitude > HALF_PI && Latitude < 1.001 * HALF_PI) {
-      Latitude = HALF_PI;
-    }
-    else if ((Latitude < -HALF_PI) || (Latitude > HALF_PI)) {
-      /* Latitude out of range */
-      //..reportError('geocent:lat out of range:' + Latitude);
-      return null;
-    }
-
-    if (Longitude > Math.PI) {
-      Longitude -= (2 * Math.PI);
-    }
-    Sin_Lat = Math.sin(Latitude);
-    Cos_Lat = Math.cos(Latitude);
-    Sin2_Lat = Sin_Lat * Sin_Lat;
-    Rn = this.a / (Math.sqrt(1.0e0 - this.es * Sin2_Lat));
-    X = (Rn + Height) * Cos_Lat * Math.cos(Longitude);
-    Y = (Rn + Height) * Cos_Lat * Math.sin(Longitude);
-    Z = ((Rn * (1 - this.es)) + Height) * Sin_Lat;
-
-    p.x = X;
-    p.y = Y;
-    p.z = Z;
-    return Error_Code;
-  }, // cs_geodetic_to_geocentric()
-
-
-  geocentric_to_geodetic: function(p) {
-    /* local defintions and variables */
-    /* end-criterium of loop, accuracy of sin(Latitude) */
-    var genau = 1e-12;
-    var genau2 = (genau * genau);
-    var maxiter = 30;
-
-    var P; /* distance between semi-minor axis and location */
-    var RR; /* distance between center and location */
-    var CT; /* sin of geocentric latitude */
-    var ST; /* cos of geocentric latitude */
-    var RX;
-    var RK;
-    var RN; /* Earth radius at location */
-    var CPHI0; /* cos of start or old geodetic latitude in iterations */
-    var SPHI0; /* sin of start or old geodetic latitude in iterations */
-    var CPHI; /* cos of searched geodetic latitude */
-    var SPHI; /* sin of searched geodetic latitude */
-    var SDPHI; /* end-criterium: addition-theorem of sin(Latitude(iter)-Latitude(iter-1)) */
-    var At_Pole; /* indicates location is in polar region */
-    var iter; /* # of continous iteration, max. 30 is always enough (s.a.) */
-
-    var X = p.x;
-    var Y = p.y;
-    var Z = p.z ? p.z : 0.0; //Z value not always supplied
-    var Longitude;
-    var Latitude;
-    var Height;
-
-    At_Pole = false;
-    P = Math.sqrt(X * X + Y * Y);
-    RR = Math.sqrt(X * X + Y * Y + Z * Z);
-
-    /*      special cases for latitude and longitude */
-    if (P / this.a < genau) {
-
-      /*  special case, if P=0. (X=0., Y=0.) */
-      At_Pole = true;
-      Longitude = 0.0;
-
-      /*  if (X,Y,Z)=(0.,0.,0.) then Height becomes semi-minor axis
-       *  of ellipsoid (=center of mass), Latitude becomes PI/2 */
-      if (RR / this.a < genau) {
-        Latitude = HALF_PI;
-        Height = -this.b;
-        return;
-      }
-    }
-    else {
-      /*  ellipsoidal (geodetic) longitude
-       *  interval: -PI < Longitude <= +PI */
-      Longitude = Math.atan2(Y, X);
-    }
-
-    /* --------------------------------------------------------------
-     * Following iterative algorithm was developped by
-     * "Institut for Erdmessung", University of Hannover, July 1988.
-     * Internet: www.ife.uni-hannover.de
-     * Iterative computation of CPHI,SPHI and Height.
-     * Iteration of CPHI and SPHI to 10**-12 radian resp.
-     * 2*10**-7 arcsec.
-     * --------------------------------------------------------------
-     */
-    CT = Z / RR;
-    ST = P / RR;
-    RX = 1.0 / Math.sqrt(1.0 - this.es * (2.0 - this.es) * ST * ST);
-    CPHI0 = ST * (1.0 - this.es) * RX;
-    SPHI0 = CT * RX;
-    iter = 0;
-
-    /* loop to find sin(Latitude) resp. Latitude
-     * until |sin(Latitude(iter)-Latitude(iter-1))| < genau */
-    do {
-      iter++;
-      RN = this.a / Math.sqrt(1.0 - this.es * SPHI0 * SPHI0);
-
-      /*  ellipsoidal (geodetic) height */
-      Height = P * CPHI0 + Z * SPHI0 - RN * (1.0 - this.es * SPHI0 * SPHI0);
-
-      RK = this.es * RN / (RN + Height);
-      RX = 1.0 / Math.sqrt(1.0 - RK * (2.0 - RK) * ST * ST);
-      CPHI = ST * (1.0 - RK) * RX;
-      SPHI = CT * RX;
-      SDPHI = SPHI * CPHI0 - CPHI * SPHI0;
-      CPHI0 = CPHI;
-      SPHI0 = SPHI;
-    }
-    while (SDPHI * SDPHI > genau2 && iter < maxiter);
-
-    /*      ellipsoidal (geodetic) latitude */
-    Latitude = Math.atan(SPHI / Math.abs(CPHI));
-
-    p.x = Longitude;
-    p.y = Latitude;
-    p.z = Height;
-    return p;
-  }, // cs_geocentric_to_geodetic()
-
-  /** Convert_Geocentric_To_Geodetic
-   * The method used here is derived from 'An Improved Algorithm for
-   * Geocentric to Geodetic Coordinate Conversion', by Ralph Toms, Feb 1996
-   */
-  geocentric_to_geodetic_noniter: function(p) {
-    var X = p.x;
-    var Y = p.y;
-    var Z = p.z ? p.z : 0; //Z value not always supplied
-    var Longitude;
-    var Latitude;
-    var Height;
-
-    var W; /* distance from Z axis */
-    var W2; /* square of distance from Z axis */
-    var T0; /* initial estimate of vertical component */
-    var T1; /* corrected estimate of vertical component */
-    var S0; /* initial estimate of horizontal component */
-    var S1; /* corrected estimate of horizontal component */
-    var Sin_B0; /* Math.sin(B0), B0 is estimate of Bowring aux variable */
-    var Sin3_B0; /* cube of Math.sin(B0) */
-    var Cos_B0; /* Math.cos(B0) */
-    var Sin_p1; /* Math.sin(phi1), phi1 is estimated latitude */
-    var Cos_p1; /* Math.cos(phi1) */
-    var Rn; /* Earth radius at location */
-    var Sum; /* numerator of Math.cos(phi1) */
-    var At_Pole; /* indicates location is in polar region */
-
-    X = parseFloat(X); // cast from string to float
-    Y = parseFloat(Y);
-    Z = parseFloat(Z);
-
-    At_Pole = false;
-    if (X !== 0.0) {
-      Longitude = Math.atan2(Y, X);
-    }
-    else {
-      if (Y > 0) {
-        Longitude = HALF_PI;
-      }
-      else if (Y < 0) {
-        Longitude = -HALF_PI;
-      }
-      else {
-        At_Pole = true;
-        Longitude = 0.0;
-        if (Z > 0.0) { /* north pole */
-          Latitude = HALF_PI;
-        }
-        else if (Z < 0.0) { /* south pole */
-          Latitude = -HALF_PI;
-        }
-        else { /* center of earth */
-          Latitude = HALF_PI;
-          Height = -this.b;
-          return;
-        }
-      }
-    }
-    W2 = X * X + Y * Y;
-    W = Math.sqrt(W2);
-    T0 = Z * AD_C;
-    S0 = Math.sqrt(T0 * T0 + W2);
-    Sin_B0 = T0 / S0;
-    Cos_B0 = W / S0;
-    Sin3_B0 = Sin_B0 * Sin_B0 * Sin_B0;
-    T1 = Z + this.b * this.ep2 * Sin3_B0;
-    Sum = W - this.a * this.es * Cos_B0 * Cos_B0 * Cos_B0;
-    S1 = Math.sqrt(T1 * T1 + Sum * Sum);
-    Sin_p1 = T1 / S1;
-    Cos_p1 = Sum / S1;
-    Rn = this.a / Math.sqrt(1.0 - this.es * Sin_p1 * Sin_p1);
-    if (Cos_p1 >= COS_67P5) {
-      Height = W / Cos_p1 - Rn;
-    }
-    else if (Cos_p1 <= -COS_67P5) {
-      Height = W / -Cos_p1 - Rn;
-    }
-    else {
-      Height = Z / Sin_p1 + Rn * (this.es - 1.0);
-    }
-    if (At_Pole === false) {
-      Latitude = Math.atan(Sin_p1 / Cos_p1);
-    }
-
-    p.x = Longitude;
-    p.y = Latitude;
-    p.z = Height;
-    return p;
-  }, // geocentric_to_geodetic_noniter()
-
-  /****************************************************************/
-  // pj_geocentic_to_wgs84( p )
-  //  p = point to transform in geocentric coordinates (x,y,z)
-  geocentric_to_wgs84: function(p) {
-
-    if (this.datum_type === PJD_3PARAM) {
-      // if( x[io] === HUGE_VAL )
-      //    continue;
-      p.x += this.datum_params[0];
-      p.y += this.datum_params[1];
-      p.z += this.datum_params[2];
-
-    }
-    else if (this.datum_type === PJD_7PARAM) {
-      var Dx_BF = this.datum_params[0];
-      var Dy_BF = this.datum_params[1];
-      var Dz_BF = this.datum_params[2];
-      var Rx_BF = this.datum_params[3];
-      var Ry_BF = this.datum_params[4];
-      var Rz_BF = this.datum_params[5];
-      var M_BF = this.datum_params[6];
-      // if( x[io] === HUGE_VAL )
-      //    continue;
-      var x_out = M_BF * (p.x - Rz_BF * p.y + Ry_BF * p.z) + Dx_BF;
-      var y_out = M_BF * (Rz_BF * p.x + p.y - Rx_BF * p.z) + Dy_BF;
-      var z_out = M_BF * (-Ry_BF * p.x + Rx_BF * p.y + p.z) + Dz_BF;
-      p.x = x_out;
-      p.y = y_out;
-      p.z = z_out;
-    }
-  }, // cs_geocentric_to_wgs84
-
-  /****************************************************************/
-  // pj_geocentic_from_wgs84()
-  //  coordinate system definition,
-  //  point to transform in geocentric coordinates (x,y,z)
-  geocentric_from_wgs84: function(p) {
-
-    if (this.datum_type === PJD_3PARAM) {
-      //if( x[io] === HUGE_VAL )
-      //    continue;
-      p.x -= this.datum_params[0];
-      p.y -= this.datum_params[1];
-      p.z -= this.datum_params[2];
-
-    }
-    else if (this.datum_type === PJD_7PARAM) {
-      var Dx_BF = this.datum_params[0];
-      var Dy_BF = this.datum_params[1];
-      var Dz_BF = this.datum_params[2];
-      var Rx_BF = this.datum_params[3];
-      var Ry_BF = this.datum_params[4];
-      var Rz_BF = this.datum_params[5];
-      var M_BF = this.datum_params[6];
-      var x_tmp = (p.x - Dx_BF) / M_BF;
-      var y_tmp = (p.y - Dy_BF) / M_BF;
-      var z_tmp = (p.z - Dz_BF) / M_BF;
-      //if( x[io] === HUGE_VAL )
-      //    continue;
-
-      p.x = x_tmp + Rz_BF * y_tmp - Ry_BF * z_tmp;
-      p.y = -Rz_BF * x_tmp + y_tmp + Rx_BF * z_tmp;
-      p.z = Ry_BF * x_tmp - Rx_BF * y_tmp + z_tmp;
-    } //cs_geocentric_from_wgs84()
-  }
-};
-
-/** point object, nothing fancy, just allows values to be
-    passed back and forth by reference rather than by value.
-    Other point classes may be used as long as they have
-    x and y properties, which will get modified in the transform method.
-*/
-module.exports = datum;
-
-},{}],132:[function(require,module,exports){
-var PJD_3PARAM = 1;
-var PJD_7PARAM = 2;
-var PJD_GRIDSHIFT = 3;
-var PJD_NODATUM = 5; // WGS84 or equivalent
-var SRS_WGS84_SEMIMAJOR = 6378137; // only used in grid shift transforms
-var SRS_WGS84_ESQUARED = 0.006694379990141316; //DGR: 2012-07-29
-module.exports = function(source, dest, point) {
-  var wp, i, l;
-
-  function checkParams(fallback) {
-    return (fallback === PJD_3PARAM || fallback === PJD_7PARAM);
-  }
-  // Short cut if the datums are identical.
-  if (source.compare_datums(dest)) {
-    return point; // in this case, zero is sucess,
-    // whereas cs_compare_datums returns 1 to indicate TRUE
-    // confusing, should fix this
-  }
-
-  // Explicitly skip datum transform by setting 'datum=none' as parameter for either source or dest
-  if (source.datum_type === PJD_NODATUM || dest.datum_type === PJD_NODATUM) {
-    return point;
-  }
-
-  //DGR: 2012-07-29 : add nadgrids support (begin)
-  var src_a = source.a;
-  var src_es = source.es;
-
-  var dst_a = dest.a;
-  var dst_es = dest.es;
-
-  var fallback = source.datum_type;
-  // If this datum requires grid shifts, then apply it to geodetic coordinates.
-  if (fallback === PJD_GRIDSHIFT) {
-    if (this.apply_gridshift(source, 0, point) === 0) {
-      source.a = SRS_WGS84_SEMIMAJOR;
-      source.es = SRS_WGS84_ESQUARED;
-    }
-    else {
-      // try 3 or 7 params transformation or nothing ?
-      if (!source.datum_params) {
-        source.a = src_a;
-        source.es = source.es;
-        return point;
-      }
-      wp = 1;
-      for (i = 0, l = source.datum_params.length; i < l; i++) {
-        wp *= source.datum_params[i];
-      }
-      if (wp === 0) {
-        source.a = src_a;
-        source.es = source.es;
-        return point;
-      }
-      if (source.datum_params.length > 3) {
-        fallback = PJD_7PARAM;
-      }
-      else {
-        fallback = PJD_3PARAM;
-      }
-    }
-  }
-  if (dest.datum_type === PJD_GRIDSHIFT) {
-    dest.a = SRS_WGS84_SEMIMAJOR;
-    dest.es = SRS_WGS84_ESQUARED;
-  }
-  // Do we need to go through geocentric coordinates?
-  if (source.es !== dest.es || source.a !== dest.a || checkParams(fallback) || checkParams(dest.datum_type)) {
-    //DGR: 2012-07-29 : add nadgrids support (end)
-    // Convert to geocentric coordinates.
-    source.geodetic_to_geocentric(point);
-    // CHECK_RETURN;
-    // Convert between datums
-    if (checkParams(source.datum_type)) {
-      source.geocentric_to_wgs84(point);
-      // CHECK_RETURN;
-    }
-    if (checkParams(dest.datum_type)) {
-      dest.geocentric_from_wgs84(point);
-      // CHECK_RETURN;
-    }
-    // Convert back to geodetic coordinates
-    dest.geocentric_to_geodetic(point);
-    // CHECK_RETURN;
-  }
-  // Apply grid shift to destination if required
-  if (dest.datum_type === PJD_GRIDSHIFT) {
-    this.apply_gridshift(dest, 1, point);
-    // CHECK_RETURN;
-  }
-
-  source.a = src_a;
-  source.es = src_es;
-  dest.a = dst_a;
-  dest.es = dst_es;
-
-  return point;
-};
-
-
-},{}],133:[function(require,module,exports){
-var globals = require('./global');
-var parseProj = require('./projString');
-var wkt = require('./wkt');
-
-function defs(name) {
-  /*global console*/
-  var that = this;
-  if (arguments.length === 2) {
-    if (arguments[1][0] === '+') {
-      defs[name] = parseProj(arguments[1]);
-    }
-    else {
-      defs[name] = wkt(arguments[1]);
-    }
-  }
-  else if (arguments.length === 1) {
-    if (Array.isArray(name)) {
-      return name.map(function(v) {
-        if (Array.isArray(v)) {
-          defs.apply(that, v);
-        }
-        else {
-          defs(v);
-        }
-      });
-    }
-    else if (typeof name === 'string') {
-
-    }
-    else if ('EPSG' in name) {
-      defs['EPSG:' + name.EPSG] = name;
-    }
-    else if ('ESRI' in name) {
-      defs['ESRI:' + name.ESRI] = name;
-    }
-    else if ('IAU2000' in name) {
-      defs['IAU2000:' + name.IAU2000] = name;
-    }
-    else {
-      console.log(name);
-    }
-    return;
-  }
-
-
-}
-globals(defs);
-module.exports = defs;
-
-},{"./global":136,"./projString":140,"./wkt":168}],134:[function(require,module,exports){
-var Datum = require('./constants/Datum');
-var Ellipsoid = require('./constants/Ellipsoid');
-var extend = require('./extend');
-var datum = require('./datum');
-var EPSLN = 1.0e-10;
-// ellipoid pj_set_ell.c
-var SIXTH = 0.1666666666666666667;
-/* 1/6 */
-var RA4 = 0.04722222222222222222;
-/* 17/360 */
-var RA6 = 0.02215608465608465608;
-module.exports = function(json) {
-  // DGR 2011-03-20 : nagrids -> nadgrids
-  if (json.datumCode && json.datumCode !== 'none') {
-    var datumDef = Datum[json.datumCode];
-    if (datumDef) {
-      json.datum_params = datumDef.towgs84 ? datumDef.towgs84.split(',') : null;
-      json.ellps = datumDef.ellipse;
-      json.datumName = datumDef.datumName ? datumDef.datumName : json.datumCode;
-    }
-  }
-  if (!json.a) { // do we have an ellipsoid?
-    var ellipse = Ellipsoid[json.ellps] ? Ellipsoid[json.ellps] : Ellipsoid.WGS84;
-    extend(json, ellipse);
-  }
-  if (json.rf && !json.b) {
-    json.b = (1.0 - 1.0 / json.rf) * json.a;
-  }
-  if (json.rf === 0 || Math.abs(json.a - json.b) < EPSLN) {
-    json.sphere = true;
-    json.b = json.a;
-  }
-  json.a2 = json.a * json.a; // used in geocentric
-  json.b2 = json.b * json.b; // used in geocentric
-  json.es = (json.a2 - json.b2) / json.a2; // e ^ 2
-  json.e = Math.sqrt(json.es); // eccentricity
-  if (json.R_A) {
-    json.a *= 1 - json.es * (SIXTH + json.es * (RA4 + json.es * RA6));
-    json.a2 = json.a * json.a;
-    json.b2 = json.b * json.b;
-    json.es = 0;
-  }
-  json.ep2 = (json.a2 - json.b2) / json.b2; // used in geocentric
-  if (!json.k0) {
-    json.k0 = 1.0; //default value
-  }
-  //DGR 2010-11-12: axis
-  if (!json.axis) {
-    json.axis = "enu";
-  }
-
-  json.datum = datum(json);
-  return json;
-};
-},{"./constants/Datum":127,"./constants/Ellipsoid":128,"./datum":131,"./extend":135}],135:[function(require,module,exports){
-module.exports = function(destination, source) {
-  destination = destination || {};
-  var value, property;
-  if (!source) {
-    return destination;
-  }
-  for (property in source) {
-    value = source[property];
-    if (value !== undefined) {
-      destination[property] = value;
-    }
-  }
-  return destination;
-};
-
-},{}],136:[function(require,module,exports){
-module.exports = function(defs) {
-  defs('WGS84', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
-  defs('EPSG:4326', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
-  defs('EPSG:4269', "+title=NAD83 (long/lat) +proj=longlat +a=6378137.0 +b=6356752.31414036 +ellps=GRS80 +datum=NAD83 +units=degrees");
-  defs('EPSG:3857', "+title=WGS 84 / Pseudo-Mercator +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +no_defs");
-
-  defs['EPSG:3785'] = defs['EPSG:3857']; // maintain backward compat, official code is 3857
-  defs.GOOGLE = defs['EPSG:3857'];
-  defs['EPSG:900913'] = defs['EPSG:3857'];
-  defs['EPSG:102113'] = defs['EPSG:3857'];
-};
-
-},{}],137:[function(require,module,exports){
-var projs = [
-  require('./projections/tmerc'),
-  require('./projections/utm'),
-  require('./projections/sterea'),
-  require('./projections/stere'),
-  require('./projections/somerc'),
-  require('./projections/omerc'),
-  require('./projections/lcc'),
-  require('./projections/krovak'),
-  require('./projections/cass'),
-  require('./projections/laea'),
-  require('./projections/aea'),
-  require('./projections/gnom'),
-  require('./projections/cea'),
-  require('./projections/eqc'),
-  require('./projections/poly'),
-  require('./projections/nzmg'),
-  require('./projections/mill'),
-  require('./projections/sinu'),
-  require('./projections/moll'),
-  require('./projections/eqdc'),
-  require('./projections/vandg'),
-  require('./projections/aeqd')
-];
-module.exports = function(proj4){
-  projs.forEach(function(proj){
-    proj4.Proj.projections.add(proj);
-  });
-};
-},{"./projections/aea":142,"./projections/aeqd":143,"./projections/cass":144,"./projections/cea":145,"./projections/eqc":146,"./projections/eqdc":147,"./projections/gnom":149,"./projections/krovak":150,"./projections/laea":151,"./projections/lcc":152,"./projections/mill":155,"./projections/moll":156,"./projections/nzmg":157,"./projections/omerc":158,"./projections/poly":159,"./projections/sinu":160,"./projections/somerc":161,"./projections/stere":162,"./projections/sterea":163,"./projections/tmerc":164,"./projections/utm":165,"./projections/vandg":166}],138:[function(require,module,exports){
-var proj4 = require('./core');
-proj4.defaultDatum = 'WGS84'; //default datum
-proj4.Proj = require('./Proj');
-proj4.WGS84 = new proj4.Proj('WGS84');
-proj4.Point = require('./Point');
-proj4.toPoint = require("./common/toPoint");
-proj4.defs = require('./defs');
-proj4.transform = require('./transform');
-proj4.mgrs = require('mgrs');
-proj4.version = require('../package.json').version;
-require('./includedProjections')(proj4);
-module.exports = proj4;
-},{"../package.json":170,"./Point":103,"./Proj":104,"./common/toPoint":125,"./core":130,"./defs":133,"./includedProjections":137,"./transform":167,"mgrs":169}],139:[function(require,module,exports){
-var defs = require('./defs');
-var wkt = require('./wkt');
-var projStr = require('./projString');
-function testObj(code){
-  return typeof code === 'string';
-}
-function testDef(code){
-  return code in defs;
-}
-function testWKT(code){
-  var codeWords = ['GEOGCS','GEOCCS','PROJCS','LOCAL_CS'];
-  return codeWords.reduce(function(a,b){
-    return a+1+code.indexOf(b);
-  },0);
-}
-function testProj(code){
-  return code[0] === '+';
-}
-function parse(code){
-  if (testObj(code)) {
-    //check to see if this is a WKT string
-    if (testDef(code)) {
-      return defs[code];
-    }
-    else if (testWKT(code)) {
-      return wkt(code);
-    }
-    else if (testProj(code)) {
-      return projStr(code);
-    }
-  }else{
-    return code;
-  }
-}
-
-module.exports = parse;
-},{"./defs":133,"./projString":140,"./wkt":168}],140:[function(require,module,exports){
-var D2R = 0.01745329251994329577;
-var PrimeMeridian = require('./constants/PrimeMeridian');
-module.exports = function(defData) {
-  var self = {};
-
-  var paramObj = {};
-  defData.split("+").map(function(v) {
-    return v.trim();
-  }).filter(function(a) {
-    return a;
-  }).forEach(function(a) {
-    var split = a.split("=");
-    split.push(true);
-    paramObj[split[0].toLowerCase()] = split[1];
-  });
-  var paramName, paramVal, paramOutname;
-  var params = {
-    proj: 'projName',
-    datum: 'datumCode',
-    rf: function(v) {
-      self.rf = parseFloat(v, 10);
-    },
-    lat_0: function(v) {
-      self.lat0 = v * D2R;
-    },
-    lat_1: function(v) {
-      self.lat1 = v * D2R;
-    },
-    lat_2: function(v) {
-      self.lat2 = v * D2R;
-    },
-    lat_ts: function(v) {
-      self.lat_ts = v * D2R;
-    },
-    lon_0: function(v) {
-      self.long0 = v * D2R;
-    },
-    lon_1: function(v) {
-      self.long1 = v * D2R;
-    },
-    lon_2: function(v) {
-      self.long2 = v * D2R;
-    },
-    alpha: function(v) {
-      self.alpha = parseFloat(v) * D2R;
-    },
-    lonc: function(v) {
-      self.longc = v * D2R;
-    },
-    x_0: function(v) {
-      self.x0 = parseFloat(v, 10);
-    },
-    y_0: function(v) {
-      self.y0 = parseFloat(v, 10);
-    },
-    k_0: function(v) {
-      self.k0 = parseFloat(v, 10);
-    },
-    k: function(v) {
-      self.k0 = parseFloat(v, 10);
-    },
-    r_a: function() {
-      self.R_A = true;
-    },
-    zone: function(v) {
-      self.zone = parseInt(v, 10);
-    },
-    south: function() {
-      self.utmSouth = true;
-    },
-    towgs84: function(v) {
-      self.datum_params = v.split(",").map(function(a) {
-        return parseFloat(a, 10);
-      });
-    },
-    to_meter: function(v) {
-      self.to_meter = parseFloat(v, 10);
-    },
-    from_greenwich: function(v) {
-      self.from_greenwich = v * D2R;
-    },
-    pm: function(v) {
-      self.from_greenwich = (PrimeMeridian[v] ? PrimeMeridian[v] : parseFloat(v, 10)) * D2R;
-    },
-    nadgrids: function(v) {
-      if (v === '@null') {
-        self.datumCode = 'none';
-      }
-      else {
-        self.nadgrids = v;
-      }
-    },
-    axis: function(v) {
-      var legalAxis = "ewnsud";
-      if (v.length === 3 && legalAxis.indexOf(v.substr(0, 1)) !== -1 && legalAxis.indexOf(v.substr(1, 1)) !== -1 && legalAxis.indexOf(v.substr(2, 1)) !== -1) {
-        self.axis = v;
-      }
-    }
-  };
-  for (paramName in paramObj) {
-    paramVal = paramObj[paramName];
-    if (paramName in params) {
-      paramOutname = params[paramName];
-      if (typeof paramOutname === 'function') {
-        paramOutname(paramVal);
-      }
-      else {
-        self[paramOutname] = paramVal;
-      }
-    }
-    else {
-      self[paramName] = paramVal;
-    }
-  }
-  if(typeof self.datumCode === 'string' && self.datumCode !== "WGS84"){
-    self.datumCode = self.datumCode.toLowerCase();
-  }
-  return self;
-};
-
-},{"./constants/PrimeMeridian":129}],141:[function(require,module,exports){
-var projs = [
-  require('./projections/merc'),
-  require('./projections/longlat')
-];
-var names = {};
-var projStore = [];
-
-function add(proj, i) {
-  var len = projStore.length;
-  if (!proj.names) {
-    console.log(i);
-    return true;
-  }
-  projStore[len] = proj;
-  proj.names.forEach(function(n) {
-    names[n.toLowerCase()] = len;
-  });
-  return this;
-}
-
-exports.add = add;
-
-exports.get = function(name) {
-  if (!name) {
-    return false;
-  }
-  var n = name.toLowerCase();
-  if (typeof names[n] !== 'undefined' && projStore[names[n]]) {
-    return projStore[names[n]];
-  }
-};
-exports.start = function() {
-  projs.forEach(add);
-};
-
-},{"./projections/longlat":153,"./projections/merc":154}],142:[function(require,module,exports){
-var EPSLN = 1.0e-10;
-var msfnz = require('../common/msfnz');
-var qsfnz = require('../common/qsfnz');
-var adjust_lon = require('../common/adjust_lon');
-var asinz = require('../common/asinz');
-exports.init = function() {
-
-  if (Math.abs(this.lat1 + this.lat2) < EPSLN) {
-    return;
-  }
-  this.temp = this.b / this.a;
-  this.es = 1 - Math.pow(this.temp, 2);
-  this.e3 = Math.sqrt(this.es);
-
-  this.sin_po = Math.sin(this.lat1);
-  this.cos_po = Math.cos(this.lat1);
-  this.t1 = this.sin_po;
-  this.con = this.sin_po;
-  this.ms1 = msfnz(this.e3, this.sin_po, this.cos_po);
-  this.qs1 = qsfnz(this.e3, this.sin_po, this.cos_po);
-
-  this.sin_po = Math.sin(this.lat2);
-  this.cos_po = Math.cos(this.lat2);
-  this.t2 = this.sin_po;
-  this.ms2 = msfnz(this.e3, this.sin_po, this.cos_po);
-  this.qs2 = qsfnz(this.e3, this.sin_po, this.cos_po);
-
-  this.sin_po = Math.sin(this.lat0);
-  this.cos_po = Math.cos(this.lat0);
-  this.t3 = this.sin_po;
-  this.qs0 = qsfnz(this.e3, this.sin_po, this.cos_po);
-
-  if (Math.abs(this.lat1 - this.lat2) > EPSLN) {
-    this.ns0 = (this.ms1 * this.ms1 - this.ms2 * this.ms2) / (this.qs2 - this.qs1);
-  }
-  else {
-    this.ns0 = this.con;
-  }
-  this.c = this.ms1 * this.ms1 + this.ns0 * this.qs1;
-  this.rh = this.a * Math.sqrt(this.c - this.ns0 * this.qs0) / this.ns0;
-};
-
-/* Albers Conical Equal Area forward equations--mapping lat,long to x,y
-  -------------------------------------------------------------------*/
-exports.forward = function(p) {
-
-  var lon = p.x;
-  var lat = p.y;
-
-  this.sin_phi = Math.sin(lat);
-  this.cos_phi = Math.cos(lat);
-
-  var qs = qsfnz(this.e3, this.sin_phi, this.cos_phi);
-  var rh1 = this.a * Math.sqrt(this.c - this.ns0 * qs) / this.ns0;
-  var theta = this.ns0 * adjust_lon(lon - this.long0);
-  var x = rh1 * Math.sin(theta) + this.x0;
-  var y = this.rh - rh1 * Math.cos(theta) + this.y0;
-
-  p.x = x;
-  p.y = y;
-  return p;
-};
-
-
-exports.inverse = function(p) {
-  var rh1, qs, con, theta, lon, lat;
-
-  p.x -= this.x0;
-  p.y = this.rh - p.y + this.y0;
-  if (this.ns0 >= 0) {
-    rh1 = Math.sqrt(p.x * p.x + p.y * p.y);
-    con = 1;
-  }
-  else {
-    rh1 = -Math.sqrt(p.x * p.x + p.y * p.y);
-    con = -1;
-  }
-  theta = 0;
-  if (rh1 !== 0) {
-    theta = Math.atan2(con * p.x, con * p.y);
-  }
-  con = rh1 * this.ns0 / this.a;
-  if (this.sphere) {
-    lat = Math.asin((this.c - con * con) / (2 * this.ns0));
-  }
-  else {
-    qs = (this.c - con * con) / this.ns0;
-    lat = this.phi1z(this.e3, qs);
-  }
-
-  lon = adjust_lon(theta / this.ns0 + this.long0);
-  p.x = lon;
-  p.y = lat;
-  return p;
-};
-
-/* Function to compute phi1, the latitude for the inverse of the
-   Albers Conical Equal-Area projection.
--------------------------------------------*/
-exports.phi1z = function(eccent, qs) {
-  var sinphi, cosphi, con, com, dphi;
-  var phi = asinz(0.5 * qs);
-  if (eccent < EPSLN) {
-    return phi;
-  }
-
-  var eccnts = eccent * eccent;
-  for (var i = 1; i <= 25; i++) {
-    sinphi = Math.sin(phi);
-    cosphi = Math.cos(phi);
-    con = eccent * sinphi;
-    com = 1 - con * con;
-    dphi = 0.5 * com * com / cosphi * (qs / (1 - eccnts) - sinphi / com + 0.5 / eccent * Math.log((1 - con) / (1 + con)));
-    phi = phi + dphi;
-    if (Math.abs(dphi) <= 1e-7) {
-      return phi;
-    }
-  }
-  return null;
-};
-exports.names = ["Albers_Conic_Equal_Area", "Albers", "aea"];
-
-},{"../common/adjust_lon":107,"../common/asinz":108,"../common/msfnz":117,"../common/qsfnz":122}],143:[function(require,module,exports){
-var adjust_lon = require('../common/adjust_lon');
-var HALF_PI = Math.PI/2;
-var EPSLN = 1.0e-10;
-var mlfn = require('../common/mlfn');
-var e0fn = require('../common/e0fn');
-var e1fn = require('../common/e1fn');
-var e2fn = require('../common/e2fn');
-var e3fn = require('../common/e3fn');
-var gN = require('../common/gN');
-var asinz = require('../common/asinz');
-var imlfn = require('../common/imlfn');
-exports.init = function() {
-  this.sin_p12 = Math.sin(this.lat0);
-  this.cos_p12 = Math.cos(this.lat0);
-};
-
-exports.forward = function(p) {
-  var lon = p.x;
-  var lat = p.y;
-  var sinphi = Math.sin(p.y);
-  var cosphi = Math.cos(p.y);
-  var dlon = adjust_lon(lon - this.long0);
-  var e0, e1, e2, e3, Mlp, Ml, tanphi, Nl1, Nl, psi, Az, G, H, GH, Hs, c, kp, cos_c, s, s2, s3, s4, s5;
-  if (this.sphere) {
-    if (Math.abs(this.sin_p12 - 1) <= EPSLN) {
-      //North Pole case
-      p.x = this.x0 + this.a * (HALF_PI - lat) * Math.sin(dlon);
-      p.y = this.y0 - this.a * (HALF_PI - lat) * Math.cos(dlon);
-      return p;
-    }
-    else if (Math.abs(this.sin_p12 + 1) <= EPSLN) {
-      //South Pole case
-      p.x = this.x0 + this.a * (HALF_PI + lat) * Math.sin(dlon);
-      p.y = this.y0 + this.a * (HALF_PI + lat) * Math.cos(dlon);
-      return p;
-    }
-    else {
-      //default case
-      cos_c = this.sin_p12 * sinphi + this.cos_p12 * cosphi * Math.cos(dlon);
-      c = Math.acos(cos_c);
-      kp = c / Math.sin(c);
-      p.x = this.x0 + this.a * kp * cosphi * Math.sin(dlon);
-      p.y = this.y0 + this.a * kp * (this.cos_p12 * sinphi - this.sin_p12 * cosphi * Math.cos(dlon));
-      return p;
-    }
-  }
-  else {
-    e0 = e0fn(this.es);
-    e1 = e1fn(this.es);
-    e2 = e2fn(this.es);
-    e3 = e3fn(this.es);
-    if (Math.abs(this.sin_p12 - 1) <= EPSLN) {
-      //North Pole case
-      Mlp = this.a * mlfn(e0, e1, e2, e3, HALF_PI);
-      Ml = this.a * mlfn(e0, e1, e2, e3, lat);
-      p.x = this.x0 + (Mlp - Ml) * Math.sin(dlon);
-      p.y = this.y0 - (Mlp - Ml) * Math.cos(dlon);
-      return p;
-    }
-    else if (Math.abs(this.sin_p12 + 1) <= EPSLN) {
-      //South Pole case
-      Mlp = this.a * mlfn(e0, e1, e2, e3, HALF_PI);
-      Ml = this.a * mlfn(e0, e1, e2, e3, lat);
-      p.x = this.x0 + (Mlp + Ml) * Math.sin(dlon);
-      p.y = this.y0 + (Mlp + Ml) * Math.cos(dlon);
-      return p;
-    }
-    else {
-      //Default case
-      tanphi = sinphi / cosphi;
-      Nl1 = gN(this.a, this.e, this.sin_p12);
-      Nl = gN(this.a, this.e, sinphi);
-      psi = Math.atan((1 - this.es) * tanphi + this.es * Nl1 * this.sin_p12 / (Nl * cosphi));
-      Az = Math.atan2(Math.sin(dlon), this.cos_p12 * Math.tan(psi) - this.sin_p12 * Math.cos(dlon));
-      if (Az === 0) {
-        s = Math.asin(this.cos_p12 * Math.sin(psi) - this.sin_p12 * Math.cos(psi));
-      }
-      else if (Math.abs(Math.abs(Az) - Math.PI) <= EPSLN) {
-        s = -Math.asin(this.cos_p12 * Math.sin(psi) - this.sin_p12 * Math.cos(psi));
-      }
-      else {
-        s = Math.asin(Math.sin(dlon) * Math.cos(psi) / Math.sin(Az));
-      }
-      G = this.e * this.sin_p12 / Math.sqrt(1 - this.es);
-      H = this.e * this.cos_p12 * Math.cos(Az) / Math.sqrt(1 - this.es);
-      GH = G * H;
-      Hs = H * H;
-      s2 = s * s;
-      s3 = s2 * s;
-      s4 = s3 * s;
-      s5 = s4 * s;
-      c = Nl1 * s * (1 - s2 * Hs * (1 - Hs) / 6 + s3 / 8 * GH * (1 - 2 * Hs) + s4 / 120 * (Hs * (4 - 7 * Hs) - 3 * G * G * (1 - 7 * Hs)) - s5 / 48 * GH);
-      p.x = this.x0 + c * Math.sin(Az);
-      p.y = this.y0 + c * Math.cos(Az);
-      return p;
-    }
-  }
-
-
-};
-
-exports.inverse = function(p) {
-  p.x -= this.x0;
-  p.y -= this.y0;
-  var rh, z, sinz, cosz, lon, lat, con, e0, e1, e2, e3, Mlp, M, N1, psi, Az, cosAz, tmp, A, B, D, Ee, F;
-  if (this.sphere) {
-    rh = Math.sqrt(p.x * p.x + p.y * p.y);
-    if (rh > (2 * HALF_PI * this.a)) {
-      return;
-    }
-    z = rh / this.a;
-
-    sinz = Math.sin(z);
-    cosz = Math.cos(z);
-
-    lon = this.long0;
-    if (Math.abs(rh) <= EPSLN) {
-      lat = this.lat0;
-    }
-    else {
-      lat = asinz(cosz * this.sin_p12 + (p.y * sinz * this.cos_p12) / rh);
-      con = Math.abs(this.lat0) - HALF_PI;
-      if (Math.abs(con) <= EPSLN) {
-        if (this.lat0 >= 0) {
-          lon = adjust_lon(this.long0 + Math.atan2(p.x, - p.y));
-        }
-        else {
-          lon = adjust_lon(this.long0 - Math.atan2(-p.x, p.y));
-        }
-      }
-      else {
-        /*con = cosz - this.sin_p12 * Math.sin(lat);
-        if ((Math.abs(con) < EPSLN) && (Math.abs(p.x) < EPSLN)) {
-          //no-op, just keep the lon value as is
-        } else {
-          var temp = Math.atan2((p.x * sinz * this.cos_p12), (con * rh));
-          lon = adjust_lon(this.long0 + Math.atan2((p.x * sinz * this.cos_p12), (con * rh)));
-        }*/
-        lon = adjust_lon(this.long0 + Math.atan2(p.x * sinz, rh * this.cos_p12 * cosz - p.y * this.sin_p12 * sinz));
-      }
-    }
-
-    p.x = lon;
-    p.y = lat;
-    return p;
-  }
-  else {
-    e0 = e0fn(this.es);
-    e1 = e1fn(this.es);
-    e2 = e2fn(this.es);
-    e3 = e3fn(this.es);
-    if (Math.abs(this.sin_p12 - 1) <= EPSLN) {
-      //North pole case
-      Mlp = this.a * mlfn(e0, e1, e2, e3, HALF_PI);
-      rh = Math.sqrt(p.x * p.x + p.y * p.y);
-      M = Mlp - rh;
-      lat = imlfn(M / this.a, e0, e1, e2, e3);
-      lon = adjust_lon(this.long0 + Math.atan2(p.x, - 1 * p.y));
-      p.x = lon;
-      p.y = lat;
-      return p;
-    }
-    else if (Math.abs(this.sin_p12 + 1) <= EPSLN) {
-      //South pole case
-      Mlp = this.a * mlfn(e0, e1, e2, e3, HALF_PI);
-      rh = Math.sqrt(p.x * p.x + p.y * p.y);
-      M = rh - Mlp;
-
-      lat = imlfn(M / this.a, e0, e1, e2, e3);
-      lon = adjust_lon(this.long0 + Math.atan2(p.x, p.y));
-      p.x = lon;
-      p.y = lat;
-      return p;
-    }
-    else {
-      //default case
-      rh = Math.sqrt(p.x * p.x + p.y * p.y);
-      Az = Math.atan2(p.x, p.y);
-      N1 = gN(this.a, this.e, this.sin_p12);
-      cosAz = Math.cos(Az);
-      tmp = this.e * this.cos_p12 * cosAz;
-      A = -tmp * tmp / (1 - this.es);
-      B = 3 * this.es * (1 - A) * this.sin_p12 * this.cos_p12 * cosAz / (1 - this.es);
-      D = rh / N1;
-      Ee = D - A * (1 + A) * Math.pow(D, 3) / 6 - B * (1 + 3 * A) * Math.pow(D, 4) / 24;
-      F = 1 - A * Ee * Ee / 2 - D * Ee * Ee * Ee / 6;
-      psi = Math.asin(this.sin_p12 * Math.cos(Ee) + this.cos_p12 * Math.sin(Ee) * cosAz);
-      lon = adjust_lon(this.long0 + Math.asin(Math.sin(Az) * Math.sin(Ee) / Math.cos(psi)));
-      lat = Math.atan((1 - this.es * F * this.sin_p12 / Math.sin(psi)) * Math.tan(psi) / (1 - this.es));
-      p.x = lon;
-      p.y = lat;
-      return p;
-    }
-  }
-
-};
-exports.names = ["Azimuthal_Equidistant", "aeqd"];
-
-},{"../common/adjust_lon":107,"../common/asinz":108,"../common/e0fn":109,"../common/e1fn":110,"../common/e2fn":111,"../common/e3fn":112,"../common/gN":113,"../common/imlfn":114,"../common/mlfn":116}],144:[function(require,module,exports){
-var mlfn = require('../common/mlfn');
-var e0fn = require('../common/e0fn');
-var e1fn = require('../common/e1fn');
-var e2fn = require('../common/e2fn');
-var e3fn = require('../common/e3fn');
-var gN = require('../common/gN');
-var adjust_lon = require('../common/adjust_lon');
-var adjust_lat = require('../common/adjust_lat');
-var imlfn = require('../common/imlfn');
-var HALF_PI = Math.PI/2;
-var EPSLN = 1.0e-10;
-exports.init = function() {
-  if (!this.sphere) {
-    this.e0 = e0fn(this.es);
-    this.e1 = e1fn(this.es);
-    this.e2 = e2fn(this.es);
-    this.e3 = e3fn(this.es);
-    this.ml0 = this.a * mlfn(this.e0, this.e1, this.e2, this.e3, this.lat0);
-  }
-};
-
-
-
-/* Cassini forward equations--mapping lat,long to x,y
-  -----------------------------------------------------------------------*/
-exports.forward = function(p) {
-
-  /* Forward equations
-      -----------------*/
-  var x, y;
-  var lam = p.x;
-  var phi = p.y;
-  lam = adjust_lon(lam - this.long0);
-
-  if (this.sphere) {
-    x = this.a * Math.asin(Math.cos(phi) * Math.sin(lam));
-    y = this.a * (Math.atan2(Math.tan(phi), Math.cos(lam)) - this.lat0);
-  }
-  else {
-    //ellipsoid
-    var sinphi = Math.sin(phi);
-    var cosphi = Math.cos(phi);
-    var nl = gN(this.a, this.e, sinphi);
-    var tl = Math.tan(phi) * Math.tan(phi);
-    var al = lam * Math.cos(phi);
-    var asq = al * al;
-    var cl = this.es * cosphi * cosphi / (1 - this.es);
-    var ml = this.a * mlfn(this.e0, this.e1, this.e2, this.e3, phi);
-
-    x = nl * al * (1 - asq * tl * (1 / 6 - (8 - tl + 8 * cl) * asq / 120));
-    y = ml - this.ml0 + nl * sinphi / cosphi * asq * (0.5 + (5 - tl + 6 * cl) * asq / 24);
-
-
-  }
-
-  p.x = x + this.x0;
-  p.y = y + this.y0;
-  return p;
-};
-
-/* Inverse equations
-  -----------------*/
-exports.inverse = function(p) {
-  p.x -= this.x0;
-  p.y -= this.y0;
-  var x = p.x / this.a;
-  var y = p.y / this.a;
-  var phi, lam;
-
-  if (this.sphere) {
-    var dd = y + this.lat0;
-    phi = Math.asin(Math.sin(dd) * Math.cos(x));
-    lam = Math.atan2(Math.tan(x), Math.cos(dd));
-  }
-  else {
-    /* ellipsoid */
-    var ml1 = this.ml0 / this.a + y;
-    var phi1 = imlfn(ml1, this.e0, this.e1, this.e2, this.e3);
-    if (Math.abs(Math.abs(phi1) - HALF_PI) <= EPSLN) {
-      p.x = this.long0;
-      p.y = HALF_PI;
-      if (y < 0) {
-        p.y *= -1;
-      }
-      return p;
-    }
-    var nl1 = gN(this.a, this.e, Math.sin(phi1));
-
-    var rl1 = nl1 * nl1 * nl1 / this.a / this.a * (1 - this.es);
-    var tl1 = Math.pow(Math.tan(phi1), 2);
-    var dl = x * this.a / nl1;
-    var dsq = dl * dl;
-    phi = phi1 - nl1 * Math.tan(phi1) / rl1 * dl * dl * (0.5 - (1 + 3 * tl1) * dl * dl / 24);
-    lam = dl * (1 - dsq * (tl1 / 3 + (1 + 3 * tl1) * tl1 * dsq / 15)) / Math.cos(phi1);
-
-  }
-
-  p.x = adjust_lon(lam + this.long0);
-  p.y = adjust_lat(phi);
-  return p;
-
-};
-exports.names = ["Cassini", "Cassini_Soldner", "cass"];
-},{"../common/adjust_lat":106,"../common/adjust_lon":107,"../common/e0fn":109,"../common/e1fn":110,"../common/e2fn":111,"../common/e3fn":112,"../common/gN":113,"../common/imlfn":114,"../common/mlfn":116}],145:[function(require,module,exports){
-var adjust_lon = require('../common/adjust_lon');
-var qsfnz = require('../common/qsfnz');
-var msfnz = require('../common/msfnz');
-var iqsfnz = require('../common/iqsfnz');
-/*
-  reference:  
-    "Cartographic Projection Procedures for the UNIX Environment-
-    A User's Manual" by Gerald I. Evenden,
-    USGS Open File Report 90-284and Release 4 Interim Reports (2003)
-*/
-exports.init = function() {
-  //no-op
-  if (!this.sphere) {
-    this.k0 = msfnz(this.e, Math.sin(this.lat_ts), Math.cos(this.lat_ts));
-  }
-};
-
-
-/* Cylindrical Equal Area forward equations--mapping lat,long to x,y
-    ------------------------------------------------------------*/
-exports.forward = function(p) {
-  var lon = p.x;
-  var lat = p.y;
-  var x, y;
-  /* Forward equations
-      -----------------*/
-  var dlon = adjust_lon(lon - this.long0);
-  if (this.sphere) {
-    x = this.x0 + this.a * dlon * Math.cos(this.lat_ts);
-    y = this.y0 + this.a * Math.sin(lat) / Math.cos(this.lat_ts);
-  }
-  else {
-    var qs = qsfnz(this.e, Math.sin(lat));
-    x = this.x0 + this.a * this.k0 * dlon;
-    y = this.y0 + this.a * qs * 0.5 / this.k0;
-  }
-
-  p.x = x;
-  p.y = y;
-  return p;
-};
-
-/* Cylindrical Equal Area inverse equations--mapping x,y to lat/long
-    ------------------------------------------------------------*/
-exports.inverse = function(p) {
-  p.x -= this.x0;
-  p.y -= this.y0;
-  var lon, lat;
-
-  if (this.sphere) {
-    lon = adjust_lon(this.long0 + (p.x / this.a) / Math.cos(this.lat_ts));
-    lat = Math.asin((p.y / this.a) * Math.cos(this.lat_ts));
-  }
-  else {
-    lat = iqsfnz(this.e, 2 * p.y * this.k0 / this.a);
-    lon = adjust_lon(this.long0 + p.x / (this.a * this.k0));
-  }
-
-  p.x = lon;
-  p.y = lat;
-  return p;
-};
-exports.names = ["cea"];
-
-},{"../common/adjust_lon":107,"../common/iqsfnz":115,"../common/msfnz":117,"../common/qsfnz":122}],146:[function(require,module,exports){
-var adjust_lon = require('../common/adjust_lon');
-var adjust_lat = require('../common/adjust_lat');
-exports.init = function() {
-
-  this.x0 = this.x0 || 0;
-  this.y0 = this.y0 || 0;
-  this.lat0 = this.lat0 || 0;
-  this.long0 = this.long0 || 0;
-  this.lat_ts = this.lat_ts || 0;
-  this.title = this.title || "Equidistant Cylindrical (Plate Carre)";
-
-  this.rc = Math.cos(this.lat_ts);
-};
-
-
-// forward equations--mapping lat,long to x,y
-// -----------------------------------------------------------------
-exports.forward = function(p) {
-
-  var lon = p.x;
-  var lat = p.y;
-
-  var dlon = adjust_lon(lon - this.long0);
-  var dlat = adjust_lat(lat - this.lat0);
-  p.x = this.x0 + (this.a * dlon * this.rc);
-  p.y = this.y0 + (this.a * dlat);
-  return p;
-};
-
-// inverse equations--mapping x,y to lat/long
-// -----------------------------------------------------------------
-exports.inverse = function(p) {
-
-  var x = p.x;
-  var y = p.y;
-
-  p.x = adjust_lon(this.long0 + ((x - this.x0) / (this.a * this.rc)));
-  p.y = adjust_lat(this.lat0 + ((y - this.y0) / (this.a)));
-  return p;
-};
-exports.names = ["Equirectangular", "Equidistant_Cylindrical", "eqc"];
-
-},{"../common/adjust_lat":106,"../common/adjust_lon":107}],147:[function(require,module,exports){
-var e0fn = require('../common/e0fn');
-var e1fn = require('../common/e1fn');
-var e2fn = require('../common/e2fn');
-var e3fn = require('../common/e3fn');
-var msfnz = require('../common/msfnz');
-var mlfn = require('../common/mlfn');
-var adjust_lon = require('../common/adjust_lon');
-var adjust_lat = require('../common/adjust_lat');
-var imlfn = require('../common/imlfn');
-var EPSLN = 1.0e-10;
-exports.init = function() {
-
-  /* Place parameters in static storage for common use
-      -------------------------------------------------*/
-  // Standard Parallels cannot be equal and on opposite sides of the equator
-  if (Math.abs(this.lat1 + this.lat2) < EPSLN) {
-    return;
-  }
-  this.lat2 = this.lat2 || this.lat1;
-  this.temp = this.b / this.a;
-  this.es = 1 - Math.pow(this.temp, 2);
-  this.e = Math.sqrt(this.es);
-  this.e0 = e0fn(this.es);
-  this.e1 = e1fn(this.es);
-  this.e2 = e2fn(this.es);
-  this.e3 = e3fn(this.es);
-
-  this.sinphi = Math.sin(this.lat1);
-  this.cosphi = Math.cos(this.lat1);
-
-  this.ms1 = msfnz(this.e, this.sinphi, this.cosphi);
-  this.ml1 = mlfn(this.e0, this.e1, this.e2, this.e3, this.lat1);
-
-  if (Math.abs(this.lat1 - this.lat2) < EPSLN) {
-    this.ns = this.sinphi;
-  }
-  else {
-    this.sinphi = Math.sin(this.lat2);
-    this.cosphi = Math.cos(this.lat2);
-    this.ms2 = msfnz(this.e, this.sinphi, this.cosphi);
-    this.ml2 = mlfn(this.e0, this.e1, this.e2, this.e3, this.lat2);
-    this.ns = (this.ms1 - this.ms2) / (this.ml2 - this.ml1);
-  }
-  this.g = this.ml1 + this.ms1 / this.ns;
-  this.ml0 = mlfn(this.e0, this.e1, this.e2, this.e3, this.lat0);
-  this.rh = this.a * (this.g - this.ml0);
-};
-
-
-/* Equidistant Conic forward equations--mapping lat,long to x,y
-  -----------------------------------------------------------*/
-exports.forward = function(p) {
-  var lon = p.x;
-  var lat = p.y;
-  var rh1;
-
-  /* Forward equations
-      -----------------*/
-  if (this.sphere) {
-    rh1 = this.a * (this.g - lat);
-  }
-  else {
-    var ml = mlfn(this.e0, this.e1, this.e2, this.e3, lat);
-    rh1 = this.a * (this.g - ml);
-  }
-  var theta = this.ns * adjust_lon(lon - this.long0);
-  var x = this.x0 + rh1 * Math.sin(theta);
-  var y = this.y0 + this.rh - rh1 * Math.cos(theta);
-  p.x = x;
-  p.y = y;
-  return p;
-};
-
-/* Inverse equations
-  -----------------*/
-exports.inverse = function(p) {
-  p.x -= this.x0;
-  p.y = this.rh - p.y + this.y0;
-  var con, rh1, lat, lon;
-  if (this.ns >= 0) {
-    rh1 = Math.sqrt(p.x * p.x + p.y * p.y);
-    con = 1;
-  }
-  else {
-    rh1 = -Math.sqrt(p.x * p.x + p.y * p.y);
-    con = -1;
-  }
-  var theta = 0;
-  if (rh1 !== 0) {
-    theta = Math.atan2(con * p.x, con * p.y);
-  }
-
-  if (this.sphere) {
-    lon = adjust_lon(this.long0 + theta / this.ns);
-    lat = adjust_lat(this.g - rh1 / this.a);
-    p.x = lon;
-    p.y = lat;
-    return p;
-  }
-  else {
-    var ml = this.g - rh1 / this.a;
-    lat = imlfn(ml, this.e0, this.e1, this.e2, this.e3);
-    lon = adjust_lon(this.long0 + theta / this.ns);
-    p.x = lon;
-    p.y = lat;
-    return p;
-  }
-
-};
-exports.names = ["Equidistant_Conic", "eqdc"];
-
-},{"../common/adjust_lat":106,"../common/adjust_lon":107,"../common/e0fn":109,"../common/e1fn":110,"../common/e2fn":111,"../common/e3fn":112,"../common/imlfn":114,"../common/mlfn":116,"../common/msfnz":117}],148:[function(require,module,exports){
-var FORTPI = Math.PI/4;
-var srat = require('../common/srat');
-var HALF_PI = Math.PI/2;
-var MAX_ITER = 20;
-exports.init = function() {
-  var sphi = Math.sin(this.lat0);
-  var cphi = Math.cos(this.lat0);
-  cphi *= cphi;
-  this.rc = Math.sqrt(1 - this.es) / (1 - this.es * sphi * sphi);
-  this.C = Math.sqrt(1 + this.es * cphi * cphi / (1 - this.es));
-  this.phic0 = Math.asin(sphi / this.C);
-  this.ratexp = 0.5 * this.C * this.e;
-  this.K = Math.tan(0.5 * this.phic0 + FORTPI) / (Math.pow(Math.tan(0.5 * this.lat0 + FORTPI), this.C) * srat(this.e * sphi, this.ratexp));
-};
-
-exports.forward = function(p) {
-  var lon = p.x;
-  var lat = p.y;
-
-  p.y = 2 * Math.atan(this.K * Math.pow(Math.tan(0.5 * lat + FORTPI), this.C) * srat(this.e * Math.sin(lat), this.ratexp)) - HALF_PI;
-  p.x = this.C * lon;
-  return p;
-};
-
-exports.inverse = function(p) {
-  var DEL_TOL = 1e-14;
-  var lon = p.x / this.C;
-  var lat = p.y;
-  var num = Math.pow(Math.tan(0.5 * lat + FORTPI) / this.K, 1 / this.C);
-  for (var i = MAX_ITER; i > 0; --i) {
-    lat = 2 * Math.atan(num * srat(this.e * Math.sin(p.y), - 0.5 * this.e)) - HALF_PI;
-    if (Math.abs(lat - p.y) < DEL_TOL) {
-      break;
-    }
-    p.y = lat;
-  }
-  /* convergence failed */
-  if (!i) {
-    return null;
-  }
-  p.x = lon;
-  p.y = lat;
-  return p;
-};
-exports.names = ["gauss"];
-
-},{"../common/srat":124}],149:[function(require,module,exports){
-var adjust_lon = require('../common/adjust_lon');
-var EPSLN = 1.0e-10;
-var asinz = require('../common/asinz');
-
-/*
-  reference:
-    Wolfram Mathworld "Gnomonic Projection"
-    http://mathworld.wolfram.com/GnomonicProjection.html
-    Accessed: 12th November 2009
-  */
-exports.init = function() {
-
-  /* Place parameters in static storage for common use
-      -------------------------------------------------*/
-  this.sin_p14 = Math.sin(this.lat0);
-  this.cos_p14 = Math.cos(this.lat0);
-  // Approximation for projecting points to the horizon (infinity)
-  this.infinity_dist = 1000 * this.a;
-  this.rc = 1;
-};
-
-
-/* Gnomonic forward equations--mapping lat,long to x,y
-    ---------------------------------------------------*/
-exports.forward = function(p) {
-  var sinphi, cosphi; /* sin and cos value        */
-  var dlon; /* delta longitude value      */
-  var coslon; /* cos of longitude        */
-  var ksp; /* scale factor          */
-  var g;
-  var x, y;
-  var lon = p.x;
-  var lat = p.y;
-  /* Forward equations
-      -----------------*/
-  dlon = adjust_lon(lon - this.long0);
-
-  sinphi = Math.sin(lat);
-  cosphi = Math.cos(lat);
-
-  coslon = Math.cos(dlon);
-  g = this.sin_p14 * sinphi + this.cos_p14 * cosphi * coslon;
-  ksp = 1;
-  if ((g > 0) || (Math.abs(g) <= EPSLN)) {
-    x = this.x0 + this.a * ksp * cosphi * Math.sin(dlon) / g;
-    y = this.y0 + this.a * ksp * (this.cos_p14 * sinphi - this.sin_p14 * cosphi * coslon) / g;
-  }
-  else {
-
-    // Point is in the opposing hemisphere and is unprojectable
-    // We still need to return a reasonable point, so we project 
-    // to infinity, on a bearing 
-    // equivalent to the northern hemisphere equivalent
-    // This is a reasonable approximation for short shapes and lines that 
-    // straddle the horizon.
-
-    x = this.x0 + this.infinity_dist * cosphi * Math.sin(dlon);
-    y = this.y0 + this.infinity_dist * (this.cos_p14 * sinphi - this.sin_p14 * cosphi * coslon);
-
-  }
-  p.x = x;
-  p.y = y;
-  return p;
-};
-
-
-exports.inverse = function(p) {
-  var rh; /* Rho */
-  var sinc, cosc;
-  var c;
-  var lon, lat;
-
-  /* Inverse equations
-      -----------------*/
-  p.x = (p.x - this.x0) / this.a;
-  p.y = (p.y - this.y0) / this.a;
-
-  p.x /= this.k0;
-  p.y /= this.k0;
-
-  if ((rh = Math.sqrt(p.x * p.x + p.y * p.y))) {
-    c = Math.atan2(rh, this.rc);
-    sinc = Math.sin(c);
-    cosc = Math.cos(c);
-
-    lat = asinz(cosc * this.sin_p14 + (p.y * sinc * this.cos_p14) / rh);
-    lon = Math.atan2(p.x * sinc, rh * this.cos_p14 * cosc - p.y * this.sin_p14 * sinc);
-    lon = adjust_lon(this.long0 + lon);
-  }
-  else {
-    lat = this.phic0;
-    lon = 0;
-  }
-
-  p.x = lon;
-  p.y = lat;
-  return p;
-};
-exports.names = ["gnom"];
-
-},{"../common/adjust_lon":107,"../common/asinz":108}],150:[function(require,module,exports){
-var adjust_lon = require('../common/adjust_lon');
-exports.init = function() {
-  this.a = 6377397.155;
-  this.es = 0.006674372230614;
-  this.e = Math.sqrt(this.es);
-  if (!this.lat0) {
-    this.lat0 = 0.863937979737193;
-  }
-  if (!this.long0) {
-    this.long0 = 0.7417649320975901 - 0.308341501185665;
-  }
-  /* if scale not set default to 0.9999 */
-  if (!this.k0) {
-    this.k0 = 0.9999;
-  }
-  this.s45 = 0.785398163397448; /* 45 */
-  this.s90 = 2 * this.s45;
-  this.fi0 = this.lat0;
-  this.e2 = this.es;
-  this.e = Math.sqrt(this.e2);
-  this.alfa = Math.sqrt(1 + (this.e2 * Math.pow(Math.cos(this.fi0), 4)) / (1 - this.e2));
-  this.uq = 1.04216856380474;
-  this.u0 = Math.asin(Math.sin(this.fi0) / this.alfa);
-  this.g = Math.pow((1 + this.e * Math.sin(this.fi0)) / (1 - this.e * Math.sin(this.fi0)), this.alfa * this.e / 2);
-  this.k = Math.tan(this.u0 / 2 + this.s45) / Math.pow(Math.tan(this.fi0 / 2 + this.s45), this.alfa) * this.g;
-  this.k1 = this.k0;
-  this.n0 = this.a * Math.sqrt(1 - this.e2) / (1 - this.e2 * Math.pow(Math.sin(this.fi0), 2));
-  this.s0 = 1.37008346281555;
-  this.n = Math.sin(this.s0);
-  this.ro0 = this.k1 * this.n0 / Math.tan(this.s0);
-  this.ad = this.s90 - this.uq;
-};
-
-/* ellipsoid */
-/* calculate xy from lat/lon */
-/* Constants, identical to inverse transform function */
-exports.forward = function(p) {
-  var gfi, u, deltav, s, d, eps, ro;
-  var lon = p.x;
-  var lat = p.y;
-  var delta_lon = adjust_lon(lon - this.long0);
-  /* Transformation */
-  gfi = Math.pow(((1 + this.e * Math.sin(lat)) / (1 - this.e * Math.sin(lat))), (this.alfa * this.e / 2));
-  u = 2 * (Math.atan(this.k * Math.pow(Math.tan(lat / 2 + this.s45), this.alfa) / gfi) - this.s45);
-  deltav = -delta_lon * this.alfa;
-  s = Math.asin(Math.cos(this.ad) * Math.sin(u) + Math.sin(this.ad) * Math.cos(u) * Math.cos(deltav));
-  d = Math.asin(Math.cos(u) * Math.sin(deltav) / Math.cos(s));
-  eps = this.n * d;
-  ro = this.ro0 * Math.pow(Math.tan(this.s0 / 2 + this.s45), this.n) / Math.pow(Math.tan(s / 2 + this.s45), this.n);
-  p.y = ro * Math.cos(eps) / 1;
-  p.x = ro * Math.sin(eps) / 1;
-
-  if (!this.czech) {
-    p.y *= -1;
-    p.x *= -1;
-  }
-  return (p);
-};
-
-/* calculate lat/lon from xy */
-exports.inverse = function(p) {
-  var u, deltav, s, d, eps, ro, fi1;
-  var ok;
-
-  /* Transformation */
-  /* revert y, x*/
-  var tmp = p.x;
-  p.x = p.y;
-  p.y = tmp;
-  if (!this.czech) {
-    p.y *= -1;
-    p.x *= -1;
-  }
-  ro = Math.sqrt(p.x * p.x + p.y * p.y);
-  eps = Math.atan2(p.y, p.x);
-  d = eps / Math.sin(this.s0);
-  s = 2 * (Math.atan(Math.pow(this.ro0 / ro, 1 / this.n) * Math.tan(this.s0 / 2 + this.s45)) - this.s45);
-  u = Math.asin(Math.cos(this.ad) * Math.sin(s) - Math.sin(this.ad) * Math.cos(s) * Math.cos(d));
-  deltav = Math.asin(Math.cos(s) * Math.sin(d) / Math.cos(u));
-  p.x = this.long0 - deltav / this.alfa;
-  fi1 = u;
-  ok = 0;
-  var iter = 0;
-  do {
-    p.y = 2 * (Math.atan(Math.pow(this.k, - 1 / this.alfa) * Math.pow(Math.tan(u / 2 + this.s45), 1 / this.alfa) * Math.pow((1 + this.e * Math.sin(fi1)) / (1 - this.e * Math.sin(fi1)), this.e / 2)) - this.s45);
-    if (Math.abs(fi1 - p.y) < 0.0000000001) {
-      ok = 1;
-    }
-    fi1 = p.y;
-    iter += 1;
-  } while (ok === 0 && iter < 15);
-  if (iter >= 15) {
-    return null;
-  }
-
-  return (p);
-};
-exports.names = ["Krovak", "krovak"];
-
-},{"../common/adjust_lon":107}],151:[function(require,module,exports){
-var HALF_PI = Math.PI/2;
-var FORTPI = Math.PI/4;
-var EPSLN = 1.0e-10;
-var qsfnz = require('../common/qsfnz');
-var adjust_lon = require('../common/adjust_lon');
-/*
-  reference
-    "New Equal-Area Map Projections for Noncircular Regions", John P. Snyder,
-    The American Cartographer, Vol 15, No. 4, October 1988, pp. 341-355.
-  */
-
-exports.S_POLE = 1;
-exports.N_POLE = 2;
-exports.EQUIT = 3;
-exports.OBLIQ = 4;
-
-
-/* Initialize the Lambert Azimuthal Equal Area projection
-  ------------------------------------------------------*/
-exports.init = function() {
-  var t = Math.abs(this.lat0);
-  if (Math.abs(t - HALF_PI) < EPSLN) {
-    this.mode = this.lat0 < 0 ? this.S_POLE : this.N_POLE;
-  }
-  else if (Math.abs(t) < EPSLN) {
-    this.mode = this.EQUIT;
-  }
-  else {
-    this.mode = this.OBLIQ;
-  }
-  if (this.es > 0) {
-    var sinphi;
-
-    this.qp = qsfnz(this.e, 1);
-    this.mmf = 0.5 / (1 - this.es);
-    this.apa = this.authset(this.es);
-    switch (this.mode) {
-    case this.N_POLE:
-      this.dd = 1;
-      break;
-    case this.S_POLE:
-      this.dd = 1;
-      break;
-    case this.EQUIT:
-      this.rq = Math.sqrt(0.5 * this.qp);
-      this.dd = 1 / this.rq;
-      this.xmf = 1;
-      this.ymf = 0.5 * this.qp;
-      break;
-    case this.OBLIQ:
-      this.rq = Math.sqrt(0.5 * this.qp);
-      sinphi = Math.sin(this.lat0);
-      this.sinb1 = qsfnz(this.e, sinphi) / this.qp;
-      this.cosb1 = Math.sqrt(1 - this.sinb1 * this.sinb1);
-      this.dd = Math.cos(this.lat0) / (Math.sqrt(1 - this.es * sinphi * sinphi) * this.rq * this.cosb1);
-      this.ymf = (this.xmf = this.rq) / this.dd;
-      this.xmf *= this.dd;
-      break;
-    }
-  }
-  else {
-    if (this.mode === this.OBLIQ) {
-      this.sinph0 = Math.sin(this.lat0);
-      this.cosph0 = Math.cos(this.lat0);
-    }
-  }
-};
-
-/* Lambert Azimuthal Equal Area forward equations--mapping lat,long to x,y
-  -----------------------------------------------------------------------*/
-exports.forward = function(p) {
-
-  /* Forward equations
-      -----------------*/
-  var x, y, coslam, sinlam, sinphi, q, sinb, cosb, b, cosphi;
-  var lam = p.x;
-  var phi = p.y;
-
-  lam = adjust_lon(lam - this.long0);
-
-  if (this.sphere) {
-    sinphi = Math.sin(phi);
-    cosphi = Math.cos(phi);
-    coslam = Math.cos(lam);
-    if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
-      y = (this.mode === this.EQUIT) ? 1 + cosphi * coslam : 1 + this.sinph0 * sinphi + this.cosph0 * cosphi * coslam;
-      if (y <= EPSLN) {
-        return null;
-      }
-      y = Math.sqrt(2 / y);
-      x = y * cosphi * Math.sin(lam);
-      y *= (this.mode === this.EQUIT) ? sinphi : this.cosph0 * sinphi - this.sinph0 * cosphi * coslam;
-    }
-    else if (this.mode === this.N_POLE || this.mode === this.S_POLE) {
-      if (this.mode === this.N_POLE) {
-        coslam = -coslam;
-      }
-      if (Math.abs(phi + this.phi0) < EPSLN) {
-        return null;
-      }
-      y = FORTPI - phi * 0.5;
-      y = 2 * ((this.mode === this.S_POLE) ? Math.cos(y) : Math.sin(y));
-      x = y * Math.sin(lam);
-      y *= coslam;
-    }
-  }
-  else {
-    sinb = 0;
-    cosb = 0;
-    b = 0;
-    coslam = Math.cos(lam);
-    sinlam = Math.sin(lam);
-    sinphi = Math.sin(phi);
-    q = qsfnz(this.e, sinphi);
-    if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
-      sinb = q / this.qp;
-      cosb = Math.sqrt(1 - sinb * sinb);
-    }
-    switch (this.mode) {
-    case this.OBLIQ:
-      b = 1 + this.sinb1 * sinb + this.cosb1 * cosb * coslam;
-      break;
-    case this.EQUIT:
-      b = 1 + cosb * coslam;
-      break;
-    case this.N_POLE:
-      b = HALF_PI + phi;
-      q = this.qp - q;
-      break;
-    case this.S_POLE:
-      b = phi - HALF_PI;
-      q = this.qp + q;
-      break;
-    }
-    if (Math.abs(b) < EPSLN) {
-      return null;
-    }
-    switch (this.mode) {
-    case this.OBLIQ:
-    case this.EQUIT:
-      b = Math.sqrt(2 / b);
-      if (this.mode === this.OBLIQ) {
-        y = this.ymf * b * (this.cosb1 * sinb - this.sinb1 * cosb * coslam);
-      }
-      else {
-        y = (b = Math.sqrt(2 / (1 + cosb * coslam))) * sinb * this.ymf;
-      }
-      x = this.xmf * b * cosb * sinlam;
-      break;
-    case this.N_POLE:
-    case this.S_POLE:
-      if (q >= 0) {
-        x = (b = Math.sqrt(q)) * sinlam;
-        y = coslam * ((this.mode === this.S_POLE) ? b : -b);
-      }
-      else {
-        x = y = 0;
-      }
-      break;
-    }
-  }
-
-  p.x = this.a * x + this.x0;
-  p.y = this.a * y + this.y0;
-  return p;
-};
-
-/* Inverse equations
-  -----------------*/
-exports.inverse = function(p) {
-  p.x -= this.x0;
-  p.y -= this.y0;
-  var x = p.x / this.a;
-  var y = p.y / this.a;
-  var lam, phi, cCe, sCe, q, rho, ab;
-
-  if (this.sphere) {
-    var cosz = 0,
-      rh, sinz = 0;
-
-    rh = Math.sqrt(x * x + y * y);
-    phi = rh * 0.5;
-    if (phi > 1) {
-      return null;
-    }
-    phi = 2 * Math.asin(phi);
-    if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
-      sinz = Math.sin(phi);
-      cosz = Math.cos(phi);
-    }
-    switch (this.mode) {
-    case this.EQUIT:
-      phi = (Math.abs(rh) <= EPSLN) ? 0 : Math.asin(y * sinz / rh);
-      x *= sinz;
-      y = cosz * rh;
-      break;
-    case this.OBLIQ:
-      phi = (Math.abs(rh) <= EPSLN) ? this.phi0 : Math.asin(cosz * this.sinph0 + y * sinz * this.cosph0 / rh);
-      x *= sinz * this.cosph0;
-      y = (cosz - Math.sin(phi) * this.sinph0) * rh;
-      break;
-    case this.N_POLE:
-      y = -y;
-      phi = HALF_PI - phi;
-      break;
-    case this.S_POLE:
-      phi -= HALF_PI;
-      break;
-    }
-    lam = (y === 0 && (this.mode === this.EQUIT || this.mode === this.OBLIQ)) ? 0 : Math.atan2(x, y);
-  }
-  else {
-    ab = 0;
-    if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
-      x /= this.dd;
-      y *= this.dd;
-      rho = Math.sqrt(x * x + y * y);
-      if (rho < EPSLN) {
-        p.x = 0;
-        p.y = this.phi0;
-        return p;
-      }
-      sCe = 2 * Math.asin(0.5 * rho / this.rq);
-      cCe = Math.cos(sCe);
-      x *= (sCe = Math.sin(sCe));
-      if (this.mode === this.OBLIQ) {
-        ab = cCe * this.sinb1 + y * sCe * this.cosb1 / rho;
-        q = this.qp * ab;
-        y = rho * this.cosb1 * cCe - y * this.sinb1 * sCe;
-      }
-      else {
-        ab = y * sCe / rho;
-        q = this.qp * ab;
-        y = rho * cCe;
-      }
-    }
-    else if (this.mode === this.N_POLE || this.mode === this.S_POLE) {
-      if (this.mode === this.N_POLE) {
-        y = -y;
-      }
-      q = (x * x + y * y);
-      if (!q) {
-        p.x = 0;
-        p.y = this.phi0;
-        return p;
-      }
-      ab = 1 - q / this.qp;
-      if (this.mode === this.S_POLE) {
-        ab = -ab;
-      }
-    }
-    lam = Math.atan2(x, y);
-    phi = this.authlat(Math.asin(ab), this.apa);
-  }
-
-
-  p.x = adjust_lon(this.long0 + lam);
-  p.y = phi;
-  return p;
-};
-
-/* determine latitude from authalic latitude */
-exports.P00 = 0.33333333333333333333;
-exports.P01 = 0.17222222222222222222;
-exports.P02 = 0.10257936507936507936;
-exports.P10 = 0.06388888888888888888;
-exports.P11 = 0.06640211640211640211;
-exports.P20 = 0.01641501294219154443;
-
-exports.authset = function(es) {
-  var t;
-  var APA = [];
-  APA[0] = es * this.P00;
-  t = es * es;
-  APA[0] += t * this.P01;
-  APA[1] = t * this.P10;
-  t *= es;
-  APA[0] += t * this.P02;
-  APA[1] += t * this.P11;
-  APA[2] = t * this.P20;
-  return APA;
-};
-
-exports.authlat = function(beta, APA) {
-  var t = beta + beta;
-  return (beta + APA[0] * Math.sin(t) + APA[1] * Math.sin(t + t) + APA[2] * Math.sin(t + t + t));
-};
-exports.names = ["Lambert Azimuthal Equal Area", "Lambert_Azimuthal_Equal_Area", "laea"];
-
-},{"../common/adjust_lon":107,"../common/qsfnz":122}],152:[function(require,module,exports){
-var EPSLN = 1.0e-10;
-var msfnz = require('../common/msfnz');
-var tsfnz = require('../common/tsfnz');
-var HALF_PI = Math.PI/2;
-var sign = require('../common/sign');
-var adjust_lon = require('../common/adjust_lon');
-var phi2z = require('../common/phi2z');
-exports.init = function() {
-
-  // array of:  r_maj,r_min,lat1,lat2,c_lon,c_lat,false_east,false_north
-  //double c_lat;                   /* center latitude                      */
-  //double c_lon;                   /* center longitude                     */
-  //double lat1;                    /* first standard parallel              */
-  //double lat2;                    /* second standard parallel             */
-  //double r_maj;                   /* major axis                           */
-  //double r_min;                   /* minor axis                           */
-  //double false_east;              /* x offset in meters                   */
-  //double false_north;             /* y offset in meters                   */
-
-  if (!this.lat2) {
-    this.lat2 = this.lat1;
-  } //if lat2 is not defined
-  if (!this.k0) {
-    this.k0 = 1;
-  }
-  this.x0 = this.x0 || 0;
-  this.y0 = this.y0 || 0;
-  // Standard Parallels cannot be equal and on opposite sides of the equator
-  if (Math.abs(this.lat1 + this.lat2) < EPSLN) {
-    return;
-  }
-
-  var temp = this.b / this.a;
-  this.e = Math.sqrt(1 - temp * temp);
-
-  var sin1 = Math.sin(this.lat1);
-  var cos1 = Math.cos(this.lat1);
-  var ms1 = msfnz(this.e, sin1, cos1);
-  var ts1 = tsfnz(this.e, this.lat1, sin1);
-
-  var sin2 = Math.sin(this.lat2);
-  var cos2 = Math.cos(this.lat2);
-  var ms2 = msfnz(this.e, sin2, cos2);
-  var ts2 = tsfnz(this.e, this.lat2, sin2);
-
-  var ts0 = tsfnz(this.e, this.lat0, Math.sin(this.lat0));
-
-  if (Math.abs(this.lat1 - this.lat2) > EPSLN) {
-    this.ns = Math.log(ms1 / ms2) / Math.log(ts1 / ts2);
-  }
-  else {
-    this.ns = sin1;
-  }
-  if (isNaN(this.ns)) {
-    this.ns = sin1;
-  }
-  this.f0 = ms1 / (this.ns * Math.pow(ts1, this.ns));
-  this.rh = this.a * this.f0 * Math.pow(ts0, this.ns);
-  if (!this.title) {
-    this.title = "Lambert Conformal Conic";
-  }
-};
-
-
-// Lambert Conformal conic forward equations--mapping lat,long to x,y
-// -----------------------------------------------------------------
-exports.forward = function(p) {
-
-  var lon = p.x;
-  var lat = p.y;
-
-  // singular cases :
-  if (Math.abs(2 * Math.abs(lat) - Math.PI) <= EPSLN) {
-    lat = sign(lat) * (HALF_PI - 2 * EPSLN);
-  }
-
-  var con = Math.abs(Math.abs(lat) - HALF_PI);
-  var ts, rh1;
-  if (con > EPSLN) {
-    ts = tsfnz(this.e, lat, Math.sin(lat));
-    rh1 = this.a * this.f0 * Math.pow(ts, this.ns);
-  }
-  else {
-    con = lat * this.ns;
-    if (con <= 0) {
-      return null;
-    }
-    rh1 = 0;
-  }
-  var theta = this.ns * adjust_lon(lon - this.long0);
-  p.x = this.k0 * (rh1 * Math.sin(theta)) + this.x0;
-  p.y = this.k0 * (this.rh - rh1 * Math.cos(theta)) + this.y0;
-
-  return p;
-};
-
-// Lambert Conformal Conic inverse equations--mapping x,y to lat/long
-// -----------------------------------------------------------------
-exports.inverse = function(p) {
-
-  var rh1, con, ts;
-  var lat, lon;
-  var x = (p.x - this.x0) / this.k0;
-  var y = (this.rh - (p.y - this.y0) / this.k0);
-  if (this.ns > 0) {
-    rh1 = Math.sqrt(x * x + y * y);
-    con = 1;
-  }
-  else {
-    rh1 = -Math.sqrt(x * x + y * y);
-    con = -1;
-  }
-  var theta = 0;
-  if (rh1 !== 0) {
-    theta = Math.atan2((con * x), (con * y));
-  }
-  if ((rh1 !== 0) || (this.ns > 0)) {
-    con = 1 / this.ns;
-    ts = Math.pow((rh1 / (this.a * this.f0)), con);
-    lat = phi2z(this.e, ts);
-    if (lat === -9999) {
-      return null;
-    }
-  }
-  else {
-    lat = -HALF_PI;
-  }
-  lon = adjust_lon(theta / this.ns + this.long0);
-
-  p.x = lon;
-  p.y = lat;
-  return p;
-};
-
-exports.names = ["Lambert Tangential Conformal Conic Projection", "Lambert_Conformal_Conic", "Lambert_Conformal_Conic_2SP", "lcc"];
-
-},{"../common/adjust_lon":107,"../common/msfnz":117,"../common/phi2z":118,"../common/sign":123,"../common/tsfnz":126}],153:[function(require,module,exports){
-exports.init = function() {
-  //no-op for longlat
-};
-
-function identity(pt) {
-  return pt;
-}
-exports.forward = identity;
-exports.inverse = identity;
-exports.names = ["longlat", "identity"];
-
-},{}],154:[function(require,module,exports){
-var msfnz = require('../common/msfnz');
-var HALF_PI = Math.PI/2;
-var EPSLN = 1.0e-10;
-var R2D = 57.29577951308232088;
-var adjust_lon = require('../common/adjust_lon');
-var FORTPI = Math.PI/4;
-var tsfnz = require('../common/tsfnz');
-var phi2z = require('../common/phi2z');
-exports.init = function() {
-  var con = this.b / this.a;
-  this.es = 1 - con * con;
-  if(!('x0' in this)){
-    this.x0 = 0;
-  }
-  if(!('y0' in this)){
-    this.y0 = 0;
-  }
-  this.e = Math.sqrt(this.es);
-  if (this.lat_ts) {
-    if (this.sphere) {
-      this.k0 = Math.cos(this.lat_ts);
-    }
-    else {
-      this.k0 = msfnz(this.e, Math.sin(this.lat_ts), Math.cos(this.lat_ts));
-    }
-  }
-  else {
-    if (!this.k0) {
-      if (this.k) {
-        this.k0 = this.k;
-      }
-      else {
-        this.k0 = 1;
-      }
-    }
-  }
-};
-
-/* Mercator forward equations--mapping lat,long to x,y
-  --------------------------------------------------*/
-
-exports.forward = function(p) {
-  var lon = p.x;
-  var lat = p.y;
-  // convert to radians
-  if (lat * R2D > 90 && lat * R2D < -90 && lon * R2D > 180 && lon * R2D < -180) {
-    return null;
-  }
-
-  var x, y;
-  if (Math.abs(Math.abs(lat) - HALF_PI) <= EPSLN) {
-    return null;
-  }
-  else {
-    if (this.sphere) {
-      x = this.x0 + this.a * this.k0 * adjust_lon(lon - this.long0);
-      y = this.y0 + this.a * this.k0 * Math.log(Math.tan(FORTPI + 0.5 * lat));
-    }
-    else {
-      var sinphi = Math.sin(lat);
-      var ts = tsfnz(this.e, lat, sinphi);
-      x = this.x0 + this.a * this.k0 * adjust_lon(lon - this.long0);
-      y = this.y0 - this.a * this.k0 * Math.log(ts);
-    }
-    p.x = x;
-    p.y = y;
-    return p;
-  }
-};
-
-
-/* Mercator inverse equations--mapping x,y to lat/long
-  --------------------------------------------------*/
-exports.inverse = function(p) {
-
-  var x = p.x - this.x0;
-  var y = p.y - this.y0;
-  var lon, lat;
-
-  if (this.sphere) {
-    lat = HALF_PI - 2 * Math.atan(Math.exp(-y / (this.a * this.k0)));
-  }
-  else {
-    var ts = Math.exp(-y / (this.a * this.k0));
-    lat = phi2z(this.e, ts);
-    if (lat === -9999) {
-      return null;
-    }
-  }
-  lon = adjust_lon(this.long0 + x / (this.a * this.k0));
-
-  p.x = lon;
-  p.y = lat;
-  return p;
-};
-
-exports.names = ["Mercator", "Popular Visualisation Pseudo Mercator", "Mercator_1SP", "Mercator_Auxiliary_Sphere", "merc"];
-
-},{"../common/adjust_lon":107,"../common/msfnz":117,"../common/phi2z":118,"../common/tsfnz":126}],155:[function(require,module,exports){
-var adjust_lon = require('../common/adjust_lon');
-/*
-  reference
-    "New Equal-Area Map Projections for Noncircular Regions", John P. Snyder,
-    The American Cartographer, Vol 15, No. 4, October 1988, pp. 341-355.
-  */
-
-
-/* Initialize the Miller Cylindrical projection
-  -------------------------------------------*/
-exports.init = function() {
-  //no-op
-};
-
-
-/* Miller Cylindrical forward equations--mapping lat,long to x,y
-    ------------------------------------------------------------*/
-exports.forward = function(p) {
-  var lon = p.x;
-  var lat = p.y;
-  /* Forward equations
-      -----------------*/
-  var dlon = adjust_lon(lon - this.long0);
-  var x = this.x0 + this.a * dlon;
-  var y = this.y0 + this.a * Math.log(Math.tan((Math.PI / 4) + (lat / 2.5))) * 1.25;
-
-  p.x = x;
-  p.y = y;
-  return p;
-};
-
-/* Miller Cylindrical inverse equations--mapping x,y to lat/long
-    ------------------------------------------------------------*/
-exports.inverse = function(p) {
-  p.x -= this.x0;
-  p.y -= this.y0;
-
-  var lon = adjust_lon(this.long0 + p.x / this.a);
-  var lat = 2.5 * (Math.atan(Math.exp(0.8 * p.y / this.a)) - Math.PI / 4);
-
-  p.x = lon;
-  p.y = lat;
-  return p;
-};
-exports.names = ["Miller_Cylindrical", "mill"];
-
-},{"../common/adjust_lon":107}],156:[function(require,module,exports){
-var adjust_lon = require('../common/adjust_lon');
-var EPSLN = 1.0e-10;
-exports.init = function() {};
-
-/* Mollweide forward equations--mapping lat,long to x,y
-    ----------------------------------------------------*/
-exports.forward = function(p) {
-
-  /* Forward equations
-      -----------------*/
-  var lon = p.x;
-  var lat = p.y;
-
-  var delta_lon = adjust_lon(lon - this.long0);
-  var theta = lat;
-  var con = Math.PI * Math.sin(lat);
-
-  /* Iterate using the Newton-Raphson method to find theta
-      -----------------------------------------------------*/
-  for (var i = 0; true; i++) {
-    var delta_theta = -(theta + Math.sin(theta) - con) / (1 + Math.cos(theta));
-    theta += delta_theta;
-    if (Math.abs(delta_theta) < EPSLN) {
-      break;
-    }
-  }
-  theta /= 2;
-
-  /* If the latitude is 90 deg, force the x coordinate to be "0 + false easting"
-       this is done here because of precision problems with "cos(theta)"
-       --------------------------------------------------------------------------*/
-  if (Math.PI / 2 - Math.abs(lat) < EPSLN) {
-    delta_lon = 0;
-  }
-  var x = 0.900316316158 * this.a * delta_lon * Math.cos(theta) + this.x0;
-  var y = 1.4142135623731 * this.a * Math.sin(theta) + this.y0;
-
-  p.x = x;
-  p.y = y;
-  return p;
-};
-
-exports.inverse = function(p) {
-  var theta;
-  var arg;
-
-  /* Inverse equations
-      -----------------*/
-  p.x -= this.x0;
-  p.y -= this.y0;
-  arg = p.y / (1.4142135623731 * this.a);
-
-  /* Because of division by zero problems, 'arg' can not be 1.  Therefore
-       a number very close to one is used instead.
-       -------------------------------------------------------------------*/
-  if (Math.abs(arg) > 0.999999999999) {
-    arg = 0.999999999999;
-  }
-  theta = Math.asin(arg);
-  var lon = adjust_lon(this.long0 + (p.x / (0.900316316158 * this.a * Math.cos(theta))));
-  if (lon < (-Math.PI)) {
-    lon = -Math.PI;
-  }
-  if (lon > Math.PI) {
-    lon = Math.PI;
-  }
-  arg = (2 * theta + Math.sin(2 * theta)) / Math.PI;
-  if (Math.abs(arg) > 1) {
-    arg = 1;
-  }
-  var lat = Math.asin(arg);
-
-  p.x = lon;
-  p.y = lat;
-  return p;
-};
-exports.names = ["Mollweide", "moll"];
-
-},{"../common/adjust_lon":107}],157:[function(require,module,exports){
-var SEC_TO_RAD = 4.84813681109535993589914102357e-6;
-/*
-  reference
-    Department of Land and Survey Technical Circular 1973/32
-      http://www.linz.govt.nz/docs/miscellaneous/nz-map-definition.pdf
-    OSG Technical Report 4.1
-      http://www.linz.govt.nz/docs/miscellaneous/nzmg.pdf
-  */
-
-/**
- * iterations: Number of iterations to refine inverse transform.
- *     0 -> km accuracy
- *     1 -> m accuracy -- suitable for most mapping applications
- *     2 -> mm accuracy
- */
-exports.iterations = 1;
-
-exports.init = function() {
-  this.A = [];
-  this.A[1] = 0.6399175073;
-  this.A[2] = -0.1358797613;
-  this.A[3] = 0.063294409;
-  this.A[4] = -0.02526853;
-  this.A[5] = 0.0117879;
-  this.A[6] = -0.0055161;
-  this.A[7] = 0.0026906;
-  this.A[8] = -0.001333;
-  this.A[9] = 0.00067;
-  this.A[10] = -0.00034;
-
-  this.B_re = [];
-  this.B_im = [];
-  this.B_re[1] = 0.7557853228;
-  this.B_im[1] = 0;
-  this.B_re[2] = 0.249204646;
-  this.B_im[2] = 0.003371507;
-  this.B_re[3] = -0.001541739;
-  this.B_im[3] = 0.041058560;
-  this.B_re[4] = -0.10162907;
-  this.B_im[4] = 0.01727609;
-  this.B_re[5] = -0.26623489;
-  this.B_im[5] = -0.36249218;
-  this.B_re[6] = -0.6870983;
-  this.B_im[6] = -1.1651967;
-
-  this.C_re = [];
-  this.C_im = [];
-  this.C_re[1] = 1.3231270439;
-  this.C_im[1] = 0;
-  this.C_re[2] = -0.577245789;
-  this.C_im[2] = -0.007809598;
-  this.C_re[3] = 0.508307513;
-  this.C_im[3] = -0.112208952;
-  this.C_re[4] = -0.15094762;
-  this.C_im[4] = 0.18200602;
-  this.C_re[5] = 1.01418179;
-  this.C_im[5] = 1.64497696;
-  this.C_re[6] = 1.9660549;
-  this.C_im[6] = 2.5127645;
-
-  this.D = [];
-  this.D[1] = 1.5627014243;
-  this.D[2] = 0.5185406398;
-  this.D[3] = -0.03333098;
-  this.D[4] = -0.1052906;
-  this.D[5] = -0.0368594;
-  this.D[6] = 0.007317;
-  this.D[7] = 0.01220;
-  this.D[8] = 0.00394;
-  this.D[9] = -0.0013;
-};
-
-/**
-    New Zealand Map Grid Forward  - long/lat to x/y
-    long/lat in radians
-  */
-exports.forward = function(p) {
-  var n;
-  var lon = p.x;
-  var lat = p.y;
-
-  var delta_lat = lat - this.lat0;
-  var delta_lon = lon - this.long0;
-
-  // 1. Calculate d_phi and d_psi    ...                          // and d_lambda
-  // For this algorithm, delta_latitude is in seconds of arc x 10-5, so we need to scale to those units. Longitude is radians.
-  var d_phi = delta_lat / SEC_TO_RAD * 1E-5;
-  var d_lambda = delta_lon;
-  var d_phi_n = 1; // d_phi^0
-
-  var d_psi = 0;
-  for (n = 1; n <= 10; n++) {
-    d_phi_n = d_phi_n * d_phi;
-    d_psi = d_psi + this.A[n] * d_phi_n;
-  }
-
-  // 2. Calculate theta
-  var th_re = d_psi;
-  var th_im = d_lambda;
-
-  // 3. Calculate z
-  var th_n_re = 1;
-  var th_n_im = 0; // theta^0
-  var th_n_re1;
-  var th_n_im1;
-
-  var z_re = 0;
-  var z_im = 0;
-  for (n = 1; n <= 6; n++) {
-    th_n_re1 = th_n_re * th_re - th_n_im * th_im;
-    th_n_im1 = th_n_im * th_re + th_n_re * th_im;
-    th_n_re = th_n_re1;
-    th_n_im = th_n_im1;
-    z_re = z_re + this.B_re[n] * th_n_re - this.B_im[n] * th_n_im;
-    z_im = z_im + this.B_im[n] * th_n_re + this.B_re[n] * th_n_im;
-  }
-
-  // 4. Calculate easting and northing
-  p.x = (z_im * this.a) + this.x0;
-  p.y = (z_re * this.a) + this.y0;
-
-  return p;
-};
-
-
-/**
-    New Zealand Map Grid Inverse  -  x/y to long/lat
-  */
-exports.inverse = function(p) {
-  var n;
-  var x = p.x;
-  var y = p.y;
-
-  var delta_x = x - this.x0;
-  var delta_y = y - this.y0;
-
-  // 1. Calculate z
-  var z_re = delta_y / this.a;
-  var z_im = delta_x / this.a;
-
-  // 2a. Calculate theta - first approximation gives km accuracy
-  var z_n_re = 1;
-  var z_n_im = 0; // z^0
-  var z_n_re1;
-  var z_n_im1;
-
-  var th_re = 0;
-  var th_im = 0;
-  for (n = 1; n <= 6; n++) {
-    z_n_re1 = z_n_re * z_re - z_n_im * z_im;
-    z_n_im1 = z_n_im * z_re + z_n_re * z_im;
-    z_n_re = z_n_re1;
-    z_n_im = z_n_im1;
-    th_re = th_re + this.C_re[n] * z_n_re - this.C_im[n] * z_n_im;
-    th_im = th_im + this.C_im[n] * z_n_re + this.C_re[n] * z_n_im;
-  }
-
-  // 2b. Iterate to refine the accuracy of the calculation
-  //        0 iterations gives km accuracy
-  //        1 iteration gives m accuracy -- good enough for most mapping applications
-  //        2 iterations bives mm accuracy
-  for (var i = 0; i < this.iterations; i++) {
-    var th_n_re = th_re;
-    var th_n_im = th_im;
-    var th_n_re1;
-    var th_n_im1;
-
-    var num_re = z_re;
-    var num_im = z_im;
-    for (n = 2; n <= 6; n++) {
-      th_n_re1 = th_n_re * th_re - th_n_im * th_im;
-      th_n_im1 = th_n_im * th_re + th_n_re * th_im;
-      th_n_re = th_n_re1;
-      th_n_im = th_n_im1;
-      num_re = num_re + (n - 1) * (this.B_re[n] * th_n_re - this.B_im[n] * th_n_im);
-      num_im = num_im + (n - 1) * (this.B_im[n] * th_n_re + this.B_re[n] * th_n_im);
-    }
-
-    th_n_re = 1;
-    th_n_im = 0;
-    var den_re = this.B_re[1];
-    var den_im = this.B_im[1];
-    for (n = 2; n <= 6; n++) {
-      th_n_re1 = th_n_re * th_re - th_n_im * th_im;
-      th_n_im1 = th_n_im * th_re + th_n_re * th_im;
-      th_n_re = th_n_re1;
-      th_n_im = th_n_im1;
-      den_re = den_re + n * (this.B_re[n] * th_n_re - this.B_im[n] * th_n_im);
-      den_im = den_im + n * (this.B_im[n] * th_n_re + this.B_re[n] * th_n_im);
-    }
-
-    // Complex division
-    var den2 = den_re * den_re + den_im * den_im;
-    th_re = (num_re * den_re + num_im * den_im) / den2;
-    th_im = (num_im * den_re - num_re * den_im) / den2;
-  }
-
-  // 3. Calculate d_phi              ...                                    // and d_lambda
-  var d_psi = th_re;
-  var d_lambda = th_im;
-  var d_psi_n = 1; // d_psi^0
-
-  var d_phi = 0;
-  for (n = 1; n <= 9; n++) {
-    d_psi_n = d_psi_n * d_psi;
-    d_phi = d_phi + this.D[n] * d_psi_n;
-  }
-
-  // 4. Calculate latitude and longitude
-  // d_phi is calcuated in second of arc * 10^-5, so we need to scale back to radians. d_lambda is in radians.
-  var lat = this.lat0 + (d_phi * SEC_TO_RAD * 1E5);
-  var lon = this.long0 + d_lambda;
-
-  p.x = lon;
-  p.y = lat;
-
-  return p;
-};
-exports.names = ["New_Zealand_Map_Grid", "nzmg"];
-},{}],158:[function(require,module,exports){
-var tsfnz = require('../common/tsfnz');
-var adjust_lon = require('../common/adjust_lon');
-var phi2z = require('../common/phi2z');
-var HALF_PI = Math.PI/2;
-var FORTPI = Math.PI/4;
-var EPSLN = 1.0e-10;
-
-/* Initialize the Oblique Mercator  projection
-    ------------------------------------------*/
-exports.init = function() {
-  this.no_off = this.no_off || false;
-  this.no_rot = this.no_rot || false;
-
-  if (isNaN(this.k0)) {
-    this.k0 = 1;
-  }
-  var sinlat = Math.sin(this.lat0);
-  var coslat = Math.cos(this.lat0);
-  var con = this.e * sinlat;
-
-  this.bl = Math.sqrt(1 + this.es / (1 - this.es) * Math.pow(coslat, 4));
-  this.al = this.a * this.bl * this.k0 * Math.sqrt(1 - this.es) / (1 - con * con);
-  var t0 = tsfnz(this.e, this.lat0, sinlat);
-  var dl = this.bl / coslat * Math.sqrt((1 - this.es) / (1 - con * con));
-  if (dl * dl < 1) {
-    dl = 1;
-  }
-  var fl;
-  var gl;
-  if (!isNaN(this.longc)) {
-    //Central point and azimuth method
-
-    if (this.lat0 >= 0) {
-      fl = dl + Math.sqrt(dl * dl - 1);
-    }
-    else {
-      fl = dl - Math.sqrt(dl * dl - 1);
-    }
-    this.el = fl * Math.pow(t0, this.bl);
-    gl = 0.5 * (fl - 1 / fl);
-    this.gamma0 = Math.asin(Math.sin(this.alpha) / dl);
-    this.long0 = this.longc - Math.asin(gl * Math.tan(this.gamma0)) / this.bl;
-
-  }
-  else {
-    //2 points method
-    var t1 = tsfnz(this.e, this.lat1, Math.sin(this.lat1));
-    var t2 = tsfnz(this.e, this.lat2, Math.sin(this.lat2));
-    if (this.lat0 >= 0) {
-      this.el = (dl + Math.sqrt(dl * dl - 1)) * Math.pow(t0, this.bl);
-    }
-    else {
-      this.el = (dl - Math.sqrt(dl * dl - 1)) * Math.pow(t0, this.bl);
-    }
-    var hl = Math.pow(t1, this.bl);
-    var ll = Math.pow(t2, this.bl);
-    fl = this.el / hl;
-    gl = 0.5 * (fl - 1 / fl);
-    var jl = (this.el * this.el - ll * hl) / (this.el * this.el + ll * hl);
-    var pl = (ll - hl) / (ll + hl);
-    var dlon12 = adjust_lon(this.long1 - this.long2);
-    this.long0 = 0.5 * (this.long1 + this.long2) - Math.atan(jl * Math.tan(0.5 * this.bl * (dlon12)) / pl) / this.bl;
-    this.long0 = adjust_lon(this.long0);
-    var dlon10 = adjust_lon(this.long1 - this.long0);
-    this.gamma0 = Math.atan(Math.sin(this.bl * (dlon10)) / gl);
-    this.alpha = Math.asin(dl * Math.sin(this.gamma0));
-  }
-
-  if (this.no_off) {
-    this.uc = 0;
-  }
-  else {
-    if (this.lat0 >= 0) {
-      this.uc = this.al / this.bl * Math.atan2(Math.sqrt(dl * dl - 1), Math.cos(this.alpha));
-    }
-    else {
-      this.uc = -1 * this.al / this.bl * Math.atan2(Math.sqrt(dl * dl - 1), Math.cos(this.alpha));
-    }
-  }
-
-};
-
-
-/* Oblique Mercator forward equations--mapping lat,long to x,y
-    ----------------------------------------------------------*/
-exports.forward = function(p) {
-  var lon = p.x;
-  var lat = p.y;
-  var dlon = adjust_lon(lon - this.long0);
-  var us, vs;
-  var con;
-  if (Math.abs(Math.abs(lat) - HALF_PI) <= EPSLN) {
-    if (lat > 0) {
-      con = -1;
-    }
-    else {
-      con = 1;
-    }
-    vs = this.al / this.bl * Math.log(Math.tan(FORTPI + con * this.gamma0 * 0.5));
-    us = -1 * con * HALF_PI * this.al / this.bl;
-  }
-  else {
-    var t = tsfnz(this.e, lat, Math.sin(lat));
-    var ql = this.el / Math.pow(t, this.bl);
-    var sl = 0.5 * (ql - 1 / ql);
-    var tl = 0.5 * (ql + 1 / ql);
-    var vl = Math.sin(this.bl * (dlon));
-    var ul = (sl * Math.sin(this.gamma0) - vl * Math.cos(this.gamma0)) / tl;
-    if (Math.abs(Math.abs(ul) - 1) <= EPSLN) {
-      vs = Number.POSITIVE_INFINITY;
-    }
-    else {
-      vs = 0.5 * this.al * Math.log((1 - ul) / (1 + ul)) / this.bl;
-    }
-    if (Math.abs(Math.cos(this.bl * (dlon))) <= EPSLN) {
-      us = this.al * this.bl * (dlon);
-    }
-    else {
-      us = this.al * Math.atan2(sl * Math.cos(this.gamma0) + vl * Math.sin(this.gamma0), Math.cos(this.bl * dlon)) / this.bl;
-    }
-  }
-
-  if (this.no_rot) {
-    p.x = this.x0 + us;
-    p.y = this.y0 + vs;
-  }
-  else {
-
-    us -= this.uc;
-    p.x = this.x0 + vs * Math.cos(this.alpha) + us * Math.sin(this.alpha);
-    p.y = this.y0 + us * Math.cos(this.alpha) - vs * Math.sin(this.alpha);
-  }
-  return p;
-};
-
-exports.inverse = function(p) {
-  var us, vs;
-  if (this.no_rot) {
-    vs = p.y - this.y0;
-    us = p.x - this.x0;
-  }
-  else {
-    vs = (p.x - this.x0) * Math.cos(this.alpha) - (p.y - this.y0) * Math.sin(this.alpha);
-    us = (p.y - this.y0) * Math.cos(this.alpha) + (p.x - this.x0) * Math.sin(this.alpha);
-    us += this.uc;
-  }
-  var qp = Math.exp(-1 * this.bl * vs / this.al);
-  var sp = 0.5 * (qp - 1 / qp);
-  var tp = 0.5 * (qp + 1 / qp);
-  var vp = Math.sin(this.bl * us / this.al);
-  var up = (vp * Math.cos(this.gamma0) + sp * Math.sin(this.gamma0)) / tp;
-  var ts = Math.pow(this.el / Math.sqrt((1 + up) / (1 - up)), 1 / this.bl);
-  if (Math.abs(up - 1) < EPSLN) {
-    p.x = this.long0;
-    p.y = HALF_PI;
-  }
-  else if (Math.abs(up + 1) < EPSLN) {
-    p.x = this.long0;
-    p.y = -1 * HALF_PI;
-  }
-  else {
-    p.y = phi2z(this.e, ts);
-    p.x = adjust_lon(this.long0 - Math.atan2(sp * Math.cos(this.gamma0) - vp * Math.sin(this.gamma0), Math.cos(this.bl * us / this.al)) / this.bl);
-  }
-  return p;
-};
-
-exports.names = ["Hotine_Oblique_Mercator", "Hotine Oblique Mercator", "Hotine_Oblique_Mercator_Azimuth_Natural_Origin", "Hotine_Oblique_Mercator_Azimuth_Center", "omerc"];
-},{"../common/adjust_lon":107,"../common/phi2z":118,"../common/tsfnz":126}],159:[function(require,module,exports){
-var e0fn = require('../common/e0fn');
-var e1fn = require('../common/e1fn');
-var e2fn = require('../common/e2fn');
-var e3fn = require('../common/e3fn');
-var adjust_lon = require('../common/adjust_lon');
-var adjust_lat = require('../common/adjust_lat');
-var mlfn = require('../common/mlfn');
-var EPSLN = 1.0e-10;
-var gN = require('../common/gN');
-var MAX_ITER = 20;
-exports.init = function() {
-  /* Place parameters in static storage for common use
-      -------------------------------------------------*/
-  this.temp = this.b / this.a;
-  this.es = 1 - Math.pow(this.temp, 2); // devait etre dans tmerc.js mais n y est pas donc je commente sinon retour de valeurs nulles
-  this.e = Math.sqrt(this.es);
-  this.e0 = e0fn(this.es);
-  this.e1 = e1fn(this.es);
-  this.e2 = e2fn(this.es);
-  this.e3 = e3fn(this.es);
-  this.ml0 = this.a * mlfn(this.e0, this.e1, this.e2, this.e3, this.lat0); //si que des zeros le calcul ne se fait pas
-};
-
-
-/* Polyconic forward equations--mapping lat,long to x,y
-    ---------------------------------------------------*/
-exports.forward = function(p) {
-  var lon = p.x;
-  var lat = p.y;
-  var x, y, el;
-  var dlon = adjust_lon(lon - this.long0);
-  el = dlon * Math.sin(lat);
-  if (this.sphere) {
-    if (Math.abs(lat) <= EPSLN) {
-      x = this.a * dlon;
-      y = -1 * this.a * this.lat0;
-    }
-    else {
-      x = this.a * Math.sin(el) / Math.tan(lat);
-      y = this.a * (adjust_lat(lat - this.lat0) + (1 - Math.cos(el)) / Math.tan(lat));
-    }
-  }
-  else {
-    if (Math.abs(lat) <= EPSLN) {
-      x = this.a * dlon;
-      y = -1 * this.ml0;
-    }
-    else {
-      var nl = gN(this.a, this.e, Math.sin(lat)) / Math.tan(lat);
-      x = nl * Math.sin(el);
-      y = this.a * mlfn(this.e0, this.e1, this.e2, this.e3, lat) - this.ml0 + nl * (1 - Math.cos(el));
-    }
-
-  }
-  p.x = x + this.x0;
-  p.y = y + this.y0;
-  return p;
-};
-
-
-/* Inverse equations
-  -----------------*/
-exports.inverse = function(p) {
-  var lon, lat, x, y, i;
-  var al, bl;
-  var phi, dphi;
-  x = p.x - this.x0;
-  y = p.y - this.y0;
-
-  if (this.sphere) {
-    if (Math.abs(y + this.a * this.lat0) <= EPSLN) {
-      lon = adjust_lon(x / this.a + this.long0);
-      lat = 0;
-    }
-    else {
-      al = this.lat0 + y / this.a;
-      bl = x * x / this.a / this.a + al * al;
-      phi = al;
-      var tanphi;
-      for (i = MAX_ITER; i; --i) {
-        tanphi = Math.tan(phi);
-        dphi = -1 * (al * (phi * tanphi + 1) - phi - 0.5 * (phi * phi + bl) * tanphi) / ((phi - al) / tanphi - 1);
-        phi += dphi;
-        if (Math.abs(dphi) <= EPSLN) {
-          lat = phi;
-          break;
-        }
-      }
-      lon = adjust_lon(this.long0 + (Math.asin(x * Math.tan(phi) / this.a)) / Math.sin(lat));
-    }
-  }
-  else {
-    if (Math.abs(y + this.ml0) <= EPSLN) {
-      lat = 0;
-      lon = adjust_lon(this.long0 + x / this.a);
-    }
-    else {
-
-      al = (this.ml0 + y) / this.a;
-      bl = x * x / this.a / this.a + al * al;
-      phi = al;
-      var cl, mln, mlnp, ma;
-      var con;
-      for (i = MAX_ITER; i; --i) {
-        con = this.e * Math.sin(phi);
-        cl = Math.sqrt(1 - con * con) * Math.tan(phi);
-        mln = this.a * mlfn(this.e0, this.e1, this.e2, this.e3, phi);
-        mlnp = this.e0 - 2 * this.e1 * Math.cos(2 * phi) + 4 * this.e2 * Math.cos(4 * phi) - 6 * this.e3 * Math.cos(6 * phi);
-        ma = mln / this.a;
-        dphi = (al * (cl * ma + 1) - ma - 0.5 * cl * (ma * ma + bl)) / (this.es * Math.sin(2 * phi) * (ma * ma + bl - 2 * al * ma) / (4 * cl) + (al - ma) * (cl * mlnp - 2 / Math.sin(2 * phi)) - mlnp);
-        phi -= dphi;
-        if (Math.abs(dphi) <= EPSLN) {
-          lat = phi;
-          break;
-        }
-      }
-
-      //lat=phi4z(this.e,this.e0,this.e1,this.e2,this.e3,al,bl,0,0);
-      cl = Math.sqrt(1 - this.es * Math.pow(Math.sin(lat), 2)) * Math.tan(lat);
-      lon = adjust_lon(this.long0 + Math.asin(x * cl / this.a) / Math.sin(lat));
-    }
-  }
-
-  p.x = lon;
-  p.y = lat;
-  return p;
-};
-exports.names = ["Polyconic", "poly"];
-},{"../common/adjust_lat":106,"../common/adjust_lon":107,"../common/e0fn":109,"../common/e1fn":110,"../common/e2fn":111,"../common/e3fn":112,"../common/gN":113,"../common/mlfn":116}],160:[function(require,module,exports){
-var adjust_lon = require('../common/adjust_lon');
-var adjust_lat = require('../common/adjust_lat');
-var pj_enfn = require('../common/pj_enfn');
-var MAX_ITER = 20;
-var pj_mlfn = require('../common/pj_mlfn');
-var pj_inv_mlfn = require('../common/pj_inv_mlfn');
-var HALF_PI = Math.PI/2;
-var EPSLN = 1.0e-10;
-var asinz = require('../common/asinz');
-exports.init = function() {
-  /* Place parameters in static storage for common use
-    -------------------------------------------------*/
-
-
-  if (!this.sphere) {
-    this.en = pj_enfn(this.es);
-  }
-  else {
-    this.n = 1;
-    this.m = 0;
-    this.es = 0;
-    this.C_y = Math.sqrt((this.m + 1) / this.n);
-    this.C_x = this.C_y / (this.m + 1);
-  }
-
-};
-
-/* Sinusoidal forward equations--mapping lat,long to x,y
-  -----------------------------------------------------*/
-exports.forward = function(p) {
-  var x, y;
-  var lon = p.x;
-  var lat = p.y;
-  /* Forward equations
-    -----------------*/
-  lon = adjust_lon(lon - this.long0);
-
-  if (this.sphere) {
-    if (!this.m) {
-      lat = this.n !== 1 ? Math.asin(this.n * Math.sin(lat)) : lat;
-    }
-    else {
-      var k = this.n * Math.sin(lat);
-      for (var i = MAX_ITER; i; --i) {
-        var V = (this.m * lat + Math.sin(lat) - k) / (this.m + Math.cos(lat));
-        lat -= V;
-        if (Math.abs(V) < EPSLN) {
-          break;
-        }
-      }
-    }
-    x = this.a * this.C_x * lon * (this.m + Math.cos(lat));
-    y = this.a * this.C_y * lat;
-
-  }
-  else {
-
-    var s = Math.sin(lat);
-    var c = Math.cos(lat);
-    y = this.a * pj_mlfn(lat, s, c, this.en);
-    x = this.a * lon * c / Math.sqrt(1 - this.es * s * s);
-  }
-
-  p.x = x;
-  p.y = y;
-  return p;
-};
-
-exports.inverse = function(p) {
-  var lat, temp, lon, s;
-
-  p.x -= this.x0;
-  lon = p.x / this.a;
-  p.y -= this.y0;
-  lat = p.y / this.a;
-
-  if (this.sphere) {
-    lat /= this.C_y;
-    lon = lon / (this.C_x * (this.m + Math.cos(lat)));
-    if (this.m) {
-      lat = asinz((this.m * lat + Math.sin(lat)) / this.n);
-    }
-    else if (this.n !== 1) {
-      lat = asinz(Math.sin(lat) / this.n);
-    }
-    lon = adjust_lon(lon + this.long0);
-    lat = adjust_lat(lat);
-  }
-  else {
-    lat = pj_inv_mlfn(p.y / this.a, this.es, this.en);
-    s = Math.abs(lat);
-    if (s < HALF_PI) {
-      s = Math.sin(lat);
-      temp = this.long0 + p.x * Math.sqrt(1 - this.es * s * s) / (this.a * Math.cos(lat));
-      //temp = this.long0 + p.x / (this.a * Math.cos(lat));
-      lon = adjust_lon(temp);
-    }
-    else if ((s - EPSLN) < HALF_PI) {
-      lon = this.long0;
-    }
-  }
-  p.x = lon;
-  p.y = lat;
-  return p;
-};
-exports.names = ["Sinusoidal", "sinu"];
-},{"../common/adjust_lat":106,"../common/adjust_lon":107,"../common/asinz":108,"../common/pj_enfn":119,"../common/pj_inv_mlfn":120,"../common/pj_mlfn":121}],161:[function(require,module,exports){
-/*
-  references:
-    Formules et constantes pour le Calcul pour la
-    projection cylindrique conforme à axe oblique et pour la transformation entre
-    des systèmes de référence.
-    http://www.swisstopo.admin.ch/internet/swisstopo/fr/home/topics/survey/sys/refsys/switzerland.parsysrelated1.31216.downloadList.77004.DownloadFile.tmp/swissprojectionfr.pdf
-  */
-exports.init = function() {
-  var phy0 = this.lat0;
-  this.lambda0 = this.long0;
-  var sinPhy0 = Math.sin(phy0);
-  var semiMajorAxis = this.a;
-  var invF = this.rf;
-  var flattening = 1 / invF;
-  var e2 = 2 * flattening - Math.pow(flattening, 2);
-  var e = this.e = Math.sqrt(e2);
-  this.R = this.k0 * semiMajorAxis * Math.sqrt(1 - e2) / (1 - e2 * Math.pow(sinPhy0, 2));
-  this.alpha = Math.sqrt(1 + e2 / (1 - e2) * Math.pow(Math.cos(phy0), 4));
-  this.b0 = Math.asin(sinPhy0 / this.alpha);
-  var k1 = Math.log(Math.tan(Math.PI / 4 + this.b0 / 2));
-  var k2 = Math.log(Math.tan(Math.PI / 4 + phy0 / 2));
-  var k3 = Math.log((1 + e * sinPhy0) / (1 - e * sinPhy0));
-  this.K = k1 - this.alpha * k2 + this.alpha * e / 2 * k3;
-};
-
-
-exports.forward = function(p) {
-  var Sa1 = Math.log(Math.tan(Math.PI / 4 - p.y / 2));
-  var Sa2 = this.e / 2 * Math.log((1 + this.e * Math.sin(p.y)) / (1 - this.e * Math.sin(p.y)));
-  var S = -this.alpha * (Sa1 + Sa2) + this.K;
-
-  // spheric latitude
-  var b = 2 * (Math.atan(Math.exp(S)) - Math.PI / 4);
-
-  // spheric longitude
-  var I = this.alpha * (p.x - this.lambda0);
-
-  // psoeudo equatorial rotation
-  var rotI = Math.atan(Math.sin(I) / (Math.sin(this.b0) * Math.tan(b) + Math.cos(this.b0) * Math.cos(I)));
-
-  var rotB = Math.asin(Math.cos(this.b0) * Math.sin(b) - Math.sin(this.b0) * Math.cos(b) * Math.cos(I));
-
-  p.y = this.R / 2 * Math.log((1 + Math.sin(rotB)) / (1 - Math.sin(rotB))) + this.y0;
-  p.x = this.R * rotI + this.x0;
-  return p;
-};
-
-exports.inverse = function(p) {
-  var Y = p.x - this.x0;
-  var X = p.y - this.y0;
-
-  var rotI = Y / this.R;
-  var rotB = 2 * (Math.atan(Math.exp(X / this.R)) - Math.PI / 4);
-
-  var b = Math.asin(Math.cos(this.b0) * Math.sin(rotB) + Math.sin(this.b0) * Math.cos(rotB) * Math.cos(rotI));
-  var I = Math.atan(Math.sin(rotI) / (Math.cos(this.b0) * Math.cos(rotI) - Math.sin(this.b0) * Math.tan(rotB)));
-
-  var lambda = this.lambda0 + I / this.alpha;
-
-  var S = 0;
-  var phy = b;
-  var prevPhy = -1000;
-  var iteration = 0;
-  while (Math.abs(phy - prevPhy) > 0.0000001) {
-    if (++iteration > 20) {
-      //...reportError("omercFwdInfinity");
-      return;
-    }
-    //S = Math.log(Math.tan(Math.PI / 4 + phy / 2));
-    S = 1 / this.alpha * (Math.log(Math.tan(Math.PI / 4 + b / 2)) - this.K) + this.e * Math.log(Math.tan(Math.PI / 4 + Math.asin(this.e * Math.sin(phy)) / 2));
-    prevPhy = phy;
-    phy = 2 * Math.atan(Math.exp(S)) - Math.PI / 2;
-  }
-
-  p.x = lambda;
-  p.y = phy;
-  return p;
-};
-
-exports.names = ["somerc"];
-
-},{}],162:[function(require,module,exports){
-var HALF_PI = Math.PI/2;
-var EPSLN = 1.0e-10;
-var sign = require('../common/sign');
-var msfnz = require('../common/msfnz');
-var tsfnz = require('../common/tsfnz');
-var phi2z = require('../common/phi2z');
-var adjust_lon = require('../common/adjust_lon');
-exports.ssfn_ = function(phit, sinphi, eccen) {
-  sinphi *= eccen;
-  return (Math.tan(0.5 * (HALF_PI + phit)) * Math.pow((1 - sinphi) / (1 + sinphi), 0.5 * eccen));
-};
-
-exports.init = function() {
-  this.coslat0 = Math.cos(this.lat0);
-  this.sinlat0 = Math.sin(this.lat0);
-  if (this.sphere) {
-    if (this.k0 === 1 && !isNaN(this.lat_ts) && Math.abs(this.coslat0) <= EPSLN) {
-      this.k0 = 0.5 * (1 + sign(this.lat0) * Math.sin(this.lat_ts));
-    }
-  }
-  else {
-    if (Math.abs(this.coslat0) <= EPSLN) {
-      if (this.lat0 > 0) {
-        //North pole
-        //trace('stere:north pole');
-        this.con = 1;
-      }
-      else {
-        //South pole
-        //trace('stere:south pole');
-        this.con = -1;
-      }
-    }
-    this.cons = Math.sqrt(Math.pow(1 + this.e, 1 + this.e) * Math.pow(1 - this.e, 1 - this.e));
-    if (this.k0 === 1 && !isNaN(this.lat_ts) && Math.abs(this.coslat0) <= EPSLN) {
-      this.k0 = 0.5 * this.cons * msfnz(this.e, Math.sin(this.lat_ts), Math.cos(this.lat_ts)) / tsfnz(this.e, this.con * this.lat_ts, this.con * Math.sin(this.lat_ts));
-    }
-    this.ms1 = msfnz(this.e, this.sinlat0, this.coslat0);
-    this.X0 = 2 * Math.atan(this.ssfn_(this.lat0, this.sinlat0, this.e)) - HALF_PI;
-    this.cosX0 = Math.cos(this.X0);
-    this.sinX0 = Math.sin(this.X0);
-  }
-};
-
-// Stereographic forward equations--mapping lat,long to x,y
-exports.forward = function(p) {
-  var lon = p.x;
-  var lat = p.y;
-  var sinlat = Math.sin(lat);
-  var coslat = Math.cos(lat);
-  var A, X, sinX, cosX, ts, rh;
-  var dlon = adjust_lon(lon - this.long0);
-
-  if (Math.abs(Math.abs(lon - this.long0) - Math.PI) <= EPSLN && Math.abs(lat + this.lat0) <= EPSLN) {
-    //case of the origine point
-    //trace('stere:this is the origin point');
-    p.x = NaN;
-    p.y = NaN;
-    return p;
-  }
-  if (this.sphere) {
-    //trace('stere:sphere case');
-    A = 2 * this.k0 / (1 + this.sinlat0 * sinlat + this.coslat0 * coslat * Math.cos(dlon));
-    p.x = this.a * A * coslat * Math.sin(dlon) + this.x0;
-    p.y = this.a * A * (this.coslat0 * sinlat - this.sinlat0 * coslat * Math.cos(dlon)) + this.y0;
-    return p;
-  }
-  else {
-    X = 2 * Math.atan(this.ssfn_(lat, sinlat, this.e)) - HALF_PI;
-    cosX = Math.cos(X);
-    sinX = Math.sin(X);
-    if (Math.abs(this.coslat0) <= EPSLN) {
-      ts = tsfnz(this.e, lat * this.con, this.con * sinlat);
-      rh = 2 * this.a * this.k0 * ts / this.cons;
-      p.x = this.x0 + rh * Math.sin(lon - this.long0);
-      p.y = this.y0 - this.con * rh * Math.cos(lon - this.long0);
-      //trace(p.toString());
-      return p;
-    }
-    else if (Math.abs(this.sinlat0) < EPSLN) {
-      //Eq
-      //trace('stere:equateur');
-      A = 2 * this.a * this.k0 / (1 + cosX * Math.cos(dlon));
-      p.y = A * sinX;
-    }
-    else {
-      //other case
-      //trace('stere:normal case');
-      A = 2 * this.a * this.k0 * this.ms1 / (this.cosX0 * (1 + this.sinX0 * sinX + this.cosX0 * cosX * Math.cos(dlon)));
-      p.y = A * (this.cosX0 * sinX - this.sinX0 * cosX * Math.cos(dlon)) + this.y0;
-    }
-    p.x = A * cosX * Math.sin(dlon) + this.x0;
-  }
-  //trace(p.toString());
-  return p;
-};
-
-
-//* Stereographic inverse equations--mapping x,y to lat/long
-exports.inverse = function(p) {
-  p.x -= this.x0;
-  p.y -= this.y0;
-  var lon, lat, ts, ce, Chi;
-  var rh = Math.sqrt(p.x * p.x + p.y * p.y);
-  if (this.sphere) {
-    var c = 2 * Math.atan(rh / (0.5 * this.a * this.k0));
-    lon = this.long0;
-    lat = this.lat0;
-    if (rh <= EPSLN) {
-      p.x = lon;
-      p.y = lat;
-      return p;
-    }
-    lat = Math.asin(Math.cos(c) * this.sinlat0 + p.y * Math.sin(c) * this.coslat0 / rh);
-    if (Math.abs(this.coslat0) < EPSLN) {
-      if (this.lat0 > 0) {
-        lon = adjust_lon(this.long0 + Math.atan2(p.x, - 1 * p.y));
-      }
-      else {
-        lon = adjust_lon(this.long0 + Math.atan2(p.x, p.y));
-      }
-    }
-    else {
-      lon = adjust_lon(this.long0 + Math.atan2(p.x * Math.sin(c), rh * this.coslat0 * Math.cos(c) - p.y * this.sinlat0 * Math.sin(c)));
-    }
-    p.x = lon;
-    p.y = lat;
-    return p;
-  }
-  else {
-    if (Math.abs(this.coslat0) <= EPSLN) {
-      if (rh <= EPSLN) {
-        lat = this.lat0;
-        lon = this.long0;
-        p.x = lon;
-        p.y = lat;
-        //trace(p.toString());
-        return p;
-      }
-      p.x *= this.con;
-      p.y *= this.con;
-      ts = rh * this.cons / (2 * this.a * this.k0);
-      lat = this.con * phi2z(this.e, ts);
-      lon = this.con * adjust_lon(this.con * this.long0 + Math.atan2(p.x, - 1 * p.y));
-    }
-    else {
-      ce = 2 * Math.atan(rh * this.cosX0 / (2 * this.a * this.k0 * this.ms1));
-      lon = this.long0;
-      if (rh <= EPSLN) {
-        Chi = this.X0;
-      }
-      else {
-        Chi = Math.asin(Math.cos(ce) * this.sinX0 + p.y * Math.sin(ce) * this.cosX0 / rh);
-        lon = adjust_lon(this.long0 + Math.atan2(p.x * Math.sin(ce), rh * this.cosX0 * Math.cos(ce) - p.y * this.sinX0 * Math.sin(ce)));
-      }
-      lat = -1 * phi2z(this.e, Math.tan(0.5 * (HALF_PI + Chi)));
-    }
-  }
-  p.x = lon;
-  p.y = lat;
-
-  //trace(p.toString());
-  return p;
-
-};
-exports.names = ["stere"];
-},{"../common/adjust_lon":107,"../common/msfnz":117,"../common/phi2z":118,"../common/sign":123,"../common/tsfnz":126}],163:[function(require,module,exports){
-var gauss = require('./gauss');
-var adjust_lon = require('../common/adjust_lon');
-exports.init = function() {
-  gauss.init.apply(this);
-  if (!this.rc) {
-    return;
-  }
-  this.sinc0 = Math.sin(this.phic0);
-  this.cosc0 = Math.cos(this.phic0);
-  this.R2 = 2 * this.rc;
-  if (!this.title) {
-    this.title = "Oblique Stereographic Alternative";
-  }
-};
-
-exports.forward = function(p) {
-  var sinc, cosc, cosl, k;
-  p.x = adjust_lon(p.x - this.long0);
-  gauss.forward.apply(this, [p]);
-  sinc = Math.sin(p.y);
-  cosc = Math.cos(p.y);
-  cosl = Math.cos(p.x);
-  k = this.k0 * this.R2 / (1 + this.sinc0 * sinc + this.cosc0 * cosc * cosl);
-  p.x = k * cosc * Math.sin(p.x);
-  p.y = k * (this.cosc0 * sinc - this.sinc0 * cosc * cosl);
-  p.x = this.a * p.x + this.x0;
-  p.y = this.a * p.y + this.y0;
-  return p;
-};
-
-exports.inverse = function(p) {
-  var sinc, cosc, lon, lat, rho;
-  p.x = (p.x - this.x0) / this.a;
-  p.y = (p.y - this.y0) / this.a;
-
-  p.x /= this.k0;
-  p.y /= this.k0;
-  if ((rho = Math.sqrt(p.x * p.x + p.y * p.y))) {
-    var c = 2 * Math.atan2(rho, this.R2);
-    sinc = Math.sin(c);
-    cosc = Math.cos(c);
-    lat = Math.asin(cosc * this.sinc0 + p.y * sinc * this.cosc0 / rho);
-    lon = Math.atan2(p.x * sinc, rho * this.cosc0 * cosc - p.y * this.sinc0 * sinc);
-  }
-  else {
-    lat = this.phic0;
-    lon = 0;
-  }
-
-  p.x = lon;
-  p.y = lat;
-  gauss.inverse.apply(this, [p]);
-  p.x = adjust_lon(p.x + this.long0);
-  return p;
-};
-
-exports.names = ["Stereographic_North_Pole", "Oblique_Stereographic", "Polar_Stereographic", "sterea","Oblique Stereographic Alternative"];
-
-},{"../common/adjust_lon":107,"./gauss":148}],164:[function(require,module,exports){
-var e0fn = require('../common/e0fn');
-var e1fn = require('../common/e1fn');
-var e2fn = require('../common/e2fn');
-var e3fn = require('../common/e3fn');
-var mlfn = require('../common/mlfn');
-var adjust_lon = require('../common/adjust_lon');
-var HALF_PI = Math.PI/2;
-var EPSLN = 1.0e-10;
-var sign = require('../common/sign');
-var asinz = require('../common/asinz');
-
-exports.init = function() {
-  this.e0 = e0fn(this.es);
-  this.e1 = e1fn(this.es);
-  this.e2 = e2fn(this.es);
-  this.e3 = e3fn(this.es);
-  this.ml0 = this.a * mlfn(this.e0, this.e1, this.e2, this.e3, this.lat0);
-};
-
-/**
-    Transverse Mercator Forward  - long/lat to x/y
-    long/lat in radians
-  */
-exports.forward = function(p) {
-  var lon = p.x;
-  var lat = p.y;
-
-  var delta_lon = adjust_lon(lon - this.long0);
-  var con;
-  var x, y;
-  var sin_phi = Math.sin(lat);
-  var cos_phi = Math.cos(lat);
-
-  if (this.sphere) {
-    var b = cos_phi * Math.sin(delta_lon);
-    if ((Math.abs(Math.abs(b) - 1)) < 0.0000000001) {
-      return (93);
-    }
-    else {
-      x = 0.5 * this.a * this.k0 * Math.log((1 + b) / (1 - b));
-      con = Math.acos(cos_phi * Math.cos(delta_lon) / Math.sqrt(1 - b * b));
-      if (lat < 0) {
-        con = -con;
-      }
-      y = this.a * this.k0 * (con - this.lat0);
-    }
-  }
-  else {
-    var al = cos_phi * delta_lon;
-    var als = Math.pow(al, 2);
-    var c = this.ep2 * Math.pow(cos_phi, 2);
-    var tq = Math.tan(lat);
-    var t = Math.pow(tq, 2);
-    con = 1 - this.es * Math.pow(sin_phi, 2);
-    var n = this.a / Math.sqrt(con);
-    var ml = this.a * mlfn(this.e0, this.e1, this.e2, this.e3, lat);
-
-    x = this.k0 * n * al * (1 + als / 6 * (1 - t + c + als / 20 * (5 - 18 * t + Math.pow(t, 2) + 72 * c - 58 * this.ep2))) + this.x0;
-    y = this.k0 * (ml - this.ml0 + n * tq * (als * (0.5 + als / 24 * (5 - t + 9 * c + 4 * Math.pow(c, 2) + als / 30 * (61 - 58 * t + Math.pow(t, 2) + 600 * c - 330 * this.ep2))))) + this.y0;
-
-  }
-  p.x = x;
-  p.y = y;
-  return p;
-};
-
-/**
-    Transverse Mercator Inverse  -  x/y to long/lat
-  */
-exports.inverse = function(p) {
-  var con, phi;
-  var delta_phi;
-  var i;
-  var max_iter = 6;
-  var lat, lon;
-
-  if (this.sphere) {
-    var f = Math.exp(p.x / (this.a * this.k0));
-    var g = 0.5 * (f - 1 / f);
-    var temp = this.lat0 + p.y / (this.a * this.k0);
-    var h = Math.cos(temp);
-    con = Math.sqrt((1 - h * h) / (1 + g * g));
-    lat = asinz(con);
-    if (temp < 0) {
-      lat = -lat;
-    }
-    if ((g === 0) && (h === 0)) {
-      lon = this.long0;
-    }
-    else {
-      lon = adjust_lon(Math.atan2(g, h) + this.long0);
-    }
-  }
-  else { // ellipsoidal form
-    var x = p.x - this.x0;
-    var y = p.y - this.y0;
-
-    con = (this.ml0 + y / this.k0) / this.a;
-    phi = con;
-    for (i = 0; true; i++) {
-      delta_phi = ((con + this.e1 * Math.sin(2 * phi) - this.e2 * Math.sin(4 * phi) + this.e3 * Math.sin(6 * phi)) / this.e0) - phi;
-      phi += delta_phi;
-      if (Math.abs(delta_phi) <= EPSLN) {
-        break;
-      }
-      if (i >= max_iter) {
-        return (95);
-      }
-    } // for()
-    if (Math.abs(phi) < HALF_PI) {
-      var sin_phi = Math.sin(phi);
-      var cos_phi = Math.cos(phi);
-      var tan_phi = Math.tan(phi);
-      var c = this.ep2 * Math.pow(cos_phi, 2);
-      var cs = Math.pow(c, 2);
-      var t = Math.pow(tan_phi, 2);
-      var ts = Math.pow(t, 2);
-      con = 1 - this.es * Math.pow(sin_phi, 2);
-      var n = this.a / Math.sqrt(con);
-      var r = n * (1 - this.es) / con;
-      var d = x / (n * this.k0);
-      var ds = Math.pow(d, 2);
-      lat = phi - (n * tan_phi * ds / r) * (0.5 - ds / 24 * (5 + 3 * t + 10 * c - 4 * cs - 9 * this.ep2 - ds / 30 * (61 + 90 * t + 298 * c + 45 * ts - 252 * this.ep2 - 3 * cs)));
-      lon = adjust_lon(this.long0 + (d * (1 - ds / 6 * (1 + 2 * t + c - ds / 20 * (5 - 2 * c + 28 * t - 3 * cs + 8 * this.ep2 + 24 * ts))) / cos_phi));
-    }
-    else {
-      lat = HALF_PI * sign(y);
-      lon = this.long0;
-    }
-  }
-  p.x = lon;
-  p.y = lat;
-  return p;
-};
-exports.names = ["Transverse_Mercator", "Transverse Mercator", "tmerc"];
-
-},{"../common/adjust_lon":107,"../common/asinz":108,"../common/e0fn":109,"../common/e1fn":110,"../common/e2fn":111,"../common/e3fn":112,"../common/mlfn":116,"../common/sign":123}],165:[function(require,module,exports){
-var D2R = 0.01745329251994329577;
-var tmerc = require('./tmerc');
-exports.dependsOn = 'tmerc';
-exports.init = function() {
-  if (!this.zone) {
-    return;
-  }
-  this.lat0 = 0;
-  this.long0 = ((6 * Math.abs(this.zone)) - 183) * D2R;
-  this.x0 = 500000;
-  this.y0 = this.utmSouth ? 10000000 : 0;
-  this.k0 = 0.9996;
-
-  tmerc.init.apply(this);
-  this.forward = tmerc.forward;
-  this.inverse = tmerc.inverse;
-};
-exports.names = ["Universal Transverse Mercator System", "utm"];
-
-},{"./tmerc":164}],166:[function(require,module,exports){
-var adjust_lon = require('../common/adjust_lon');
-var HALF_PI = Math.PI/2;
-var EPSLN = 1.0e-10;
-var asinz = require('../common/asinz');
-/* Initialize the Van Der Grinten projection
-  ----------------------------------------*/
-exports.init = function() {
-  //this.R = 6370997; //Radius of earth
-  this.R = this.a;
-};
-
-exports.forward = function(p) {
-
-  var lon = p.x;
-  var lat = p.y;
-
-  /* Forward equations
-    -----------------*/
-  var dlon = adjust_lon(lon - this.long0);
-  var x, y;
-
-  if (Math.abs(lat) <= EPSLN) {
-    x = this.x0 + this.R * dlon;
-    y = this.y0;
-  }
-  var theta = asinz(2 * Math.abs(lat / Math.PI));
-  if ((Math.abs(dlon) <= EPSLN) || (Math.abs(Math.abs(lat) - HALF_PI) <= EPSLN)) {
-    x = this.x0;
-    if (lat >= 0) {
-      y = this.y0 + Math.PI * this.R * Math.tan(0.5 * theta);
-    }
-    else {
-      y = this.y0 + Math.PI * this.R * -Math.tan(0.5 * theta);
-    }
-    //  return(OK);
-  }
-  var al = 0.5 * Math.abs((Math.PI / dlon) - (dlon / Math.PI));
-  var asq = al * al;
-  var sinth = Math.sin(theta);
-  var costh = Math.cos(theta);
-
-  var g = costh / (sinth + costh - 1);
-  var gsq = g * g;
-  var m = g * (2 / sinth - 1);
-  var msq = m * m;
-  var con = Math.PI * this.R * (al * (g - msq) + Math.sqrt(asq * (g - msq) * (g - msq) - (msq + asq) * (gsq - msq))) / (msq + asq);
-  if (dlon < 0) {
-    con = -con;
-  }
-  x = this.x0 + con;
-  //con = Math.abs(con / (Math.PI * this.R));
-  var q = asq + g;
-  con = Math.PI * this.R * (m * q - al * Math.sqrt((msq + asq) * (asq + 1) - q * q)) / (msq + asq);
-  if (lat >= 0) {
-    //y = this.y0 + Math.PI * this.R * Math.sqrt(1 - con * con - 2 * al * con);
-    y = this.y0 + con;
-  }
-  else {
-    //y = this.y0 - Math.PI * this.R * Math.sqrt(1 - con * con - 2 * al * con);
-    y = this.y0 - con;
-  }
-  p.x = x;
-  p.y = y;
-  return p;
-};
-
-/* Van Der Grinten inverse equations--mapping x,y to lat/long
-  ---------------------------------------------------------*/
-exports.inverse = function(p) {
-  var lon, lat;
-  var xx, yy, xys, c1, c2, c3;
-  var a1;
-  var m1;
-  var con;
-  var th1;
-  var d;
-
-  /* inverse equations
-    -----------------*/
-  p.x -= this.x0;
-  p.y -= this.y0;
-  con = Math.PI * this.R;
-  xx = p.x / con;
-  yy = p.y / con;
-  xys = xx * xx + yy * yy;
-  c1 = -Math.abs(yy) * (1 + xys);
-  c2 = c1 - 2 * yy * yy + xx * xx;
-  c3 = -2 * c1 + 1 + 2 * yy * yy + xys * xys;
-  d = yy * yy / c3 + (2 * c2 * c2 * c2 / c3 / c3 / c3 - 9 * c1 * c2 / c3 / c3) / 27;
-  a1 = (c1 - c2 * c2 / 3 / c3) / c3;
-  m1 = 2 * Math.sqrt(-a1 / 3);
-  con = ((3 * d) / a1) / m1;
-  if (Math.abs(con) > 1) {
-    if (con >= 0) {
-      con = 1;
-    }
-    else {
-      con = -1;
-    }
-  }
-  th1 = Math.acos(con) / 3;
-  if (p.y >= 0) {
-    lat = (-m1 * Math.cos(th1 + Math.PI / 3) - c2 / 3 / c3) * Math.PI;
-  }
-  else {
-    lat = -(-m1 * Math.cos(th1 + Math.PI / 3) - c2 / 3 / c3) * Math.PI;
-  }
-
-  if (Math.abs(xx) < EPSLN) {
-    lon = this.long0;
-  }
-  else {
-    lon = adjust_lon(this.long0 + Math.PI * (xys - 1 + Math.sqrt(1 + 2 * (xx * xx - yy * yy) + xys * xys)) / 2 / xx);
-  }
-
-  p.x = lon;
-  p.y = lat;
-  return p;
-};
-exports.names = ["Van_der_Grinten_I", "VanDerGrinten", "vandg"];
-},{"../common/adjust_lon":107,"../common/asinz":108}],167:[function(require,module,exports){
-var D2R = 0.01745329251994329577;
-var R2D = 57.29577951308232088;
-var PJD_3PARAM = 1;
-var PJD_7PARAM = 2;
-var datum_transform = require('./datum_transform');
-var adjust_axis = require('./adjust_axis');
-var proj = require('./Proj');
-var toPoint = require('./common/toPoint');
-module.exports = function transform(source, dest, point) {
-  var wgs84;
-  if (Array.isArray(point)) {
-    point = toPoint(point);
-  }
-  function checkNotWGS(source, dest) {
-    return ((source.datum.datum_type === PJD_3PARAM || source.datum.datum_type === PJD_7PARAM) && dest.datumCode !== "WGS84");
-  }
-
-  // Workaround for datum shifts towgs84, if either source or destination projection is not wgs84
-  if (source.datum && dest.datum && (checkNotWGS(source, dest) || checkNotWGS(dest, source))) {
-    wgs84 = new proj('WGS84');
-    transform(source, wgs84, point);
-    source = wgs84;
-  }
-  // DGR, 2010/11/12
-  if (source.axis !== "enu") {
-    adjust_axis(source, false, point);
-  }
-  // Transform source points to long/lat, if they aren't already.
-  if (source.projName === "longlat") {
-    point.x *= D2R; // convert degrees to radians
-    point.y *= D2R;
-  }
-  else {
-    if (source.to_meter) {
-      point.x *= source.to_meter;
-      point.y *= source.to_meter;
-    }
-    source.inverse(point); // Convert Cartesian to longlat
-  }
-  // Adjust for the prime meridian if necessary
-  if (source.from_greenwich) {
-    point.x += source.from_greenwich;
-  }
-
-  // Convert datums if needed, and if possible.
-  point = datum_transform(source.datum, dest.datum, point);
-
-  // Adjust for the prime meridian if necessary
-  if (dest.from_greenwich) {
-    point.x -= dest.from_greenwich;
-  }
-
-  if (dest.projName === "longlat") {
-    // convert radians to decimal degrees
-    point.x *= R2D;
-    point.y *= R2D;
-  }
-  else { // else project
-    dest.forward(point);
-    if (dest.to_meter) {
-      point.x /= dest.to_meter;
-      point.y /= dest.to_meter;
-    }
-  }
-
-  // DGR, 2010/11/12
-  if (dest.axis !== "enu") {
-    adjust_axis(dest, true, point);
-  }
-
-  return point;
-};
-},{"./Proj":104,"./adjust_axis":105,"./common/toPoint":125,"./datum_transform":132}],168:[function(require,module,exports){
-var D2R = 0.01745329251994329577;
-var extend = require('./extend');
-
-function mapit(obj, key, v) {
-  obj[key] = v.map(function(aa) {
-    var o = {};
-    sExpr(aa, o);
-    return o;
-  }).reduce(function(a, b) {
-    return extend(a, b);
-  }, {});
-}
-
-function sExpr(v, obj) {
-  var key;
-  if (!Array.isArray(v)) {
-    obj[v] = true;
-    return;
-  }
-  else {
-    key = v.shift();
-    if (key === 'PARAMETER') {
-      key = v.shift();
-    }
-    if (v.length === 1) {
-      if (Array.isArray(v[0])) {
-        obj[key] = {};
-        sExpr(v[0], obj[key]);
-      }
-      else {
-        obj[key] = v[0];
-      }
-    }
-    else if (!v.length) {
-      obj[key] = true;
-    }
-    else if (key === 'TOWGS84') {
-      obj[key] = v;
-    }
-    else {
-      obj[key] = {};
-      if (['UNIT', 'PRIMEM', 'VERT_DATUM'].indexOf(key) > -1) {
-        obj[key] = {
-          name: v[0].toLowerCase(),
-          convert: v[1]
-        };
-        if (v.length === 3) {
-          obj[key].auth = v[2];
-        }
-      }
-      else if (key === 'SPHEROID') {
-        obj[key] = {
-          name: v[0],
-          a: v[1],
-          rf: v[2]
-        };
-        if (v.length === 4) {
-          obj[key].auth = v[3];
-        }
-      }
-      else if (['GEOGCS', 'GEOCCS', 'DATUM', 'VERT_CS', 'COMPD_CS', 'LOCAL_CS', 'FITTED_CS', 'LOCAL_DATUM'].indexOf(key) > -1) {
-        v[0] = ['name', v[0]];
-        mapit(obj, key, v);
-      }
-      else if (v.every(function(aa) {
-        return Array.isArray(aa);
-      })) {
-        mapit(obj, key, v);
-      }
-      else {
-        sExpr(v, obj[key]);
-      }
-    }
-  }
-}
-
-function rename(obj, params) {
-  var outName = params[0];
-  var inName = params[1];
-  if (!(outName in obj) && (inName in obj)) {
-    obj[outName] = obj[inName];
-    if (params.length === 3) {
-      obj[outName] = params[2](obj[outName]);
-    }
-  }
-}
-
-function d2r(input) {
-  return input * D2R;
-}
-
-function cleanWKT(wkt) {
-  if (wkt.type === 'GEOGCS') {
-    wkt.projName = 'longlat';
-  }
-  else if (wkt.type === 'LOCAL_CS') {
-    wkt.projName = 'identity';
-    wkt.local = true;
-  }
-  else {
-    if (typeof wkt.PROJECTION === "object") {
-      wkt.projName = Object.keys(wkt.PROJECTION)[0];
-    }
-    else {
-      wkt.projName = wkt.PROJECTION;
-    }
-  }
-  if (wkt.UNIT) {
-    wkt.units = wkt.UNIT.name.toLowerCase();
-    if (wkt.units === 'metre') {
-      wkt.units = 'meter';
-    }
-    if (wkt.UNIT.convert) {
-      wkt.to_meter = parseFloat(wkt.UNIT.convert, 10);
-    }
-  }
-
-  if (wkt.GEOGCS) {
-    //if(wkt.GEOGCS.PRIMEM&&wkt.GEOGCS.PRIMEM.convert){
-    //  wkt.from_greenwich=wkt.GEOGCS.PRIMEM.convert*D2R;
-    //}
-    if (wkt.GEOGCS.DATUM) {
-      wkt.datumCode = wkt.GEOGCS.DATUM.name.toLowerCase();
-    }
-    else {
-      wkt.datumCode = wkt.GEOGCS.name.toLowerCase();
-    }
-    if (wkt.datumCode.slice(0, 2) === 'd_') {
-      wkt.datumCode = wkt.datumCode.slice(2);
-    }
-    if (wkt.datumCode === 'new_zealand_geodetic_datum_1949' || wkt.datumCode === 'new_zealand_1949') {
-      wkt.datumCode = 'nzgd49';
-    }
-    if (wkt.datumCode === "wgs_1984") {
-      if (wkt.PROJECTION === 'Mercator_Auxiliary_Sphere') {
-        wkt.sphere = true;
-      }
-      wkt.datumCode = 'wgs84';
-    }
-    if (wkt.datumCode.slice(-6) === '_ferro') {
-      wkt.datumCode = wkt.datumCode.slice(0, - 6);
-    }
-    if (wkt.datumCode.slice(-8) === '_jakarta') {
-      wkt.datumCode = wkt.datumCode.slice(0, - 8);
-    }
-    if (~wkt.datumCode.indexOf('belge')) {
-      wkt.datumCode = "rnb72";
-    }
-    if (wkt.GEOGCS.DATUM && wkt.GEOGCS.DATUM.SPHEROID) {
-      wkt.ellps = wkt.GEOGCS.DATUM.SPHEROID.name.replace('_19', '').replace(/[Cc]larke\_18/, 'clrk');
-      if (wkt.ellps.toLowerCase().slice(0, 13) === "international") {
-        wkt.ellps = 'intl';
-      }
-
-      wkt.a = wkt.GEOGCS.DATUM.SPHEROID.a;
-      wkt.rf = parseFloat(wkt.GEOGCS.DATUM.SPHEROID.rf, 10);
-    }
-  }
-  if (wkt.b && !isFinite(wkt.b)) {
-    wkt.b = wkt.a;
-  }
-
-  function toMeter(input) {
-    var ratio = wkt.to_meter || 1;
-    return parseFloat(input, 10) * ratio;
-  }
-  var renamer = function(a) {
-    return rename(wkt, a);
-  };
-  var list = [
-    ['standard_parallel_1', 'Standard_Parallel_1'],
-    ['standard_parallel_2', 'Standard_Parallel_2'],
-    ['false_easting', 'False_Easting'],
-    ['false_northing', 'False_Northing'],
-    ['central_meridian', 'Central_Meridian'],
-    ['latitude_of_origin', 'Latitude_Of_Origin'],
-    ['scale_factor', 'Scale_Factor'],
-    ['k0', 'scale_factor'],
-    ['latitude_of_center', 'Latitude_of_center'],
-    ['lat0', 'latitude_of_center', d2r],
-    ['longitude_of_center', 'Longitude_Of_Center'],
-    ['longc', 'longitude_of_center', d2r],
-    ['x0', 'false_easting', toMeter],
-    ['y0', 'false_northing', toMeter],
-    ['long0', 'central_meridian', d2r],
-    ['lat0', 'latitude_of_origin', d2r],
-    ['lat0', 'standard_parallel_1', d2r],
-    ['lat1', 'standard_parallel_1', d2r],
-    ['lat2', 'standard_parallel_2', d2r],
-    ['alpha', 'azimuth', d2r],
-    ['srsCode', 'name']
-  ];
-  list.forEach(renamer);
-  if (!wkt.long0 && wkt.longc && (wkt.PROJECTION === 'Albers_Conic_Equal_Area' || wkt.PROJECTION === "Lambert_Azimuthal_Equal_Area")) {
-    wkt.long0 = wkt.longc;
-  }
-}
-module.exports = function(wkt, self) {
-  var lisp = JSON.parse(("," + wkt).replace(/\s*\,\s*([A-Z_0-9]+?)(\[)/g, ',["$1",').slice(1).replace(/\s*\,\s*([A-Z_0-9]+?)\]/g, ',"$1"]'));
-  var type = lisp.shift();
-  var name = lisp.shift();
-  lisp.unshift(['name', name]);
-  lisp.unshift(['type', type]);
-  lisp.unshift('output');
-  var obj = {};
-  sExpr(lisp, obj);
-  cleanWKT(obj.output);
-  return extend(self, obj.output);
-};
-
-},{"./extend":135}],169:[function(require,module,exports){
-
-
-
-/**
- * UTM zones are grouped, and assigned to one of a group of 6
- * sets.
- *
- * {int} @private
- */
-var NUM_100K_SETS = 6;
-
-/**
- * The column letters (for easting) of the lower left value, per
- * set.
- *
- * {string} @private
- */
-var SET_ORIGIN_COLUMN_LETTERS = 'AJSAJS';
-
-/**
- * The row letters (for northing) of the lower left value, per
- * set.
- *
- * {string} @private
- */
-var SET_ORIGIN_ROW_LETTERS = 'AFAFAF';
-
-var A = 65; // A
-var I = 73; // I
-var O = 79; // O
-var V = 86; // V
-var Z = 90; // Z
-
-/**
- * Conversion of lat/lon to MGRS.
- *
- * @param {object} ll Object literal with lat and lon properties on a
- *     WGS84 ellipsoid.
- * @param {int} accuracy Accuracy in digits (5 for 1 m, 4 for 10 m, 3 for
- *      100 m, 4 for 1000 m or 5 for 10000 m). Optional, default is 5.
- * @return {string} the MGRS string for the given location and accuracy.
- */
-exports.forward = function(ll, accuracy) {
-  accuracy = accuracy || 5; // default accuracy 1m
-  return encode(LLtoUTM({
-    lat: ll[1],
-    lon: ll[0]
-  }), accuracy);
-};
-
-/**
- * Conversion of MGRS to lat/lon.
- *
- * @param {string} mgrs MGRS string.
- * @return {array} An array with left (longitude), bottom (latitude), right
- *     (longitude) and top (latitude) values in WGS84, representing the
- *     bounding box for the provided MGRS reference.
- */
-exports.inverse = function(mgrs) {
-  var bbox = UTMtoLL(decode(mgrs.toUpperCase()));
-  return [bbox.left, bbox.bottom, bbox.right, bbox.top];
-};
-
-exports.toPoint = function(mgrsStr) {
-  var llbbox = exports.inverse(mgrsStr);
-  return [(llbbox[2] + llbbox[0]) / 2, (llbbox[3] + llbbox[1]) / 2];
-};
-/**
- * Conversion from degrees to radians.
- *
- * @private
- * @param {number} deg the angle in degrees.
- * @return {number} the angle in radians.
- */
-function degToRad(deg) {
-  return (deg * (Math.PI / 180.0));
-}
-
-/**
- * Conversion from radians to degrees.
- *
- * @private
- * @param {number} rad the angle in radians.
- * @return {number} the angle in degrees.
- */
-function radToDeg(rad) {
-  return (180.0 * (rad / Math.PI));
-}
-
-/**
- * Converts a set of Longitude and Latitude co-ordinates to UTM
- * using the WGS84 ellipsoid.
- *
- * @private
- * @param {object} ll Object literal with lat and lon properties
- *     representing the WGS84 coordinate to be converted.
- * @return {object} Object literal containing the UTM value with easting,
- *     northing, zoneNumber and zoneLetter properties, and an optional
- *     accuracy property in digits. Returns null if the conversion failed.
- */
-function LLtoUTM(ll) {
-  var Lat = ll.lat;
-  var Long = ll.lon;
-  var a = 6378137.0; //ellip.radius;
-  var eccSquared = 0.00669438; //ellip.eccsq;
-  var k0 = 0.9996;
-  var LongOrigin;
-  var eccPrimeSquared;
-  var N, T, C, A, M;
-  var LatRad = degToRad(Lat);
-  var LongRad = degToRad(Long);
-  var LongOriginRad;
-  var ZoneNumber;
-  // (int)
-  ZoneNumber = Math.floor((Long + 180) / 6) + 1;
-
-  //Make sure the longitude 180.00 is in Zone 60
-  if (Long === 180) {
-    ZoneNumber = 60;
-  }
-
-  // Special zone for Norway
-  if (Lat >= 56.0 && Lat < 64.0 && Long >= 3.0 && Long < 12.0) {
-    ZoneNumber = 32;
-  }
-
-  // Special zones for Svalbard
-  if (Lat >= 72.0 && Lat < 84.0) {
-    if (Long >= 0.0 && Long < 9.0) {
-      ZoneNumber = 31;
-    }
-    else if (Long >= 9.0 && Long < 21.0) {
-      ZoneNumber = 33;
-    }
-    else if (Long >= 21.0 && Long < 33.0) {
-      ZoneNumber = 35;
-    }
-    else if (Long >= 33.0 && Long < 42.0) {
-      ZoneNumber = 37;
-    }
-  }
-
-  LongOrigin = (ZoneNumber - 1) * 6 - 180 + 3; //+3 puts origin
-  // in middle of
-  // zone
-  LongOriginRad = degToRad(LongOrigin);
-
-  eccPrimeSquared = (eccSquared) / (1 - eccSquared);
-
-  N = a / Math.sqrt(1 - eccSquared * Math.sin(LatRad) * Math.sin(LatRad));
-  T = Math.tan(LatRad) * Math.tan(LatRad);
-  C = eccPrimeSquared * Math.cos(LatRad) * Math.cos(LatRad);
-  A = Math.cos(LatRad) * (LongRad - LongOriginRad);
-
-  M = a * ((1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256) * LatRad - (3 * eccSquared / 8 + 3 * eccSquared * eccSquared / 32 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(2 * LatRad) + (15 * eccSquared * eccSquared / 256 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(4 * LatRad) - (35 * eccSquared * eccSquared * eccSquared / 3072) * Math.sin(6 * LatRad));
-
-  var UTMEasting = (k0 * N * (A + (1 - T + C) * A * A * A / 6.0 + (5 - 18 * T + T * T + 72 * C - 58 * eccPrimeSquared) * A * A * A * A * A / 120.0) + 500000.0);
-
-  var UTMNorthing = (k0 * (M + N * Math.tan(LatRad) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24.0 + (61 - 58 * T + T * T + 600 * C - 330 * eccPrimeSquared) * A * A * A * A * A * A / 720.0)));
-  if (Lat < 0.0) {
-    UTMNorthing += 10000000.0; //10000000 meter offset for
-    // southern hemisphere
-  }
-
-  return {
-    northing: Math.round(UTMNorthing),
-    easting: Math.round(UTMEasting),
-    zoneNumber: ZoneNumber,
-    zoneLetter: getLetterDesignator(Lat)
-  };
-}
-
-/**
- * Converts UTM coords to lat/long, using the WGS84 ellipsoid. This is a convenience
- * class where the Zone can be specified as a single string eg."60N" which
- * is then broken down into the ZoneNumber and ZoneLetter.
- *
- * @private
- * @param {object} utm An object literal with northing, easting, zoneNumber
- *     and zoneLetter properties. If an optional accuracy property is
- *     provided (in meters), a bounding box will be returned instead of
- *     latitude and longitude.
- * @return {object} An object literal containing either lat and lon values
- *     (if no accuracy was provided), or top, right, bottom and left values
- *     for the bounding box calculated according to the provided accuracy.
- *     Returns null if the conversion failed.
- */
-function UTMtoLL(utm) {
-
-  var UTMNorthing = utm.northing;
-  var UTMEasting = utm.easting;
-  var zoneLetter = utm.zoneLetter;
-  var zoneNumber = utm.zoneNumber;
-  // check the ZoneNummber is valid
-  if (zoneNumber < 0 || zoneNumber > 60) {
-    return null;
-  }
-
-  var k0 = 0.9996;
-  var a = 6378137.0; //ellip.radius;
-  var eccSquared = 0.00669438; //ellip.eccsq;
-  var eccPrimeSquared;
-  var e1 = (1 - Math.sqrt(1 - eccSquared)) / (1 + Math.sqrt(1 - eccSquared));
-  var N1, T1, C1, R1, D, M;
-  var LongOrigin;
-  var mu, phi1Rad;
-
-  // remove 500,000 meter offset for longitude
-  var x = UTMEasting - 500000.0;
-  var y = UTMNorthing;
-
-  // We must know somehow if we are in the Northern or Southern
-  // hemisphere, this is the only time we use the letter So even
-  // if the Zone letter isn't exactly correct it should indicate
-  // the hemisphere correctly
-  if (zoneLetter < 'N') {
-    y -= 10000000.0; // remove 10,000,000 meter offset used
-    // for southern hemisphere
-  }
-
-  // There are 60 zones with zone 1 being at West -180 to -174
-  LongOrigin = (zoneNumber - 1) * 6 - 180 + 3; // +3 puts origin
-  // in middle of
-  // zone
-
-  eccPrimeSquared = (eccSquared) / (1 - eccSquared);
-
-  M = y / k0;
-  mu = M / (a * (1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256));
-
-  phi1Rad = mu + (3 * e1 / 2 - 27 * e1 * e1 * e1 / 32) * Math.sin(2 * mu) + (21 * e1 * e1 / 16 - 55 * e1 * e1 * e1 * e1 / 32) * Math.sin(4 * mu) + (151 * e1 * e1 * e1 / 96) * Math.sin(6 * mu);
-  // double phi1 = ProjMath.radToDeg(phi1Rad);
-
-  N1 = a / Math.sqrt(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad));
-  T1 = Math.tan(phi1Rad) * Math.tan(phi1Rad);
-  C1 = eccPrimeSquared * Math.cos(phi1Rad) * Math.cos(phi1Rad);
-  R1 = a * (1 - eccSquared) / Math.pow(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad), 1.5);
-  D = x / (N1 * k0);
-
-  var lat = phi1Rad - (N1 * Math.tan(phi1Rad) / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * eccPrimeSquared) * D * D * D * D / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * eccPrimeSquared - 3 * C1 * C1) * D * D * D * D * D * D / 720);
-  lat = radToDeg(lat);
-
-  var lon = (D - (1 + 2 * T1 + C1) * D * D * D / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * eccPrimeSquared + 24 * T1 * T1) * D * D * D * D * D / 120) / Math.cos(phi1Rad);
-  lon = LongOrigin + radToDeg(lon);
-
-  var result;
-  if (utm.accuracy) {
-    var topRight = UTMtoLL({
-      northing: utm.northing + utm.accuracy,
-      easting: utm.easting + utm.accuracy,
-      zoneLetter: utm.zoneLetter,
-      zoneNumber: utm.zoneNumber
+function dbfRowHeader(data, headerLen, decoder) {
+  var out = [];
+  var offset = 32;
+  while (offset < headerLen) {
+    out.push({
+      name: decoder(data.slice(offset, offset + 11)),
+      dataType: String.fromCharCode(data.readUInt8(offset + 11)),
+      len: data.readUInt8(offset + 16),
+      decimal: data.readUInt8(offset + 17)
     });
-    result = {
-      top: topRight.lat,
-      right: topRight.lon,
-      bottom: lat,
-      left: lon
-    };
-  }
-  else {
-    result = {
-      lat: lat,
-      lon: lon
-    };
-  }
-  return result;
-}
-
-/**
- * Calculates the MGRS letter designator for the given latitude.
- *
- * @private
- * @param {number} lat The latitude in WGS84 to get the letter designator
- *     for.
- * @return {char} The letter designator.
- */
-function getLetterDesignator(lat) {
-  //This is here as an error flag to show that the Latitude is
-  //outside MGRS limits
-  var LetterDesignator = 'Z';
-
-  if ((84 >= lat) && (lat >= 72)) {
-    LetterDesignator = 'X';
-  }
-  else if ((72 > lat) && (lat >= 64)) {
-    LetterDesignator = 'W';
-  }
-  else if ((64 > lat) && (lat >= 56)) {
-    LetterDesignator = 'V';
-  }
-  else if ((56 > lat) && (lat >= 48)) {
-    LetterDesignator = 'U';
-  }
-  else if ((48 > lat) && (lat >= 40)) {
-    LetterDesignator = 'T';
-  }
-  else if ((40 > lat) && (lat >= 32)) {
-    LetterDesignator = 'S';
-  }
-  else if ((32 > lat) && (lat >= 24)) {
-    LetterDesignator = 'R';
-  }
-  else if ((24 > lat) && (lat >= 16)) {
-    LetterDesignator = 'Q';
-  }
-  else if ((16 > lat) && (lat >= 8)) {
-    LetterDesignator = 'P';
-  }
-  else if ((8 > lat) && (lat >= 0)) {
-    LetterDesignator = 'N';
-  }
-  else if ((0 > lat) && (lat >= -8)) {
-    LetterDesignator = 'M';
-  }
-  else if ((-8 > lat) && (lat >= -16)) {
-    LetterDesignator = 'L';
-  }
-  else if ((-16 > lat) && (lat >= -24)) {
-    LetterDesignator = 'K';
-  }
-  else if ((-24 > lat) && (lat >= -32)) {
-    LetterDesignator = 'J';
-  }
-  else if ((-32 > lat) && (lat >= -40)) {
-    LetterDesignator = 'H';
-  }
-  else if ((-40 > lat) && (lat >= -48)) {
-    LetterDesignator = 'G';
-  }
-  else if ((-48 > lat) && (lat >= -56)) {
-    LetterDesignator = 'F';
-  }
-  else if ((-56 > lat) && (lat >= -64)) {
-    LetterDesignator = 'E';
-  }
-  else if ((-64 > lat) && (lat >= -72)) {
-    LetterDesignator = 'D';
-  }
-  else if ((-72 > lat) && (lat >= -80)) {
-    LetterDesignator = 'C';
-  }
-  return LetterDesignator;
-}
-
-/**
- * Encodes a UTM location as MGRS string.
- *
- * @private
- * @param {object} utm An object literal with easting, northing,
- *     zoneLetter, zoneNumber
- * @param {number} accuracy Accuracy in digits (1-5).
- * @return {string} MGRS string for the given UTM location.
- */
-function encode(utm, accuracy) {
-  var seasting = "" + utm.easting,
-    snorthing = "" + utm.northing;
-
-  return utm.zoneNumber + utm.zoneLetter + get100kID(utm.easting, utm.northing, utm.zoneNumber) + seasting.substr(seasting.length - 5, accuracy) + snorthing.substr(snorthing.length - 5, accuracy);
-}
-
-/**
- * Get the two letter 100k designator for a given UTM easting,
- * northing and zone number value.
- *
- * @private
- * @param {number} easting
- * @param {number} northing
- * @param {number} zoneNumber
- * @return the two letter 100k designator for the given UTM location.
- */
-function get100kID(easting, northing, zoneNumber) {
-  var setParm = get100kSetForZone(zoneNumber);
-  var setColumn = Math.floor(easting / 100000);
-  var setRow = Math.floor(northing / 100000) % 20;
-  return getLetter100kID(setColumn, setRow, setParm);
-}
-
-/**
- * Given a UTM zone number, figure out the MGRS 100K set it is in.
- *
- * @private
- * @param {number} i An UTM zone number.
- * @return {number} the 100k set the UTM zone is in.
- */
-function get100kSetForZone(i) {
-  var setParm = i % NUM_100K_SETS;
-  if (setParm === 0) {
-    setParm = NUM_100K_SETS;
-  }
-
-  return setParm;
-}
-
-/**
- * Get the two-letter MGRS 100k designator given information
- * translated from the UTM northing, easting and zone number.
- *
- * @private
- * @param {number} column the column index as it relates to the MGRS
- *        100k set spreadsheet, created from the UTM easting.
- *        Values are 1-8.
- * @param {number} row the row index as it relates to the MGRS 100k set
- *        spreadsheet, created from the UTM northing value. Values
- *        are from 0-19.
- * @param {number} parm the set block, as it relates to the MGRS 100k set
- *        spreadsheet, created from the UTM zone. Values are from
- *        1-60.
- * @return two letter MGRS 100k code.
- */
-function getLetter100kID(column, row, parm) {
-  // colOrigin and rowOrigin are the letters at the origin of the set
-  var index = parm - 1;
-  var colOrigin = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(index);
-  var rowOrigin = SET_ORIGIN_ROW_LETTERS.charCodeAt(index);
-
-  // colInt and rowInt are the letters to build to return
-  var colInt = colOrigin + column - 1;
-  var rowInt = rowOrigin + row;
-  var rollover = false;
-
-  if (colInt > Z) {
-    colInt = colInt - Z + A - 1;
-    rollover = true;
-  }
-
-  if (colInt === I || (colOrigin < I && colInt > I) || ((colInt > I || colOrigin < I) && rollover)) {
-    colInt++;
-  }
-
-  if (colInt === O || (colOrigin < O && colInt > O) || ((colInt > O || colOrigin < O) && rollover)) {
-    colInt++;
-
-    if (colInt === I) {
-      colInt++;
+    if (data.readUInt8(offset + 32) === 13) {
+      break;
+    } else {
+      offset += 32;
     }
   }
-
-  if (colInt > Z) {
-    colInt = colInt - Z + A - 1;
-  }
-
-  if (rowInt > V) {
-    rowInt = rowInt - V + A - 1;
-    rollover = true;
-  }
-  else {
-    rollover = false;
-  }
-
-  if (((rowInt === I) || ((rowOrigin < I) && (rowInt > I))) || (((rowInt > I) || (rowOrigin < I)) && rollover)) {
-    rowInt++;
-  }
-
-  if (((rowInt === O) || ((rowOrigin < O) && (rowInt > O))) || (((rowInt > O) || (rowOrigin < O)) && rollover)) {
-    rowInt++;
-
-    if (rowInt === I) {
-      rowInt++;
-    }
-  }
-
-  if (rowInt > V) {
-    rowInt = rowInt - V + A - 1;
-  }
-
-  var twoLetter = String.fromCharCode(colInt) + String.fromCharCode(rowInt);
-  return twoLetter;
+  return out;
 }
 
-/**
- * Decode the UTM parameters from a MGRS string.
- *
- * @private
- * @param {string} mgrsString an UPPERCASE coordinate string is expected.
- * @return {object} An object literal with easting, northing, zoneLetter,
- *     zoneNumber and accuracy (in meters) properties.
- */
-function decode(mgrsString) {
-
-  if (mgrsString && mgrsString.length === 0) {
-    throw ("MGRSPoint coverting from nothing");
+function rowFuncs(buffer, offset, len, type, decoder) {
+  var data = buffer.slice(offset, offset + len);
+  var textData = decoder(data);
+  switch (type) {
+    case 'N':
+    case 'F':
+    case 'O':
+      return parseFloat(textData, 10);
+    case 'D':
+      return new Date(textData.slice(0, 4), parseInt(textData.slice(4, 6), 10) - 1, textData.slice(6, 8));
+    case 'L':
+      return textData.toLowerCase() === 'y' || textData.toLowerCase() === 't';
+    default:
+      return textData;
   }
+}
 
-  var length = mgrsString.length;
-
-  var hunK = null;
-  var sb = "";
-  var testChar;
+function parseRow(buffer, offset, rowHeaders, decoder) {
+  var out = {};
   var i = 0;
-
-  // get Zone number
-  while (!(/[A-Z]/).test(testChar = mgrsString.charAt(i))) {
-    if (i >= 2) {
-      throw ("MGRSPoint bad conversion from: " + mgrsString);
+  var len = rowHeaders.length;
+  var field;
+  var header;
+  while (i < len) {
+    header = rowHeaders[i];
+    field = rowFuncs(buffer, offset, header.len, header.dataType, decoder);
+    offset += header.len;
+    if (typeof field !== 'undefined') {
+      out[header.name] = field;
     }
-    sb += testChar;
     i++;
   }
+  return out;
+}
 
-  var zoneNumber = parseInt(sb, 10);
+module.exports = function(buffer, encoding) {
+  var decoder = createDecoder(encoding);
+  var header = dbfHeader(buffer);
+  var rowHeaders = dbfRowHeader(buffer, header.headerLen - 1, decoder);
 
-  if (i === 0 || i + 3 > length) {
-    // A good MGRS string has to be 4-5 digits long,
-    // ##AAA/#AAA at least.
-    throw ("MGRSPoint bad conversion from: " + mgrsString);
+  var offset = ((rowHeaders.length + 1) << 5) + 2;
+  var recLen = header.recLen;
+  var records = header.records;
+  var out = [];
+  while (records) {
+    out.push(parseRow(buffer, offset, rowHeaders, decoder));
+    offset += recLen;
+    records--;
+  }
+  return out;
+};
+
+},{"./decoder":88}],90:[function(require,module,exports){
+(function (global, factory) {
+	typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
+	typeof define === 'function' && define.amd ? define(factory) :
+	(global.proj4 = factory());
+}(this, (function () { 'use strict';
+
+	var globals = function(defs) {
+	  defs('EPSG:4326', "+title=WGS 84 (long/lat) +proj=longlat +ellps=WGS84 +datum=WGS84 +units=degrees");
+	  defs('EPSG:4269', "+title=NAD83 (long/lat) +proj=longlat +a=6378137.0 +b=6356752.31414036 +ellps=GRS80 +datum=NAD83 +units=degrees");
+	  defs('EPSG:3857', "+title=WGS 84 / Pseudo-Mercator +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +no_defs");
+
+	  defs.WGS84 = defs['EPSG:4326'];
+	  defs['EPSG:3785'] = defs['EPSG:3857']; // maintain backward compat, official code is 3857
+	  defs.GOOGLE = defs['EPSG:3857'];
+	  defs['EPSG:900913'] = defs['EPSG:3857'];
+	  defs['EPSG:102113'] = defs['EPSG:3857'];
+	};
+
+	var PJD_3PARAM = 1;
+	var PJD_7PARAM = 2;
+	var PJD_WGS84 = 4; // WGS84 or equivalent
+	var PJD_NODATUM = 5; // WGS84 or equivalent
+	var SEC_TO_RAD = 4.84813681109535993589914102357e-6;
+	var HALF_PI = Math.PI/2;
+	// ellipoid pj_set_ell.c
+	var SIXTH = 0.1666666666666666667;
+	/* 1/6 */
+	var RA4 = 0.04722222222222222222;
+	/* 17/360 */
+	var RA6 = 0.02215608465608465608;
+	var EPSLN = (typeof Number.EPSILON === 'undefined') ? 1.0e-10 : Number.EPSILON;
+	var D2R = 0.01745329251994329577;
+	var R2D = 57.29577951308232088;
+	var FORTPI = Math.PI/4;
+	var TWO_PI = Math.PI * 2;
+	// SPI is slightly greater than Math.PI, so values that exceed the -180..180
+	// degree range by a tiny amount don't get wrapped. This prevents points that
+	// have drifted from their original location along the 180th meridian (due to
+	// floating point error) from changing their sign.
+	var SPI = 3.14159265359;
+
+	var exports$1 = {};
+	exports$1.greenwich = 0.0; //"0dE",
+	exports$1.lisbon = -9.131906111111; //"9d07'54.862\"W",
+	exports$1.paris = 2.337229166667; //"2d20'14.025\"E",
+	exports$1.bogota = -74.080916666667; //"74d04'51.3\"W",
+	exports$1.madrid = -3.687938888889; //"3d41'16.58\"W",
+	exports$1.rome = 12.452333333333; //"12d27'8.4\"E",
+	exports$1.bern = 7.439583333333; //"7d26'22.5\"E",
+	exports$1.jakarta = 106.807719444444; //"106d48'27.79\"E",
+	exports$1.ferro = -17.666666666667; //"17d40'W",
+	exports$1.brussels = 4.367975; //"4d22'4.71\"E",
+	exports$1.stockholm = 18.058277777778; //"18d3'29.8\"E",
+	exports$1.athens = 23.7163375; //"23d42'58.815\"E",
+	exports$1.oslo = 10.722916666667; //"10d43'22.5\"E"
+
+	var units = {
+	  ft: {to_meter: 0.3048},
+	  'us-ft': {to_meter: 1200 / 3937}
+	};
+
+	var ignoredChar = /[\s_\-\/\(\)]/g;
+	function match(obj, key) {
+	  if (obj[key]) {
+	    return obj[key];
+	  }
+	  var keys = Object.keys(obj);
+	  var lkey = key.toLowerCase().replace(ignoredChar, '');
+	  var i = -1;
+	  var testkey, processedKey;
+	  while (++i < keys.length) {
+	    testkey = keys[i];
+	    processedKey = testkey.toLowerCase().replace(ignoredChar, '');
+	    if (processedKey === lkey) {
+	      return obj[testkey];
+	    }
+	  }
+	}
+
+	var parseProj = function(defData) {
+	  var self = {};
+	  var paramObj = defData.split('+').map(function(v) {
+	    return v.trim();
+	  }).filter(function(a) {
+	    return a;
+	  }).reduce(function(p, a) {
+	    var split = a.split('=');
+	    split.push(true);
+	    p[split[0].toLowerCase()] = split[1];
+	    return p;
+	  }, {});
+	  var paramName, paramVal, paramOutname;
+	  var params = {
+	    proj: 'projName',
+	    datum: 'datumCode',
+	    rf: function(v) {
+	      self.rf = parseFloat(v);
+	    },
+	    lat_0: function(v) {
+	      self.lat0 = v * D2R;
+	    },
+	    lat_1: function(v) {
+	      self.lat1 = v * D2R;
+	    },
+	    lat_2: function(v) {
+	      self.lat2 = v * D2R;
+	    },
+	    lat_ts: function(v) {
+	      self.lat_ts = v * D2R;
+	    },
+	    lon_0: function(v) {
+	      self.long0 = v * D2R;
+	    },
+	    lon_1: function(v) {
+	      self.long1 = v * D2R;
+	    },
+	    lon_2: function(v) {
+	      self.long2 = v * D2R;
+	    },
+	    alpha: function(v) {
+	      self.alpha = parseFloat(v) * D2R;
+	    },
+	    lonc: function(v) {
+	      self.longc = v * D2R;
+	    },
+	    x_0: function(v) {
+	      self.x0 = parseFloat(v);
+	    },
+	    y_0: function(v) {
+	      self.y0 = parseFloat(v);
+	    },
+	    k_0: function(v) {
+	      self.k0 = parseFloat(v);
+	    },
+	    k: function(v) {
+	      self.k0 = parseFloat(v);
+	    },
+	    a: function(v) {
+	      self.a = parseFloat(v);
+	    },
+	    b: function(v) {
+	      self.b = parseFloat(v);
+	    },
+	    r_a: function() {
+	      self.R_A = true;
+	    },
+	    zone: function(v) {
+	      self.zone = parseInt(v, 10);
+	    },
+	    south: function() {
+	      self.utmSouth = true;
+	    },
+	    towgs84: function(v) {
+	      self.datum_params = v.split(",").map(function(a) {
+	        return parseFloat(a);
+	      });
+	    },
+	    to_meter: function(v) {
+	      self.to_meter = parseFloat(v);
+	    },
+	    units: function(v) {
+	      self.units = v;
+	      var unit = match(units, v);
+	      if (unit) {
+	        self.to_meter = unit.to_meter;
+	      }
+	    },
+	    from_greenwich: function(v) {
+	      self.from_greenwich = v * D2R;
+	    },
+	    pm: function(v) {
+	      var pm = match(exports$1, v);
+	      self.from_greenwich = (pm ? pm : parseFloat(v)) * D2R;
+	    },
+	    nadgrids: function(v) {
+	      if (v === '@null') {
+	        self.datumCode = 'none';
+	      }
+	      else {
+	        self.nadgrids = v;
+	      }
+	    },
+	    axis: function(v) {
+	      var legalAxis = "ewnsud";
+	      if (v.length === 3 && legalAxis.indexOf(v.substr(0, 1)) !== -1 && legalAxis.indexOf(v.substr(1, 1)) !== -1 && legalAxis.indexOf(v.substr(2, 1)) !== -1) {
+	        self.axis = v;
+	      }
+	    }
+	  };
+	  for (paramName in paramObj) {
+	    paramVal = paramObj[paramName];
+	    if (paramName in params) {
+	      paramOutname = params[paramName];
+	      if (typeof paramOutname === 'function') {
+	        paramOutname(paramVal);
+	      }
+	      else {
+	        self[paramOutname] = paramVal;
+	      }
+	    }
+	    else {
+	      self[paramName] = paramVal;
+	    }
+	  }
+	  if(typeof self.datumCode === 'string' && self.datumCode !== "WGS84"){
+	    self.datumCode = self.datumCode.toLowerCase();
+	  }
+	  return self;
+	};
+
+	var NEUTRAL = 1;
+	var KEYWORD = 2;
+	var NUMBER = 3;
+	var QUOTED = 4;
+	var AFTERQUOTE = 5;
+	var ENDED = -1;
+	var whitespace = /\s/;
+	var latin = /[A-Za-z]/;
+	var keyword = /[A-Za-z84]/;
+	var endThings = /[,\]]/;
+	var digets = /[\d\.E\-\+]/;
+	// const ignoredChar = /[\s_\-\/\(\)]/g;
+	function Parser(text) {
+	  if (typeof text !== 'string') {
+	    throw new Error('not a string');
+	  }
+	  this.text = text.trim();
+	  this.level = 0;
+	  this.place = 0;
+	  this.root = null;
+	  this.stack = [];
+	  this.currentObject = null;
+	  this.state = NEUTRAL;
+	}
+	Parser.prototype.readCharicter = function() {
+	  var char = this.text[this.place++];
+	  if (this.state !== QUOTED) {
+	    while (whitespace.test(char)) {
+	      if (this.place >= this.text.length) {
+	        return;
+	      }
+	      char = this.text[this.place++];
+	    }
+	  }
+	  switch (this.state) {
+	    case NEUTRAL:
+	      return this.neutral(char);
+	    case KEYWORD:
+	      return this.keyword(char)
+	    case QUOTED:
+	      return this.quoted(char);
+	    case AFTERQUOTE:
+	      return this.afterquote(char);
+	    case NUMBER:
+	      return this.number(char);
+	    case ENDED:
+	      return;
+	  }
+	};
+	Parser.prototype.afterquote = function(char) {
+	  if (char === '"') {
+	    this.word += '"';
+	    this.state = QUOTED;
+	    return;
+	  }
+	  if (endThings.test(char)) {
+	    this.word = this.word.trim();
+	    this.afterItem(char);
+	    return;
+	  }
+	  throw new Error('havn\'t handled "' +char + '" in afterquote yet, index ' + this.place);
+	};
+	Parser.prototype.afterItem = function(char) {
+	  if (char === ',') {
+	    if (this.word !== null) {
+	      this.currentObject.push(this.word);
+	    }
+	    this.word = null;
+	    this.state = NEUTRAL;
+	    return;
+	  }
+	  if (char === ']') {
+	    this.level--;
+	    if (this.word !== null) {
+	      this.currentObject.push(this.word);
+	      this.word = null;
+	    }
+	    this.state = NEUTRAL;
+	    this.currentObject = this.stack.pop();
+	    if (!this.currentObject) {
+	      this.state = ENDED;
+	    }
+
+	    return;
+	  }
+	};
+	Parser.prototype.number = function(char) {
+	  if (digets.test(char)) {
+	    this.word += char;
+	    return;
+	  }
+	  if (endThings.test(char)) {
+	    this.word = parseFloat(this.word);
+	    this.afterItem(char);
+	    return;
+	  }
+	  throw new Error('havn\'t handled "' +char + '" in number yet, index ' + this.place);
+	};
+	Parser.prototype.quoted = function(char) {
+	  if (char === '"') {
+	    this.state = AFTERQUOTE;
+	    return;
+	  }
+	  this.word += char;
+	  return;
+	};
+	Parser.prototype.keyword = function(char) {
+	  if (keyword.test(char)) {
+	    this.word += char;
+	    return;
+	  }
+	  if (char === '[') {
+	    var newObjects = [];
+	    newObjects.push(this.word);
+	    this.level++;
+	    if (this.root === null) {
+	      this.root = newObjects;
+	    } else {
+	      this.currentObject.push(newObjects);
+	    }
+	    this.stack.push(this.currentObject);
+	    this.currentObject = newObjects;
+	    this.state = NEUTRAL;
+	    return;
+	  }
+	  if (endThings.test(char)) {
+	    this.afterItem(char);
+	    return;
+	  }
+	  throw new Error('havn\'t handled "' +char + '" in keyword yet, index ' + this.place);
+	};
+	Parser.prototype.neutral = function(char) {
+	  if (latin.test(char)) {
+	    this.word = char;
+	    this.state = KEYWORD;
+	    return;
+	  }
+	  if (char === '"') {
+	    this.word = '';
+	    this.state = QUOTED;
+	    return;
+	  }
+	  if (digets.test(char)) {
+	    this.word = char;
+	    this.state = NUMBER;
+	    return;
+	  }
+	  if (endThings.test(char)) {
+	    this.afterItem(char);
+	    return;
+	  }
+	  throw new Error('havn\'t handled "' +char + '" in neutral yet, index ' + this.place);
+	};
+	Parser.prototype.output = function() {
+	  while (this.place < this.text.length) {
+	    this.readCharicter();
+	  }
+	  if (this.state === ENDED) {
+	    return this.root;
+	  }
+	  throw new Error('unable to parse string "' +this.text + '". State is ' + this.state);
+	};
+
+	function parseString(txt) {
+	  var parser = new Parser(txt);
+	  return parser.output();
+	}
+
+	function mapit(obj, key, value) {
+	  if (Array.isArray(key)) {
+	    value.unshift(key);
+	    key = null;
+	  }
+	  var thing = key ? {} : obj;
+
+	  var out = value.reduce(function(newObj, item) {
+	    sExpr(item, newObj);
+	    return newObj
+	  }, thing);
+	  if (key) {
+	    obj[key] = out;
+	  }
+	}
+
+	function sExpr(v, obj) {
+	  if (!Array.isArray(v)) {
+	    obj[v] = true;
+	    return;
+	  }
+	  var key = v.shift();
+	  if (key === 'PARAMETER') {
+	    key = v.shift();
+	  }
+	  if (v.length === 1) {
+	    if (Array.isArray(v[0])) {
+	      obj[key] = {};
+	      sExpr(v[0], obj[key]);
+	      return;
+	    }
+	    obj[key] = v[0];
+	    return;
+	  }
+	  if (!v.length) {
+	    obj[key] = true;
+	    return;
+	  }
+	  if (key === 'TOWGS84') {
+	    obj[key] = v;
+	    return;
+	  }
+	  if (!Array.isArray(key)) {
+	    obj[key] = {};
+	  }
+
+	  var i;
+	  switch (key) {
+	    case 'UNIT':
+	    case 'PRIMEM':
+	    case 'VERT_DATUM':
+	      obj[key] = {
+	        name: v[0].toLowerCase(),
+	        convert: v[1]
+	      };
+	      if (v.length === 3) {
+	        sExpr(v[2], obj[key]);
+	      }
+	      return;
+	    case 'SPHEROID':
+	    case 'ELLIPSOID':
+	      obj[key] = {
+	        name: v[0],
+	        a: v[1],
+	        rf: v[2]
+	      };
+	      if (v.length === 4) {
+	        sExpr(v[3], obj[key]);
+	      }
+	      return;
+	    case 'PROJECTEDCRS':
+	    case 'PROJCRS':
+	    case 'GEOGCS':
+	    case 'GEOCCS':
+	    case 'PROJCS':
+	    case 'LOCAL_CS':
+	    case 'GEODCRS':
+	    case 'GEODETICCRS':
+	    case 'GEODETICDATUM':
+	    case 'EDATUM':
+	    case 'ENGINEERINGDATUM':
+	    case 'VERT_CS':
+	    case 'VERTCRS':
+	    case 'VERTICALCRS':
+	    case 'COMPD_CS':
+	    case 'COMPOUNDCRS':
+	    case 'ENGINEERINGCRS':
+	    case 'ENGCRS':
+	    case 'FITTED_CS':
+	    case 'LOCAL_DATUM':
+	    case 'DATUM':
+	      v[0] = ['name', v[0]];
+	      mapit(obj, key, v);
+	      return;
+	    default:
+	      i = -1;
+	      while (++i < v.length) {
+	        if (!Array.isArray(v[i])) {
+	          return sExpr(v, obj[key]);
+	        }
+	      }
+	      return mapit(obj, key, v);
+	  }
+	}
+
+	var D2R$1 = 0.01745329251994329577;
+	function rename(obj, params) {
+	  var outName = params[0];
+	  var inName = params[1];
+	  if (!(outName in obj) && (inName in obj)) {
+	    obj[outName] = obj[inName];
+	    if (params.length === 3) {
+	      obj[outName] = params[2](obj[outName]);
+	    }
+	  }
+	}
+
+	function d2r(input) {
+	  return input * D2R$1;
+	}
+
+	function cleanWKT(wkt) {
+	  if (wkt.type === 'GEOGCS') {
+	    wkt.projName = 'longlat';
+	  } else if (wkt.type === 'LOCAL_CS') {
+	    wkt.projName = 'identity';
+	    wkt.local = true;
+	  } else {
+	    if (typeof wkt.PROJECTION === 'object') {
+	      wkt.projName = Object.keys(wkt.PROJECTION)[0];
+	    } else {
+	      wkt.projName = wkt.PROJECTION;
+	    }
+	  }
+	  if (wkt.UNIT) {
+	    wkt.units = wkt.UNIT.name.toLowerCase();
+	    if (wkt.units === 'metre') {
+	      wkt.units = 'meter';
+	    }
+	    if (wkt.UNIT.convert) {
+	      if (wkt.type === 'GEOGCS') {
+	        if (wkt.DATUM && wkt.DATUM.SPHEROID) {
+	          wkt.to_meter = wkt.UNIT.convert*wkt.DATUM.SPHEROID.a;
+	        }
+	      } else {
+	        wkt.to_meter = wkt.UNIT.convert, 10;
+	      }
+	    }
+	  }
+	  var geogcs = wkt.GEOGCS;
+	  if (wkt.type === 'GEOGCS') {
+	    geogcs = wkt;
+	  }
+	  if (geogcs) {
+	    //if(wkt.GEOGCS.PRIMEM&&wkt.GEOGCS.PRIMEM.convert){
+	    //  wkt.from_greenwich=wkt.GEOGCS.PRIMEM.convert*D2R;
+	    //}
+	    if (geogcs.DATUM) {
+	      wkt.datumCode = geogcs.DATUM.name.toLowerCase();
+	    } else {
+	      wkt.datumCode = geogcs.name.toLowerCase();
+	    }
+	    if (wkt.datumCode.slice(0, 2) === 'd_') {
+	      wkt.datumCode = wkt.datumCode.slice(2);
+	    }
+	    if (wkt.datumCode === 'new_zealand_geodetic_datum_1949' || wkt.datumCode === 'new_zealand_1949') {
+	      wkt.datumCode = 'nzgd49';
+	    }
+	    if (wkt.datumCode === 'wgs_1984') {
+	      if (wkt.PROJECTION === 'Mercator_Auxiliary_Sphere') {
+	        wkt.sphere = true;
+	      }
+	      wkt.datumCode = 'wgs84';
+	    }
+	    if (wkt.datumCode.slice(-6) === '_ferro') {
+	      wkt.datumCode = wkt.datumCode.slice(0, - 6);
+	    }
+	    if (wkt.datumCode.slice(-8) === '_jakarta') {
+	      wkt.datumCode = wkt.datumCode.slice(0, - 8);
+	    }
+	    if (~wkt.datumCode.indexOf('belge')) {
+	      wkt.datumCode = 'rnb72';
+	    }
+	    if (geogcs.DATUM && geogcs.DATUM.SPHEROID) {
+	      wkt.ellps = geogcs.DATUM.SPHEROID.name.replace('_19', '').replace(/[Cc]larke\_18/, 'clrk');
+	      if (wkt.ellps.toLowerCase().slice(0, 13) === 'international') {
+	        wkt.ellps = 'intl';
+	      }
+
+	      wkt.a = geogcs.DATUM.SPHEROID.a;
+	      wkt.rf = parseFloat(geogcs.DATUM.SPHEROID.rf, 10);
+	    }
+	    if (~wkt.datumCode.indexOf('osgb_1936')) {
+	      wkt.datumCode = 'osgb36';
+	    }
+	  }
+	  if (wkt.b && !isFinite(wkt.b)) {
+	    wkt.b = wkt.a;
+	  }
+
+	  function toMeter(input) {
+	    var ratio = wkt.to_meter || 1;
+	    return input * ratio;
+	  }
+	  var renamer = function(a) {
+	    return rename(wkt, a);
+	  };
+	  var list = [
+	    ['standard_parallel_1', 'Standard_Parallel_1'],
+	    ['standard_parallel_2', 'Standard_Parallel_2'],
+	    ['false_easting', 'False_Easting'],
+	    ['false_northing', 'False_Northing'],
+	    ['central_meridian', 'Central_Meridian'],
+	    ['latitude_of_origin', 'Latitude_Of_Origin'],
+	    ['latitude_of_origin', 'Central_Parallel'],
+	    ['scale_factor', 'Scale_Factor'],
+	    ['k0', 'scale_factor'],
+	    ['latitude_of_center', 'Latitude_of_center'],
+	    ['lat0', 'latitude_of_center', d2r],
+	    ['longitude_of_center', 'Longitude_Of_Center'],
+	    ['longc', 'longitude_of_center', d2r],
+	    ['x0', 'false_easting', toMeter],
+	    ['y0', 'false_northing', toMeter],
+	    ['long0', 'central_meridian', d2r],
+	    ['lat0', 'latitude_of_origin', d2r],
+	    ['lat0', 'standard_parallel_1', d2r],
+	    ['lat1', 'standard_parallel_1', d2r],
+	    ['lat2', 'standard_parallel_2', d2r],
+	    ['alpha', 'azimuth', d2r],
+	    ['srsCode', 'name']
+	  ];
+	  list.forEach(renamer);
+	  if (!wkt.long0 && wkt.longc && (wkt.projName === 'Albers_Conic_Equal_Area' || wkt.projName === 'Lambert_Azimuthal_Equal_Area')) {
+	    wkt.long0 = wkt.longc;
+	  }
+	  if (!wkt.lat_ts && wkt.lat1 && (wkt.projName === 'Stereographic_South_Pole' || wkt.projName === 'Polar Stereographic (variant B)')) {
+	    wkt.lat0 = d2r(wkt.lat1 > 0 ? 90 : -90);
+	    wkt.lat_ts = wkt.lat1;
+	  }
+	}
+	var wkt = function(wkt) {
+	  var lisp = parseString(wkt);
+	  var type = lisp.shift();
+	  var name = lisp.shift();
+	  lisp.unshift(['name', name]);
+	  lisp.unshift(['type', type]);
+	  var obj = {};
+	  sExpr(lisp, obj);
+	  cleanWKT(obj);
+	  return obj;
+	};
+
+	function defs(name) {
+	  /*global console*/
+	  var that = this;
+	  if (arguments.length === 2) {
+	    var def = arguments[1];
+	    if (typeof def === 'string') {
+	      if (def.charAt(0) === '+') {
+	        defs[name] = parseProj(arguments[1]);
+	      }
+	      else {
+	        defs[name] = wkt(arguments[1]);
+	      }
+	    } else {
+	      defs[name] = def;
+	    }
+	  }
+	  else if (arguments.length === 1) {
+	    if (Array.isArray(name)) {
+	      return name.map(function(v) {
+	        if (Array.isArray(v)) {
+	          defs.apply(that, v);
+	        }
+	        else {
+	          defs(v);
+	        }
+	      });
+	    }
+	    else if (typeof name === 'string') {
+	      if (name in defs) {
+	        return defs[name];
+	      }
+	    }
+	    else if ('EPSG' in name) {
+	      defs['EPSG:' + name.EPSG] = name;
+	    }
+	    else if ('ESRI' in name) {
+	      defs['ESRI:' + name.ESRI] = name;
+	    }
+	    else if ('IAU2000' in name) {
+	      defs['IAU2000:' + name.IAU2000] = name;
+	    }
+	    else {
+	      console.log(name);
+	    }
+	    return;
+	  }
+
+
+	}
+	globals(defs);
+
+	function testObj(code){
+	  return typeof code === 'string';
+	}
+	function testDef(code){
+	  return code in defs;
+	}
+	 var codeWords = ['PROJECTEDCRS', 'PROJCRS', 'GEOGCS','GEOCCS','PROJCS','LOCAL_CS', 'GEODCRS', 'GEODETICCRS', 'GEODETICDATUM', 'ENGCRS', 'ENGINEERINGCRS']; 
+	function testWKT(code){
+	  return codeWords.some(function (word) {
+	    return code.indexOf(word) > -1;
+	  });
+	}
+	function testProj(code){
+	  return code[0] === '+';
+	}
+	function parse(code){
+	  if (testObj(code)) {
+	    //check to see if this is a WKT string
+	    if (testDef(code)) {
+	      return defs[code];
+	    }
+	    if (testWKT(code)) {
+	      return wkt(code);
+	    }
+	    if (testProj(code)) {
+	      return parseProj(code);
+	    }
+	  }else{
+	    return code;
+	  }
+	}
+
+	var extend = function(destination, source) {
+	  destination = destination || {};
+	  var value, property;
+	  if (!source) {
+	    return destination;
+	  }
+	  for (property in source) {
+	    value = source[property];
+	    if (value !== undefined) {
+	      destination[property] = value;
+	    }
+	  }
+	  return destination;
+	};
+
+	var msfnz = function(eccent, sinphi, cosphi) {
+	  var con = eccent * sinphi;
+	  return cosphi / (Math.sqrt(1 - con * con));
+	};
+
+	var sign = function(x) {
+	  return x<0 ? -1 : 1;
+	};
+
+	var adjust_lon = function(x) {
+	  return (Math.abs(x) <= SPI) ? x : (x - (sign(x) * TWO_PI));
+	};
+
+	var tsfnz = function(eccent, phi, sinphi) {
+	  var con = eccent * sinphi;
+	  var com = 0.5 * eccent;
+	  con = Math.pow(((1 - con) / (1 + con)), com);
+	  return (Math.tan(0.5 * (HALF_PI - phi)) / con);
+	};
+
+	var phi2z = function(eccent, ts) {
+	  var eccnth = 0.5 * eccent;
+	  var con, dphi;
+	  var phi = HALF_PI - 2 * Math.atan(ts);
+	  for (var i = 0; i <= 15; i++) {
+	    con = eccent * Math.sin(phi);
+	    dphi = HALF_PI - 2 * Math.atan(ts * (Math.pow(((1 - con) / (1 + con)), eccnth))) - phi;
+	    phi += dphi;
+	    if (Math.abs(dphi) <= 0.0000000001) {
+	      return phi;
+	    }
+	  }
+	  //console.log("phi2z has NoConvergence");
+	  return -9999;
+	};
+
+	function init() {
+	  var con = this.b / this.a;
+	  this.es = 1 - con * con;
+	  if(!('x0' in this)){
+	    this.x0 = 0;
+	  }
+	  if(!('y0' in this)){
+	    this.y0 = 0;
+	  }
+	  this.e = Math.sqrt(this.es);
+	  if (this.lat_ts) {
+	    if (this.sphere) {
+	      this.k0 = Math.cos(this.lat_ts);
+	    }
+	    else {
+	      this.k0 = msfnz(this.e, Math.sin(this.lat_ts), Math.cos(this.lat_ts));
+	    }
+	  }
+	  else {
+	    if (!this.k0) {
+	      if (this.k) {
+	        this.k0 = this.k;
+	      }
+	      else {
+	        this.k0 = 1;
+	      }
+	    }
+	  }
+	}
+
+	/* Mercator forward equations--mapping lat,long to x,y
+	  --------------------------------------------------*/
+
+	function forward(p) {
+	  var lon = p.x;
+	  var lat = p.y;
+	  // convert to radians
+	  if (lat * R2D > 90 && lat * R2D < -90 && lon * R2D > 180 && lon * R2D < -180) {
+	    return null;
+	  }
+
+	  var x, y;
+	  if (Math.abs(Math.abs(lat) - HALF_PI) <= EPSLN) {
+	    return null;
+	  }
+	  else {
+	    if (this.sphere) {
+	      x = this.x0 + this.a * this.k0 * adjust_lon(lon - this.long0);
+	      y = this.y0 + this.a * this.k0 * Math.log(Math.tan(FORTPI + 0.5 * lat));
+	    }
+	    else {
+	      var sinphi = Math.sin(lat);
+	      var ts = tsfnz(this.e, lat, sinphi);
+	      x = this.x0 + this.a * this.k0 * adjust_lon(lon - this.long0);
+	      y = this.y0 - this.a * this.k0 * Math.log(ts);
+	    }
+	    p.x = x;
+	    p.y = y;
+	    return p;
+	  }
+	}
+
+	/* Mercator inverse equations--mapping x,y to lat/long
+	  --------------------------------------------------*/
+	function inverse(p) {
+
+	  var x = p.x - this.x0;
+	  var y = p.y - this.y0;
+	  var lon, lat;
+
+	  if (this.sphere) {
+	    lat = HALF_PI - 2 * Math.atan(Math.exp(-y / (this.a * this.k0)));
+	  }
+	  else {
+	    var ts = Math.exp(-y / (this.a * this.k0));
+	    lat = phi2z(this.e, ts);
+	    if (lat === -9999) {
+	      return null;
+	    }
+	  }
+	  lon = adjust_lon(this.long0 + x / (this.a * this.k0));
+
+	  p.x = lon;
+	  p.y = lat;
+	  return p;
+	}
+
+	var names$1 = ["Mercator", "Popular Visualisation Pseudo Mercator", "Mercator_1SP", "Mercator_Auxiliary_Sphere", "merc"];
+	var merc = {
+	  init: init,
+	  forward: forward,
+	  inverse: inverse,
+	  names: names$1
+	};
+
+	function init$1() {
+	  //no-op for longlat
+	}
+
+	function identity(pt) {
+	  return pt;
+	}
+	var names$2 = ["longlat", "identity"];
+	var longlat = {
+	  init: init$1,
+	  forward: identity,
+	  inverse: identity,
+	  names: names$2
+	};
+
+	var projs = [merc, longlat];
+	var names$$1 = {};
+	var projStore = [];
+
+	function add(proj, i) {
+	  var len = projStore.length;
+	  if (!proj.names) {
+	    console.log(i);
+	    return true;
+	  }
+	  projStore[len] = proj;
+	  proj.names.forEach(function(n) {
+	    names$$1[n.toLowerCase()] = len;
+	  });
+	  return this;
+	}
+
+	function get(name) {
+	  if (!name) {
+	    return false;
+	  }
+	  var n = name.toLowerCase();
+	  if (typeof names$$1[n] !== 'undefined' && projStore[names$$1[n]]) {
+	    return projStore[names$$1[n]];
+	  }
+	}
+
+	function start() {
+	  projs.forEach(add);
+	}
+	var projections = {
+	  start: start,
+	  add: add,
+	  get: get
+	};
+
+	var exports$2 = {};
+	exports$2.MERIT = {
+	  a: 6378137.0,
+	  rf: 298.257,
+	  ellipseName: "MERIT 1983"
+	};
+
+	exports$2.SGS85 = {
+	  a: 6378136.0,
+	  rf: 298.257,
+	  ellipseName: "Soviet Geodetic System 85"
+	};
+
+	exports$2.GRS80 = {
+	  a: 6378137.0,
+	  rf: 298.257222101,
+	  ellipseName: "GRS 1980(IUGG, 1980)"
+	};
+
+	exports$2.IAU76 = {
+	  a: 6378140.0,
+	  rf: 298.257,
+	  ellipseName: "IAU 1976"
+	};
+
+	exports$2.airy = {
+	  a: 6377563.396,
+	  b: 6356256.910,
+	  ellipseName: "Airy 1830"
+	};
+
+	exports$2.APL4 = {
+	  a: 6378137,
+	  rf: 298.25,
+	  ellipseName: "Appl. Physics. 1965"
+	};
+
+	exports$2.NWL9D = {
+	  a: 6378145.0,
+	  rf: 298.25,
+	  ellipseName: "Naval Weapons Lab., 1965"
+	};
+
+	exports$2.mod_airy = {
+	  a: 6377340.189,
+	  b: 6356034.446,
+	  ellipseName: "Modified Airy"
+	};
+
+	exports$2.andrae = {
+	  a: 6377104.43,
+	  rf: 300.0,
+	  ellipseName: "Andrae 1876 (Den., Iclnd.)"
+	};
+
+	exports$2.aust_SA = {
+	  a: 6378160.0,
+	  rf: 298.25,
+	  ellipseName: "Australian Natl & S. Amer. 1969"
+	};
+
+	exports$2.GRS67 = {
+	  a: 6378160.0,
+	  rf: 298.2471674270,
+	  ellipseName: "GRS 67(IUGG 1967)"
+	};
+
+	exports$2.bessel = {
+	  a: 6377397.155,
+	  rf: 299.1528128,
+	  ellipseName: "Bessel 1841"
+	};
+
+	exports$2.bess_nam = {
+	  a: 6377483.865,
+	  rf: 299.1528128,
+	  ellipseName: "Bessel 1841 (Namibia)"
+	};
+
+	exports$2.clrk66 = {
+	  a: 6378206.4,
+	  b: 6356583.8,
+	  ellipseName: "Clarke 1866"
+	};
+
+	exports$2.clrk80 = {
+	  a: 6378249.145,
+	  rf: 293.4663,
+	  ellipseName: "Clarke 1880 mod."
+	};
+
+	exports$2.clrk58 = {
+	  a: 6378293.645208759,
+	  rf: 294.2606763692654,
+	  ellipseName: "Clarke 1858"
+	};
+
+	exports$2.CPM = {
+	  a: 6375738.7,
+	  rf: 334.29,
+	  ellipseName: "Comm. des Poids et Mesures 1799"
+	};
+
+	exports$2.delmbr = {
+	  a: 6376428.0,
+	  rf: 311.5,
+	  ellipseName: "Delambre 1810 (Belgium)"
+	};
+
+	exports$2.engelis = {
+	  a: 6378136.05,
+	  rf: 298.2566,
+	  ellipseName: "Engelis 1985"
+	};
+
+	exports$2.evrst30 = {
+	  a: 6377276.345,
+	  rf: 300.8017,
+	  ellipseName: "Everest 1830"
+	};
+
+	exports$2.evrst48 = {
+	  a: 6377304.063,
+	  rf: 300.8017,
+	  ellipseName: "Everest 1948"
+	};
+
+	exports$2.evrst56 = {
+	  a: 6377301.243,
+	  rf: 300.8017,
+	  ellipseName: "Everest 1956"
+	};
+
+	exports$2.evrst69 = {
+	  a: 6377295.664,
+	  rf: 300.8017,
+	  ellipseName: "Everest 1969"
+	};
+
+	exports$2.evrstSS = {
+	  a: 6377298.556,
+	  rf: 300.8017,
+	  ellipseName: "Everest (Sabah & Sarawak)"
+	};
+
+	exports$2.fschr60 = {
+	  a: 6378166.0,
+	  rf: 298.3,
+	  ellipseName: "Fischer (Mercury Datum) 1960"
+	};
+
+	exports$2.fschr60m = {
+	  a: 6378155.0,
+	  rf: 298.3,
+	  ellipseName: "Fischer 1960"
+	};
+
+	exports$2.fschr68 = {
+	  a: 6378150.0,
+	  rf: 298.3,
+	  ellipseName: "Fischer 1968"
+	};
+
+	exports$2.helmert = {
+	  a: 6378200.0,
+	  rf: 298.3,
+	  ellipseName: "Helmert 1906"
+	};
+
+	exports$2.hough = {
+	  a: 6378270.0,
+	  rf: 297.0,
+	  ellipseName: "Hough"
+	};
+
+	exports$2.intl = {
+	  a: 6378388.0,
+	  rf: 297.0,
+	  ellipseName: "International 1909 (Hayford)"
+	};
+
+	exports$2.kaula = {
+	  a: 6378163.0,
+	  rf: 298.24,
+	  ellipseName: "Kaula 1961"
+	};
+
+	exports$2.lerch = {
+	  a: 6378139.0,
+	  rf: 298.257,
+	  ellipseName: "Lerch 1979"
+	};
+
+	exports$2.mprts = {
+	  a: 6397300.0,
+	  rf: 191.0,
+	  ellipseName: "Maupertius 1738"
+	};
+
+	exports$2.new_intl = {
+	  a: 6378157.5,
+	  b: 6356772.2,
+	  ellipseName: "New International 1967"
+	};
+
+	exports$2.plessis = {
+	  a: 6376523.0,
+	  rf: 6355863.0,
+	  ellipseName: "Plessis 1817 (France)"
+	};
+
+	exports$2.krass = {
+	  a: 6378245.0,
+	  rf: 298.3,
+	  ellipseName: "Krassovsky, 1942"
+	};
+
+	exports$2.SEasia = {
+	  a: 6378155.0,
+	  b: 6356773.3205,
+	  ellipseName: "Southeast Asia"
+	};
+
+	exports$2.walbeck = {
+	  a: 6376896.0,
+	  b: 6355834.8467,
+	  ellipseName: "Walbeck"
+	};
+
+	exports$2.WGS60 = {
+	  a: 6378165.0,
+	  rf: 298.3,
+	  ellipseName: "WGS 60"
+	};
+
+	exports$2.WGS66 = {
+	  a: 6378145.0,
+	  rf: 298.25,
+	  ellipseName: "WGS 66"
+	};
+
+	exports$2.WGS7 = {
+	  a: 6378135.0,
+	  rf: 298.26,
+	  ellipseName: "WGS 72"
+	};
+
+	var WGS84 = exports$2.WGS84 = {
+	  a: 6378137.0,
+	  rf: 298.257223563,
+	  ellipseName: "WGS 84"
+	};
+
+	exports$2.sphere = {
+	  a: 6370997.0,
+	  b: 6370997.0,
+	  ellipseName: "Normal Sphere (r=6370997)"
+	};
+
+	function eccentricity(a, b, rf, R_A) {
+	  var a2 = a * a; // used in geocentric
+	  var b2 = b * b; // used in geocentric
+	  var es = (a2 - b2) / a2; // e ^ 2
+	  var e = 0;
+	  if (R_A) {
+	    a *= 1 - es * (SIXTH + es * (RA4 + es * RA6));
+	    a2 = a * a;
+	    es = 0;
+	  } else {
+	    e = Math.sqrt(es); // eccentricity
+	  }
+	  var ep2 = (a2 - b2) / b2; // used in geocentric
+	  return {
+	    es: es,
+	    e: e,
+	    ep2: ep2
+	  };
+	}
+	function sphere(a, b, rf, ellps, sphere) {
+	  if (!a) { // do we have an ellipsoid?
+	    var ellipse = match(exports$2, ellps);
+	    if (!ellipse) {
+	      ellipse = WGS84;
+	    }
+	    a = ellipse.a;
+	    b = ellipse.b;
+	    rf = ellipse.rf;
+	  }
+
+	  if (rf && !b) {
+	    b = (1.0 - 1.0 / rf) * a;
+	  }
+	  if (rf === 0 || Math.abs(a - b) < EPSLN) {
+	    sphere = true;
+	    b = a;
+	  }
+	  return {
+	    a: a,
+	    b: b,
+	    rf: rf,
+	    sphere: sphere
+	  };
+	}
+
+	var exports$3 = {};
+	exports$3.wgs84 = {
+	  towgs84: "0,0,0",
+	  ellipse: "WGS84",
+	  datumName: "WGS84"
+	};
+
+	exports$3.ch1903 = {
+	  towgs84: "674.374,15.056,405.346",
+	  ellipse: "bessel",
+	  datumName: "swiss"
+	};
+
+	exports$3.ggrs87 = {
+	  towgs84: "-199.87,74.79,246.62",
+	  ellipse: "GRS80",
+	  datumName: "Greek_Geodetic_Reference_System_1987"
+	};
+
+	exports$3.nad83 = {
+	  towgs84: "0,0,0",
+	  ellipse: "GRS80",
+	  datumName: "North_American_Datum_1983"
+	};
+
+	exports$3.nad27 = {
+	  nadgrids: "@conus,@alaska,@ntv2_0.gsb,@ntv1_can.dat",
+	  ellipse: "clrk66",
+	  datumName: "North_American_Datum_1927"
+	};
+
+	exports$3.potsdam = {
+	  towgs84: "606.0,23.0,413.0",
+	  ellipse: "bessel",
+	  datumName: "Potsdam Rauenberg 1950 DHDN"
+	};
+
+	exports$3.carthage = {
+	  towgs84: "-263.0,6.0,431.0",
+	  ellipse: "clark80",
+	  datumName: "Carthage 1934 Tunisia"
+	};
+
+	exports$3.hermannskogel = {
+	  towgs84: "653.0,-212.0,449.0",
+	  ellipse: "bessel",
+	  datumName: "Hermannskogel"
+	};
+
+	exports$3.ire65 = {
+	  towgs84: "482.530,-130.596,564.557,-1.042,-0.214,-0.631,8.15",
+	  ellipse: "mod_airy",
+	  datumName: "Ireland 1965"
+	};
+
+	exports$3.rassadiran = {
+	  towgs84: "-133.63,-157.5,-158.62",
+	  ellipse: "intl",
+	  datumName: "Rassadiran"
+	};
+
+	exports$3.nzgd49 = {
+	  towgs84: "59.47,-5.04,187.44,0.47,-0.1,1.024,-4.5993",
+	  ellipse: "intl",
+	  datumName: "New Zealand Geodetic Datum 1949"
+	};
+
+	exports$3.osgb36 = {
+	  towgs84: "446.448,-125.157,542.060,0.1502,0.2470,0.8421,-20.4894",
+	  ellipse: "airy",
+	  datumName: "Airy 1830"
+	};
+
+	exports$3.s_jtsk = {
+	  towgs84: "589,76,480",
+	  ellipse: 'bessel',
+	  datumName: 'S-JTSK (Ferro)'
+	};
+
+	exports$3.beduaram = {
+	  towgs84: '-106,-87,188',
+	  ellipse: 'clrk80',
+	  datumName: 'Beduaram'
+	};
+
+	exports$3.gunung_segara = {
+	  towgs84: '-403,684,41',
+	  ellipse: 'bessel',
+	  datumName: 'Gunung Segara Jakarta'
+	};
+
+	exports$3.rnb72 = {
+	  towgs84: "106.869,-52.2978,103.724,-0.33657,0.456955,-1.84218,1",
+	  ellipse: "intl",
+	  datumName: "Reseau National Belge 1972"
+	};
+
+	function datum(datumCode, datum_params, a, b, es, ep2) {
+	  var out = {};
+
+	  if (datumCode === undefined || datumCode === 'none') {
+	    out.datum_type = PJD_NODATUM;
+	  } else {
+	    out.datum_type = PJD_WGS84;
+	  }
+
+	  if (datum_params) {
+	    out.datum_params = datum_params.map(parseFloat);
+	    if (out.datum_params[0] !== 0 || out.datum_params[1] !== 0 || out.datum_params[2] !== 0) {
+	      out.datum_type = PJD_3PARAM;
+	    }
+	    if (out.datum_params.length > 3) {
+	      if (out.datum_params[3] !== 0 || out.datum_params[4] !== 0 || out.datum_params[5] !== 0 || out.datum_params[6] !== 0) {
+	        out.datum_type = PJD_7PARAM;
+	        out.datum_params[3] *= SEC_TO_RAD;
+	        out.datum_params[4] *= SEC_TO_RAD;
+	        out.datum_params[5] *= SEC_TO_RAD;
+	        out.datum_params[6] = (out.datum_params[6] / 1000000.0) + 1.0;
+	      }
+	    }
+	  }
+
+	  out.a = a; //datum object also uses these values
+	  out.b = b;
+	  out.es = es;
+	  out.ep2 = ep2;
+	  return out;
+	}
+
+	function Projection$1(srsCode,callback) {
+	  if (!(this instanceof Projection$1)) {
+	    return new Projection$1(srsCode);
+	  }
+	  callback = callback || function(error){
+	    if(error){
+	      throw error;
+	    }
+	  };
+	  var json = parse(srsCode);
+	  if(typeof json !== 'object'){
+	    callback(srsCode);
+	    return;
+	  }
+	  var ourProj = Projection$1.projections.get(json.projName);
+	  if(!ourProj){
+	    callback(srsCode);
+	    return;
+	  }
+	  if (json.datumCode && json.datumCode !== 'none') {
+	    var datumDef = match(exports$3, json.datumCode);
+	    if (datumDef) {
+	      json.datum_params = datumDef.towgs84 ? datumDef.towgs84.split(',') : null;
+	      json.ellps = datumDef.ellipse;
+	      json.datumName = datumDef.datumName ? datumDef.datumName : json.datumCode;
+	    }
+	  }
+	  json.k0 = json.k0 || 1.0;
+	  json.axis = json.axis || 'enu';
+	  json.ellps = json.ellps || 'wgs84';
+	  var sphere_ = sphere(json.a, json.b, json.rf, json.ellps, json.sphere);
+	  var ecc = eccentricity(sphere_.a, sphere_.b, sphere_.rf, json.R_A);
+	  var datumObj = json.datum || datum(json.datumCode, json.datum_params, sphere_.a, sphere_.b, ecc.es, ecc.ep2);
+
+	  extend(this, json); // transfer everything over from the projection because we don't know what we'll need
+	  extend(this, ourProj); // transfer all the methods from the projection
+
+	  // copy the 4 things over we calulated in deriveConstants.sphere
+	  this.a = sphere_.a;
+	  this.b = sphere_.b;
+	  this.rf = sphere_.rf;
+	  this.sphere = sphere_.sphere;
+
+	  // copy the 3 things we calculated in deriveConstants.eccentricity
+	  this.es = ecc.es;
+	  this.e = ecc.e;
+	  this.ep2 = ecc.ep2;
+
+	  // add in the datum object
+	  this.datum = datumObj;
+
+	  // init the projection
+	  this.init();
+
+	  // legecy callback from back in the day when it went to spatialreference.org
+	  callback(null, this);
+
+	}
+	Projection$1.projections = projections;
+	Projection$1.projections.start();
+
+	function compareDatums(source, dest) {
+	  if (source.datum_type !== dest.datum_type) {
+	    return false; // false, datums are not equal
+	  } else if (source.a !== dest.a || Math.abs(source.es - dest.es) > 0.000000000050) {
+	    // the tolerance for es is to ensure that GRS80 and WGS84
+	    // are considered identical
+	    return false;
+	  } else if (source.datum_type === PJD_3PARAM) {
+	    return (source.datum_params[0] === dest.datum_params[0] && source.datum_params[1] === dest.datum_params[1] && source.datum_params[2] === dest.datum_params[2]);
+	  } else if (source.datum_type === PJD_7PARAM) {
+	    return (source.datum_params[0] === dest.datum_params[0] && source.datum_params[1] === dest.datum_params[1] && source.datum_params[2] === dest.datum_params[2] && source.datum_params[3] === dest.datum_params[3] && source.datum_params[4] === dest.datum_params[4] && source.datum_params[5] === dest.datum_params[5] && source.datum_params[6] === dest.datum_params[6]);
+	  } else {
+	    return true; // datums are equal
+	  }
+	} // cs_compare_datums()
+
+	/*
+	 * The function Convert_Geodetic_To_Geocentric converts geodetic coordinates
+	 * (latitude, longitude, and height) to geocentric coordinates (X, Y, Z),
+	 * according to the current ellipsoid parameters.
+	 *
+	 *    Latitude  : Geodetic latitude in radians                     (input)
+	 *    Longitude : Geodetic longitude in radians                    (input)
+	 *    Height    : Geodetic height, in meters                       (input)
+	 *    X         : Calculated Geocentric X coordinate, in meters    (output)
+	 *    Y         : Calculated Geocentric Y coordinate, in meters    (output)
+	 *    Z         : Calculated Geocentric Z coordinate, in meters    (output)
+	 *
+	 */
+	function geodeticToGeocentric(p, es, a) {
+	  var Longitude = p.x;
+	  var Latitude = p.y;
+	  var Height = p.z ? p.z : 0; //Z value not always supplied
+
+	  var Rn; /*  Earth radius at location  */
+	  var Sin_Lat; /*  Math.sin(Latitude)  */
+	  var Sin2_Lat; /*  Square of Math.sin(Latitude)  */
+	  var Cos_Lat; /*  Math.cos(Latitude)  */
+
+	  /*
+	   ** Don't blow up if Latitude is just a little out of the value
+	   ** range as it may just be a rounding issue.  Also removed longitude
+	   ** test, it should be wrapped by Math.cos() and Math.sin().  NFW for PROJ.4, Sep/2001.
+	   */
+	  if (Latitude < -HALF_PI && Latitude > -1.001 * HALF_PI) {
+	    Latitude = -HALF_PI;
+	  } else if (Latitude > HALF_PI && Latitude < 1.001 * HALF_PI) {
+	    Latitude = HALF_PI;
+	  } else if ((Latitude < -HALF_PI) || (Latitude > HALF_PI)) {
+	    /* Latitude out of range */
+	    //..reportError('geocent:lat out of range:' + Latitude);
+	    return null;
+	  }
+
+	  if (Longitude > Math.PI) {
+	    Longitude -= (2 * Math.PI);
+	  }
+	  Sin_Lat = Math.sin(Latitude);
+	  Cos_Lat = Math.cos(Latitude);
+	  Sin2_Lat = Sin_Lat * Sin_Lat;
+	  Rn = a / (Math.sqrt(1.0e0 - es * Sin2_Lat));
+	  return {
+	    x: (Rn + Height) * Cos_Lat * Math.cos(Longitude),
+	    y: (Rn + Height) * Cos_Lat * Math.sin(Longitude),
+	    z: ((Rn * (1 - es)) + Height) * Sin_Lat
+	  };
+	} // cs_geodetic_to_geocentric()
+
+	function geocentricToGeodetic(p, es, a, b) {
+	  /* local defintions and variables */
+	  /* end-criterium of loop, accuracy of sin(Latitude) */
+	  var genau = 1e-12;
+	  var genau2 = (genau * genau);
+	  var maxiter = 30;
+
+	  var P; /* distance between semi-minor axis and location */
+	  var RR; /* distance between center and location */
+	  var CT; /* sin of geocentric latitude */
+	  var ST; /* cos of geocentric latitude */
+	  var RX;
+	  var RK;
+	  var RN; /* Earth radius at location */
+	  var CPHI0; /* cos of start or old geodetic latitude in iterations */
+	  var SPHI0; /* sin of start or old geodetic latitude in iterations */
+	  var CPHI; /* cos of searched geodetic latitude */
+	  var SPHI; /* sin of searched geodetic latitude */
+	  var SDPHI; /* end-criterium: addition-theorem of sin(Latitude(iter)-Latitude(iter-1)) */
+	  var iter; /* # of continous iteration, max. 30 is always enough (s.a.) */
+
+	  var X = p.x;
+	  var Y = p.y;
+	  var Z = p.z ? p.z : 0.0; //Z value not always supplied
+	  var Longitude;
+	  var Latitude;
+	  var Height;
+
+	  P = Math.sqrt(X * X + Y * Y);
+	  RR = Math.sqrt(X * X + Y * Y + Z * Z);
+
+	  /*      special cases for latitude and longitude */
+	  if (P / a < genau) {
+
+	    /*  special case, if P=0. (X=0., Y=0.) */
+	    Longitude = 0.0;
+
+	    /*  if (X,Y,Z)=(0.,0.,0.) then Height becomes semi-minor axis
+	     *  of ellipsoid (=center of mass), Latitude becomes PI/2 */
+	    if (RR / a < genau) {
+	      Latitude = HALF_PI;
+	      Height = -b;
+	      return {
+	        x: p.x,
+	        y: p.y,
+	        z: p.z
+	      };
+	    }
+	  } else {
+	    /*  ellipsoidal (geodetic) longitude
+	     *  interval: -PI < Longitude <= +PI */
+	    Longitude = Math.atan2(Y, X);
+	  }
+
+	  /* --------------------------------------------------------------
+	   * Following iterative algorithm was developped by
+	   * "Institut for Erdmessung", University of Hannover, July 1988.
+	   * Internet: www.ife.uni-hannover.de
+	   * Iterative computation of CPHI,SPHI and Height.
+	   * Iteration of CPHI and SPHI to 10**-12 radian resp.
+	   * 2*10**-7 arcsec.
+	   * --------------------------------------------------------------
+	   */
+	  CT = Z / RR;
+	  ST = P / RR;
+	  RX = 1.0 / Math.sqrt(1.0 - es * (2.0 - es) * ST * ST);
+	  CPHI0 = ST * (1.0 - es) * RX;
+	  SPHI0 = CT * RX;
+	  iter = 0;
+
+	  /* loop to find sin(Latitude) resp. Latitude
+	   * until |sin(Latitude(iter)-Latitude(iter-1))| < genau */
+	  do {
+	    iter++;
+	    RN = a / Math.sqrt(1.0 - es * SPHI0 * SPHI0);
+
+	    /*  ellipsoidal (geodetic) height */
+	    Height = P * CPHI0 + Z * SPHI0 - RN * (1.0 - es * SPHI0 * SPHI0);
+
+	    RK = es * RN / (RN + Height);
+	    RX = 1.0 / Math.sqrt(1.0 - RK * (2.0 - RK) * ST * ST);
+	    CPHI = ST * (1.0 - RK) * RX;
+	    SPHI = CT * RX;
+	    SDPHI = SPHI * CPHI0 - CPHI * SPHI0;
+	    CPHI0 = CPHI;
+	    SPHI0 = SPHI;
+	  }
+	  while (SDPHI * SDPHI > genau2 && iter < maxiter);
+
+	  /*      ellipsoidal (geodetic) latitude */
+	  Latitude = Math.atan(SPHI / Math.abs(CPHI));
+	  return {
+	    x: Longitude,
+	    y: Latitude,
+	    z: Height
+	  };
+	} // cs_geocentric_to_geodetic()
+
+	/****************************************************************/
+	// pj_geocentic_to_wgs84( p )
+	//  p = point to transform in geocentric coordinates (x,y,z)
+
+
+	/** point object, nothing fancy, just allows values to be
+	    passed back and forth by reference rather than by value.
+	    Other point classes may be used as long as they have
+	    x and y properties, which will get modified in the transform method.
+	*/
+	function geocentricToWgs84(p, datum_type, datum_params) {
+
+	  if (datum_type === PJD_3PARAM) {
+	    // if( x[io] === HUGE_VAL )
+	    //    continue;
+	    return {
+	      x: p.x + datum_params[0],
+	      y: p.y + datum_params[1],
+	      z: p.z + datum_params[2],
+	    };
+	  } else if (datum_type === PJD_7PARAM) {
+	    var Dx_BF = datum_params[0];
+	    var Dy_BF = datum_params[1];
+	    var Dz_BF = datum_params[2];
+	    var Rx_BF = datum_params[3];
+	    var Ry_BF = datum_params[4];
+	    var Rz_BF = datum_params[5];
+	    var M_BF = datum_params[6];
+	    // if( x[io] === HUGE_VAL )
+	    //    continue;
+	    return {
+	      x: M_BF * (p.x - Rz_BF * p.y + Ry_BF * p.z) + Dx_BF,
+	      y: M_BF * (Rz_BF * p.x + p.y - Rx_BF * p.z) + Dy_BF,
+	      z: M_BF * (-Ry_BF * p.x + Rx_BF * p.y + p.z) + Dz_BF
+	    };
+	  }
+	} // cs_geocentric_to_wgs84
+
+	/****************************************************************/
+	// pj_geocentic_from_wgs84()
+	//  coordinate system definition,
+	//  point to transform in geocentric coordinates (x,y,z)
+	function geocentricFromWgs84(p, datum_type, datum_params) {
+
+	  if (datum_type === PJD_3PARAM) {
+	    //if( x[io] === HUGE_VAL )
+	    //    continue;
+	    return {
+	      x: p.x - datum_params[0],
+	      y: p.y - datum_params[1],
+	      z: p.z - datum_params[2],
+	    };
+
+	  } else if (datum_type === PJD_7PARAM) {
+	    var Dx_BF = datum_params[0];
+	    var Dy_BF = datum_params[1];
+	    var Dz_BF = datum_params[2];
+	    var Rx_BF = datum_params[3];
+	    var Ry_BF = datum_params[4];
+	    var Rz_BF = datum_params[5];
+	    var M_BF = datum_params[6];
+	    var x_tmp = (p.x - Dx_BF) / M_BF;
+	    var y_tmp = (p.y - Dy_BF) / M_BF;
+	    var z_tmp = (p.z - Dz_BF) / M_BF;
+	    //if( x[io] === HUGE_VAL )
+	    //    continue;
+
+	    return {
+	      x: x_tmp + Rz_BF * y_tmp - Ry_BF * z_tmp,
+	      y: -Rz_BF * x_tmp + y_tmp + Rx_BF * z_tmp,
+	      z: Ry_BF * x_tmp - Rx_BF * y_tmp + z_tmp
+	    };
+	  } //cs_geocentric_from_wgs84()
+	}
+
+	function checkParams(type) {
+	  return (type === PJD_3PARAM || type === PJD_7PARAM);
+	}
+
+	var datum_transform = function(source, dest, point) {
+	  // Short cut if the datums are identical.
+	  if (compareDatums(source, dest)) {
+	    return point; // in this case, zero is sucess,
+	    // whereas cs_compare_datums returns 1 to indicate TRUE
+	    // confusing, should fix this
+	  }
+
+	  // Explicitly skip datum transform by setting 'datum=none' as parameter for either source or dest
+	  if (source.datum_type === PJD_NODATUM || dest.datum_type === PJD_NODATUM) {
+	    return point;
+	  }
+
+	  // If this datum requires grid shifts, then apply it to geodetic coordinates.
+
+	  // Do we need to go through geocentric coordinates?
+	  if (source.es === dest.es && source.a === dest.a && !checkParams(source.datum_type) &&  !checkParams(dest.datum_type)) {
+	    return point;
+	  }
+
+	  // Convert to geocentric coordinates.
+	  point = geodeticToGeocentric(point, source.es, source.a);
+	  // Convert between datums
+	  if (checkParams(source.datum_type)) {
+	    point = geocentricToWgs84(point, source.datum_type, source.datum_params);
+	  }
+	  if (checkParams(dest.datum_type)) {
+	    point = geocentricFromWgs84(point, dest.datum_type, dest.datum_params);
+	  }
+	  return geocentricToGeodetic(point, dest.es, dest.a, dest.b);
+
+	};
+
+	var adjust_axis = function(crs, denorm, point) {
+	  var xin = point.x,
+	    yin = point.y,
+	    zin = point.z || 0.0;
+	  var v, t, i;
+	  var out = {};
+	  for (i = 0; i < 3; i++) {
+	    if (denorm && i === 2 && point.z === undefined) {
+	      continue;
+	    }
+	    if (i === 0) {
+	      v = xin;
+	      t = 'x';
+	    }
+	    else if (i === 1) {
+	      v = yin;
+	      t = 'y';
+	    }
+	    else {
+	      v = zin;
+	      t = 'z';
+	    }
+	    switch (crs.axis[i]) {
+	    case 'e':
+	      out[t] = v;
+	      break;
+	    case 'w':
+	      out[t] = -v;
+	      break;
+	    case 'n':
+	      out[t] = v;
+	      break;
+	    case 's':
+	      out[t] = -v;
+	      break;
+	    case 'u':
+	      if (point[t] !== undefined) {
+	        out.z = v;
+	      }
+	      break;
+	    case 'd':
+	      if (point[t] !== undefined) {
+	        out.z = -v;
+	      }
+	      break;
+	    default:
+	      //console.log("ERROR: unknow axis ("+crs.axis[i]+") - check definition of "+crs.projName);
+	      return null;
+	    }
+	  }
+	  return out;
+	};
+
+	var toPoint = function (array){
+	  var out = {
+	    x: array[0],
+	    y: array[1]
+	  };
+	  if (array.length>2) {
+	    out.z = array[2];
+	  }
+	  if (array.length>3) {
+	    out.m = array[3];
+	  }
+	  return out;
+	};
+
+	function checkNotWGS(source, dest) {
+	  return ((source.datum.datum_type === PJD_3PARAM || source.datum.datum_type === PJD_7PARAM) && dest.datumCode !== 'WGS84') || ((dest.datum.datum_type === PJD_3PARAM || dest.datum.datum_type === PJD_7PARAM) && source.datumCode !== 'WGS84');
+	}
+
+	function transform(source, dest, point) {
+	  var wgs84;
+	  if (Array.isArray(point)) {
+	    point = toPoint(point);
+	  }
+
+	  // Workaround for datum shifts towgs84, if either source or destination projection is not wgs84
+	  if (source.datum && dest.datum && checkNotWGS(source, dest)) {
+	    wgs84 = new Projection$1('WGS84');
+	    point = transform(source, wgs84, point);
+	    source = wgs84;
+	  }
+	  // DGR, 2010/11/12
+	  if (source.axis !== 'enu') {
+	    point = adjust_axis(source, false, point);
+	  }
+	  // Transform source points to long/lat, if they aren't already.
+	  if (source.projName === 'longlat') {
+	    point = {
+	      x: point.x * D2R,
+	      y: point.y * D2R
+	    };
+	  }
+	  else {
+	    if (source.to_meter) {
+	      point = {
+	        x: point.x * source.to_meter,
+	        y: point.y * source.to_meter
+	      };
+	    }
+	    point = source.inverse(point); // Convert Cartesian to longlat
+	  }
+	  // Adjust for the prime meridian if necessary
+	  if (source.from_greenwich) {
+	    point.x += source.from_greenwich;
+	  }
+
+	  // Convert datums if needed, and if possible.
+	  point = datum_transform(source.datum, dest.datum, point);
+
+	  // Adjust for the prime meridian if necessary
+	  if (dest.from_greenwich) {
+	    point = {
+	      x: point.x - dest.from_greenwich,
+	      y: point.y
+	    };
+	  }
+
+	  if (dest.projName === 'longlat') {
+	    // convert radians to decimal degrees
+	    point = {
+	      x: point.x * R2D,
+	      y: point.y * R2D
+	    };
+	  } else { // else project
+	    point = dest.forward(point);
+	    if (dest.to_meter) {
+	      point = {
+	        x: point.x / dest.to_meter,
+	        y: point.y / dest.to_meter
+	      };
+	    }
+	  }
+
+	  // DGR, 2010/11/12
+	  if (dest.axis !== 'enu') {
+	    return adjust_axis(dest, true, point);
+	  }
+
+	  return point;
+	}
+
+	var wgs84 = Projection$1('WGS84');
+
+	function transformer(from, to, coords) {
+	  var transformedArray;
+	  if (Array.isArray(coords)) {
+	    transformedArray = transform(from, to, coords);
+	    if (coords.length === 3) {
+	      return [transformedArray.x, transformedArray.y, transformedArray.z];
+	    }
+	    else {
+	      return [transformedArray.x, transformedArray.y];
+	    }
+	  }
+	  else {
+	    return transform(from, to, coords);
+	  }
+	}
+
+	function checkProj(item) {
+	  if (item instanceof Projection$1) {
+	    return item;
+	  }
+	  if (item.oProj) {
+	    return item.oProj;
+	  }
+	  return Projection$1(item);
+	}
+	function proj4$1(fromProj, toProj, coord) {
+	  fromProj = checkProj(fromProj);
+	  var single = false;
+	  var obj;
+	  if (typeof toProj === 'undefined') {
+	    toProj = fromProj;
+	    fromProj = wgs84;
+	    single = true;
+	  }
+	  else if (typeof toProj.x !== 'undefined' || Array.isArray(toProj)) {
+	    coord = toProj;
+	    toProj = fromProj;
+	    fromProj = wgs84;
+	    single = true;
+	  }
+	  toProj = checkProj(toProj);
+	  if (coord) {
+	    return transformer(fromProj, toProj, coord);
+	  }
+	  else {
+	    obj = {
+	      forward: function(coords) {
+	        return transformer(fromProj, toProj, coords);
+	      },
+	      inverse: function(coords) {
+	        return transformer(toProj, fromProj, coords);
+	      }
+	    };
+	    if (single) {
+	      obj.oProj = toProj;
+	    }
+	    return obj;
+	  }
+	}
+
+	/**
+	 * UTM zones are grouped, and assigned to one of a group of 6
+	 * sets.
+	 *
+	 * {int} @private
+	 */
+	var NUM_100K_SETS = 6;
+
+	/**
+	 * The column letters (for easting) of the lower left value, per
+	 * set.
+	 *
+	 * {string} @private
+	 */
+	var SET_ORIGIN_COLUMN_LETTERS = 'AJSAJS';
+
+	/**
+	 * The row letters (for northing) of the lower left value, per
+	 * set.
+	 *
+	 * {string} @private
+	 */
+	var SET_ORIGIN_ROW_LETTERS = 'AFAFAF';
+
+	var A = 65; // A
+	var I = 73; // I
+	var O = 79; // O
+	var V = 86; // V
+	var Z = 90; // Z
+	var mgrs = {
+	  forward: forward$1,
+	  inverse: inverse$1,
+	  toPoint: toPoint$1
+	};
+	/**
+	 * Conversion of lat/lon to MGRS.
+	 *
+	 * @param {object} ll Object literal with lat and lon properties on a
+	 *     WGS84 ellipsoid.
+	 * @param {int} accuracy Accuracy in digits (5 for 1 m, 4 for 10 m, 3 for
+	 *      100 m, 2 for 1000 m or 1 for 10000 m). Optional, default is 5.
+	 * @return {string} the MGRS string for the given location and accuracy.
+	 */
+	function forward$1(ll, accuracy) {
+	  accuracy = accuracy || 5; // default accuracy 1m
+	  return encode(LLtoUTM({
+	    lat: ll[1],
+	    lon: ll[0]
+	  }), accuracy);
+	}
+
+	/**
+	 * Conversion of MGRS to lat/lon.
+	 *
+	 * @param {string} mgrs MGRS string.
+	 * @return {array} An array with left (longitude), bottom (latitude), right
+	 *     (longitude) and top (latitude) values in WGS84, representing the
+	 *     bounding box for the provided MGRS reference.
+	 */
+	function inverse$1(mgrs) {
+	  var bbox = UTMtoLL(decode(mgrs.toUpperCase()));
+	  if (bbox.lat && bbox.lon) {
+	    return [bbox.lon, bbox.lat, bbox.lon, bbox.lat];
+	  }
+	  return [bbox.left, bbox.bottom, bbox.right, bbox.top];
+	}
+
+	function toPoint$1(mgrs) {
+	  var bbox = UTMtoLL(decode(mgrs.toUpperCase()));
+	  if (bbox.lat && bbox.lon) {
+	    return [bbox.lon, bbox.lat];
+	  }
+	  return [(bbox.left + bbox.right) / 2, (bbox.top + bbox.bottom) / 2];
+	}
+	/**
+	 * Conversion from degrees to radians.
+	 *
+	 * @private
+	 * @param {number} deg the angle in degrees.
+	 * @return {number} the angle in radians.
+	 */
+	function degToRad(deg) {
+	  return (deg * (Math.PI / 180.0));
+	}
+
+	/**
+	 * Conversion from radians to degrees.
+	 *
+	 * @private
+	 * @param {number} rad the angle in radians.
+	 * @return {number} the angle in degrees.
+	 */
+	function radToDeg(rad) {
+	  return (180.0 * (rad / Math.PI));
+	}
+
+	/**
+	 * Converts a set of Longitude and Latitude co-ordinates to UTM
+	 * using the WGS84 ellipsoid.
+	 *
+	 * @private
+	 * @param {object} ll Object literal with lat and lon properties
+	 *     representing the WGS84 coordinate to be converted.
+	 * @return {object} Object literal containing the UTM value with easting,
+	 *     northing, zoneNumber and zoneLetter properties, and an optional
+	 *     accuracy property in digits. Returns null if the conversion failed.
+	 */
+	function LLtoUTM(ll) {
+	  var Lat = ll.lat;
+	  var Long = ll.lon;
+	  var a = 6378137.0; //ellip.radius;
+	  var eccSquared = 0.00669438; //ellip.eccsq;
+	  var k0 = 0.9996;
+	  var LongOrigin;
+	  var eccPrimeSquared;
+	  var N, T, C, A, M;
+	  var LatRad = degToRad(Lat);
+	  var LongRad = degToRad(Long);
+	  var LongOriginRad;
+	  var ZoneNumber;
+	  // (int)
+	  ZoneNumber = Math.floor((Long + 180) / 6) + 1;
+
+	  //Make sure the longitude 180.00 is in Zone 60
+	  if (Long === 180) {
+	    ZoneNumber = 60;
+	  }
+
+	  // Special zone for Norway
+	  if (Lat >= 56.0 && Lat < 64.0 && Long >= 3.0 && Long < 12.0) {
+	    ZoneNumber = 32;
+	  }
+
+	  // Special zones for Svalbard
+	  if (Lat >= 72.0 && Lat < 84.0) {
+	    if (Long >= 0.0 && Long < 9.0) {
+	      ZoneNumber = 31;
+	    }
+	    else if (Long >= 9.0 && Long < 21.0) {
+	      ZoneNumber = 33;
+	    }
+	    else if (Long >= 21.0 && Long < 33.0) {
+	      ZoneNumber = 35;
+	    }
+	    else if (Long >= 33.0 && Long < 42.0) {
+	      ZoneNumber = 37;
+	    }
+	  }
+
+	  LongOrigin = (ZoneNumber - 1) * 6 - 180 + 3; //+3 puts origin
+	  // in middle of
+	  // zone
+	  LongOriginRad = degToRad(LongOrigin);
+
+	  eccPrimeSquared = (eccSquared) / (1 - eccSquared);
+
+	  N = a / Math.sqrt(1 - eccSquared * Math.sin(LatRad) * Math.sin(LatRad));
+	  T = Math.tan(LatRad) * Math.tan(LatRad);
+	  C = eccPrimeSquared * Math.cos(LatRad) * Math.cos(LatRad);
+	  A = Math.cos(LatRad) * (LongRad - LongOriginRad);
+
+	  M = a * ((1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256) * LatRad - (3 * eccSquared / 8 + 3 * eccSquared * eccSquared / 32 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(2 * LatRad) + (15 * eccSquared * eccSquared / 256 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(4 * LatRad) - (35 * eccSquared * eccSquared * eccSquared / 3072) * Math.sin(6 * LatRad));
+
+	  var UTMEasting = (k0 * N * (A + (1 - T + C) * A * A * A / 6.0 + (5 - 18 * T + T * T + 72 * C - 58 * eccPrimeSquared) * A * A * A * A * A / 120.0) + 500000.0);
+
+	  var UTMNorthing = (k0 * (M + N * Math.tan(LatRad) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24.0 + (61 - 58 * T + T * T + 600 * C - 330 * eccPrimeSquared) * A * A * A * A * A * A / 720.0)));
+	  if (Lat < 0.0) {
+	    UTMNorthing += 10000000.0; //10000000 meter offset for
+	    // southern hemisphere
+	  }
+
+	  return {
+	    northing: Math.round(UTMNorthing),
+	    easting: Math.round(UTMEasting),
+	    zoneNumber: ZoneNumber,
+	    zoneLetter: getLetterDesignator(Lat)
+	  };
+	}
+
+	/**
+	 * Converts UTM coords to lat/long, using the WGS84 ellipsoid. This is a convenience
+	 * class where the Zone can be specified as a single string eg."60N" which
+	 * is then broken down into the ZoneNumber and ZoneLetter.
+	 *
+	 * @private
+	 * @param {object} utm An object literal with northing, easting, zoneNumber
+	 *     and zoneLetter properties. If an optional accuracy property is
+	 *     provided (in meters), a bounding box will be returned instead of
+	 *     latitude and longitude.
+	 * @return {object} An object literal containing either lat and lon values
+	 *     (if no accuracy was provided), or top, right, bottom and left values
+	 *     for the bounding box calculated according to the provided accuracy.
+	 *     Returns null if the conversion failed.
+	 */
+	function UTMtoLL(utm) {
+
+	  var UTMNorthing = utm.northing;
+	  var UTMEasting = utm.easting;
+	  var zoneLetter = utm.zoneLetter;
+	  var zoneNumber = utm.zoneNumber;
+	  // check the ZoneNummber is valid
+	  if (zoneNumber < 0 || zoneNumber > 60) {
+	    return null;
+	  }
+
+	  var k0 = 0.9996;
+	  var a = 6378137.0; //ellip.radius;
+	  var eccSquared = 0.00669438; //ellip.eccsq;
+	  var eccPrimeSquared;
+	  var e1 = (1 - Math.sqrt(1 - eccSquared)) / (1 + Math.sqrt(1 - eccSquared));
+	  var N1, T1, C1, R1, D, M;
+	  var LongOrigin;
+	  var mu, phi1Rad;
+
+	  // remove 500,000 meter offset for longitude
+	  var x = UTMEasting - 500000.0;
+	  var y = UTMNorthing;
+
+	  // We must know somehow if we are in the Northern or Southern
+	  // hemisphere, this is the only time we use the letter So even
+	  // if the Zone letter isn't exactly correct it should indicate
+	  // the hemisphere correctly
+	  if (zoneLetter < 'N') {
+	    y -= 10000000.0; // remove 10,000,000 meter offset used
+	    // for southern hemisphere
+	  }
+
+	  // There are 60 zones with zone 1 being at West -180 to -174
+	  LongOrigin = (zoneNumber - 1) * 6 - 180 + 3; // +3 puts origin
+	  // in middle of
+	  // zone
+
+	  eccPrimeSquared = (eccSquared) / (1 - eccSquared);
+
+	  M = y / k0;
+	  mu = M / (a * (1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared * eccSquared / 256));
+
+	  phi1Rad = mu + (3 * e1 / 2 - 27 * e1 * e1 * e1 / 32) * Math.sin(2 * mu) + (21 * e1 * e1 / 16 - 55 * e1 * e1 * e1 * e1 / 32) * Math.sin(4 * mu) + (151 * e1 * e1 * e1 / 96) * Math.sin(6 * mu);
+	  // double phi1 = ProjMath.radToDeg(phi1Rad);
+
+	  N1 = a / Math.sqrt(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad));
+	  T1 = Math.tan(phi1Rad) * Math.tan(phi1Rad);
+	  C1 = eccPrimeSquared * Math.cos(phi1Rad) * Math.cos(phi1Rad);
+	  R1 = a * (1 - eccSquared) / Math.pow(1 - eccSquared * Math.sin(phi1Rad) * Math.sin(phi1Rad), 1.5);
+	  D = x / (N1 * k0);
+
+	  var lat = phi1Rad - (N1 * Math.tan(phi1Rad) / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * eccPrimeSquared) * D * D * D * D / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * eccPrimeSquared - 3 * C1 * C1) * D * D * D * D * D * D / 720);
+	  lat = radToDeg(lat);
+
+	  var lon = (D - (1 + 2 * T1 + C1) * D * D * D / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * eccPrimeSquared + 24 * T1 * T1) * D * D * D * D * D / 120) / Math.cos(phi1Rad);
+	  lon = LongOrigin + radToDeg(lon);
+
+	  var result;
+	  if (utm.accuracy) {
+	    var topRight = UTMtoLL({
+	      northing: utm.northing + utm.accuracy,
+	      easting: utm.easting + utm.accuracy,
+	      zoneLetter: utm.zoneLetter,
+	      zoneNumber: utm.zoneNumber
+	    });
+	    result = {
+	      top: topRight.lat,
+	      right: topRight.lon,
+	      bottom: lat,
+	      left: lon
+	    };
+	  }
+	  else {
+	    result = {
+	      lat: lat,
+	      lon: lon
+	    };
+	  }
+	  return result;
+	}
+
+	/**
+	 * Calculates the MGRS letter designator for the given latitude.
+	 *
+	 * @private
+	 * @param {number} lat The latitude in WGS84 to get the letter designator
+	 *     for.
+	 * @return {char} The letter designator.
+	 */
+	function getLetterDesignator(lat) {
+	  //This is here as an error flag to show that the Latitude is
+	  //outside MGRS limits
+	  var LetterDesignator = 'Z';
+
+	  if ((84 >= lat) && (lat >= 72)) {
+	    LetterDesignator = 'X';
+	  }
+	  else if ((72 > lat) && (lat >= 64)) {
+	    LetterDesignator = 'W';
+	  }
+	  else if ((64 > lat) && (lat >= 56)) {
+	    LetterDesignator = 'V';
+	  }
+	  else if ((56 > lat) && (lat >= 48)) {
+	    LetterDesignator = 'U';
+	  }
+	  else if ((48 > lat) && (lat >= 40)) {
+	    LetterDesignator = 'T';
+	  }
+	  else if ((40 > lat) && (lat >= 32)) {
+	    LetterDesignator = 'S';
+	  }
+	  else if ((32 > lat) && (lat >= 24)) {
+	    LetterDesignator = 'R';
+	  }
+	  else if ((24 > lat) && (lat >= 16)) {
+	    LetterDesignator = 'Q';
+	  }
+	  else if ((16 > lat) && (lat >= 8)) {
+	    LetterDesignator = 'P';
+	  }
+	  else if ((8 > lat) && (lat >= 0)) {
+	    LetterDesignator = 'N';
+	  }
+	  else if ((0 > lat) && (lat >= -8)) {
+	    LetterDesignator = 'M';
+	  }
+	  else if ((-8 > lat) && (lat >= -16)) {
+	    LetterDesignator = 'L';
+	  }
+	  else if ((-16 > lat) && (lat >= -24)) {
+	    LetterDesignator = 'K';
+	  }
+	  else if ((-24 > lat) && (lat >= -32)) {
+	    LetterDesignator = 'J';
+	  }
+	  else if ((-32 > lat) && (lat >= -40)) {
+	    LetterDesignator = 'H';
+	  }
+	  else if ((-40 > lat) && (lat >= -48)) {
+	    LetterDesignator = 'G';
+	  }
+	  else if ((-48 > lat) && (lat >= -56)) {
+	    LetterDesignator = 'F';
+	  }
+	  else if ((-56 > lat) && (lat >= -64)) {
+	    LetterDesignator = 'E';
+	  }
+	  else if ((-64 > lat) && (lat >= -72)) {
+	    LetterDesignator = 'D';
+	  }
+	  else if ((-72 > lat) && (lat >= -80)) {
+	    LetterDesignator = 'C';
+	  }
+	  return LetterDesignator;
+	}
+
+	/**
+	 * Encodes a UTM location as MGRS string.
+	 *
+	 * @private
+	 * @param {object} utm An object literal with easting, northing,
+	 *     zoneLetter, zoneNumber
+	 * @param {number} accuracy Accuracy in digits (1-5).
+	 * @return {string} MGRS string for the given UTM location.
+	 */
+	function encode(utm, accuracy) {
+	  // prepend with leading zeroes
+	  var seasting = "00000" + utm.easting,
+	    snorthing = "00000" + utm.northing;
+
+	  return utm.zoneNumber + utm.zoneLetter + get100kID(utm.easting, utm.northing, utm.zoneNumber) + seasting.substr(seasting.length - 5, accuracy) + snorthing.substr(snorthing.length - 5, accuracy);
+	}
+
+	/**
+	 * Get the two letter 100k designator for a given UTM easting,
+	 * northing and zone number value.
+	 *
+	 * @private
+	 * @param {number} easting
+	 * @param {number} northing
+	 * @param {number} zoneNumber
+	 * @return the two letter 100k designator for the given UTM location.
+	 */
+	function get100kID(easting, northing, zoneNumber) {
+	  var setParm = get100kSetForZone(zoneNumber);
+	  var setColumn = Math.floor(easting / 100000);
+	  var setRow = Math.floor(northing / 100000) % 20;
+	  return getLetter100kID(setColumn, setRow, setParm);
+	}
+
+	/**
+	 * Given a UTM zone number, figure out the MGRS 100K set it is in.
+	 *
+	 * @private
+	 * @param {number} i An UTM zone number.
+	 * @return {number} the 100k set the UTM zone is in.
+	 */
+	function get100kSetForZone(i) {
+	  var setParm = i % NUM_100K_SETS;
+	  if (setParm === 0) {
+	    setParm = NUM_100K_SETS;
+	  }
+
+	  return setParm;
+	}
+
+	/**
+	 * Get the two-letter MGRS 100k designator given information
+	 * translated from the UTM northing, easting and zone number.
+	 *
+	 * @private
+	 * @param {number} column the column index as it relates to the MGRS
+	 *        100k set spreadsheet, created from the UTM easting.
+	 *        Values are 1-8.
+	 * @param {number} row the row index as it relates to the MGRS 100k set
+	 *        spreadsheet, created from the UTM northing value. Values
+	 *        are from 0-19.
+	 * @param {number} parm the set block, as it relates to the MGRS 100k set
+	 *        spreadsheet, created from the UTM zone. Values are from
+	 *        1-60.
+	 * @return two letter MGRS 100k code.
+	 */
+	function getLetter100kID(column, row, parm) {
+	  // colOrigin and rowOrigin are the letters at the origin of the set
+	  var index = parm - 1;
+	  var colOrigin = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(index);
+	  var rowOrigin = SET_ORIGIN_ROW_LETTERS.charCodeAt(index);
+
+	  // colInt and rowInt are the letters to build to return
+	  var colInt = colOrigin + column - 1;
+	  var rowInt = rowOrigin + row;
+	  var rollover = false;
+
+	  if (colInt > Z) {
+	    colInt = colInt - Z + A - 1;
+	    rollover = true;
+	  }
+
+	  if (colInt === I || (colOrigin < I && colInt > I) || ((colInt > I || colOrigin < I) && rollover)) {
+	    colInt++;
+	  }
+
+	  if (colInt === O || (colOrigin < O && colInt > O) || ((colInt > O || colOrigin < O) && rollover)) {
+	    colInt++;
+
+	    if (colInt === I) {
+	      colInt++;
+	    }
+	  }
+
+	  if (colInt > Z) {
+	    colInt = colInt - Z + A - 1;
+	  }
+
+	  if (rowInt > V) {
+	    rowInt = rowInt - V + A - 1;
+	    rollover = true;
+	  }
+	  else {
+	    rollover = false;
+	  }
+
+	  if (((rowInt === I) || ((rowOrigin < I) && (rowInt > I))) || (((rowInt > I) || (rowOrigin < I)) && rollover)) {
+	    rowInt++;
+	  }
+
+	  if (((rowInt === O) || ((rowOrigin < O) && (rowInt > O))) || (((rowInt > O) || (rowOrigin < O)) && rollover)) {
+	    rowInt++;
+
+	    if (rowInt === I) {
+	      rowInt++;
+	    }
+	  }
+
+	  if (rowInt > V) {
+	    rowInt = rowInt - V + A - 1;
+	  }
+
+	  var twoLetter = String.fromCharCode(colInt) + String.fromCharCode(rowInt);
+	  return twoLetter;
+	}
+
+	/**
+	 * Decode the UTM parameters from a MGRS string.
+	 *
+	 * @private
+	 * @param {string} mgrsString an UPPERCASE coordinate string is expected.
+	 * @return {object} An object literal with easting, northing, zoneLetter,
+	 *     zoneNumber and accuracy (in meters) properties.
+	 */
+	function decode(mgrsString) {
+
+	  if (mgrsString && mgrsString.length === 0) {
+	    throw ("MGRSPoint coverting from nothing");
+	  }
+
+	  var length = mgrsString.length;
+
+	  var hunK = null;
+	  var sb = "";
+	  var testChar;
+	  var i = 0;
+
+	  // get Zone number
+	  while (!(/[A-Z]/).test(testChar = mgrsString.charAt(i))) {
+	    if (i >= 2) {
+	      throw ("MGRSPoint bad conversion from: " + mgrsString);
+	    }
+	    sb += testChar;
+	    i++;
+	  }
+
+	  var zoneNumber = parseInt(sb, 10);
+
+	  if (i === 0 || i + 3 > length) {
+	    // A good MGRS string has to be 4-5 digits long,
+	    // ##AAA/#AAA at least.
+	    throw ("MGRSPoint bad conversion from: " + mgrsString);
+	  }
+
+	  var zoneLetter = mgrsString.charAt(i++);
+
+	  // Should we check the zone letter here? Why not.
+	  if (zoneLetter <= 'A' || zoneLetter === 'B' || zoneLetter === 'Y' || zoneLetter >= 'Z' || zoneLetter === 'I' || zoneLetter === 'O') {
+	    throw ("MGRSPoint zone letter " + zoneLetter + " not handled: " + mgrsString);
+	  }
+
+	  hunK = mgrsString.substring(i, i += 2);
+
+	  var set = get100kSetForZone(zoneNumber);
+
+	  var east100k = getEastingFromChar(hunK.charAt(0), set);
+	  var north100k = getNorthingFromChar(hunK.charAt(1), set);
+
+	  // We have a bug where the northing may be 2000000 too low.
+	  // How
+	  // do we know when to roll over?
+
+	  while (north100k < getMinNorthing(zoneLetter)) {
+	    north100k += 2000000;
+	  }
+
+	  // calculate the char index for easting/northing separator
+	  var remainder = length - i;
+
+	  if (remainder % 2 !== 0) {
+	    throw ("MGRSPoint has to have an even number \nof digits after the zone letter and two 100km letters - front \nhalf for easting meters, second half for \nnorthing meters" + mgrsString);
+	  }
+
+	  var sep = remainder / 2;
+
+	  var sepEasting = 0.0;
+	  var sepNorthing = 0.0;
+	  var accuracyBonus, sepEastingString, sepNorthingString, easting, northing;
+	  if (sep > 0) {
+	    accuracyBonus = 100000.0 / Math.pow(10, sep);
+	    sepEastingString = mgrsString.substring(i, i + sep);
+	    sepEasting = parseFloat(sepEastingString) * accuracyBonus;
+	    sepNorthingString = mgrsString.substring(i + sep);
+	    sepNorthing = parseFloat(sepNorthingString) * accuracyBonus;
+	  }
+
+	  easting = sepEasting + east100k;
+	  northing = sepNorthing + north100k;
+
+	  return {
+	    easting: easting,
+	    northing: northing,
+	    zoneLetter: zoneLetter,
+	    zoneNumber: zoneNumber,
+	    accuracy: accuracyBonus
+	  };
+	}
+
+	/**
+	 * Given the first letter from a two-letter MGRS 100k zone, and given the
+	 * MGRS table set for the zone number, figure out the easting value that
+	 * should be added to the other, secondary easting value.
+	 *
+	 * @private
+	 * @param {char} e The first letter from a two-letter MGRS 100´k zone.
+	 * @param {number} set The MGRS table set for the zone number.
+	 * @return {number} The easting value for the given letter and set.
+	 */
+	function getEastingFromChar(e, set) {
+	  // colOrigin is the letter at the origin of the set for the
+	  // column
+	  var curCol = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(set - 1);
+	  var eastingValue = 100000.0;
+	  var rewindMarker = false;
+
+	  while (curCol !== e.charCodeAt(0)) {
+	    curCol++;
+	    if (curCol === I) {
+	      curCol++;
+	    }
+	    if (curCol === O) {
+	      curCol++;
+	    }
+	    if (curCol > Z) {
+	      if (rewindMarker) {
+	        throw ("Bad character: " + e);
+	      }
+	      curCol = A;
+	      rewindMarker = true;
+	    }
+	    eastingValue += 100000.0;
+	  }
+
+	  return eastingValue;
+	}
+
+	/**
+	 * Given the second letter from a two-letter MGRS 100k zone, and given the
+	 * MGRS table set for the zone number, figure out the northing value that
+	 * should be added to the other, secondary northing value. You have to
+	 * remember that Northings are determined from the equator, and the vertical
+	 * cycle of letters mean a 2000000 additional northing meters. This happens
+	 * approx. every 18 degrees of latitude. This method does *NOT* count any
+	 * additional northings. You have to figure out how many 2000000 meters need
+	 * to be added for the zone letter of the MGRS coordinate.
+	 *
+	 * @private
+	 * @param {char} n Second letter of the MGRS 100k zone
+	 * @param {number} set The MGRS table set number, which is dependent on the
+	 *     UTM zone number.
+	 * @return {number} The northing value for the given letter and set.
+	 */
+	function getNorthingFromChar(n, set) {
+
+	  if (n > 'V') {
+	    throw ("MGRSPoint given invalid Northing " + n);
+	  }
+
+	  // rowOrigin is the letter at the origin of the set for the
+	  // column
+	  var curRow = SET_ORIGIN_ROW_LETTERS.charCodeAt(set - 1);
+	  var northingValue = 0.0;
+	  var rewindMarker = false;
+
+	  while (curRow !== n.charCodeAt(0)) {
+	    curRow++;
+	    if (curRow === I) {
+	      curRow++;
+	    }
+	    if (curRow === O) {
+	      curRow++;
+	    }
+	    // fixing a bug making whole application hang in this loop
+	    // when 'n' is a wrong character
+	    if (curRow > V) {
+	      if (rewindMarker) { // making sure that this loop ends
+	        throw ("Bad character: " + n);
+	      }
+	      curRow = A;
+	      rewindMarker = true;
+	    }
+	    northingValue += 100000.0;
+	  }
+
+	  return northingValue;
+	}
+
+	/**
+	 * The function getMinNorthing returns the minimum northing value of a MGRS
+	 * zone.
+	 *
+	 * Ported from Geotrans' c Lattitude_Band_Value structure table.
+	 *
+	 * @private
+	 * @param {char} zoneLetter The MGRS zone to get the min northing for.
+	 * @return {number}
+	 */
+	function getMinNorthing(zoneLetter) {
+	  var northing;
+	  switch (zoneLetter) {
+	  case 'C':
+	    northing = 1100000.0;
+	    break;
+	  case 'D':
+	    northing = 2000000.0;
+	    break;
+	  case 'E':
+	    northing = 2800000.0;
+	    break;
+	  case 'F':
+	    northing = 3700000.0;
+	    break;
+	  case 'G':
+	    northing = 4600000.0;
+	    break;
+	  case 'H':
+	    northing = 5500000.0;
+	    break;
+	  case 'J':
+	    northing = 6400000.0;
+	    break;
+	  case 'K':
+	    northing = 7300000.0;
+	    break;
+	  case 'L':
+	    northing = 8200000.0;
+	    break;
+	  case 'M':
+	    northing = 9100000.0;
+	    break;
+	  case 'N':
+	    northing = 0.0;
+	    break;
+	  case 'P':
+	    northing = 800000.0;
+	    break;
+	  case 'Q':
+	    northing = 1700000.0;
+	    break;
+	  case 'R':
+	    northing = 2600000.0;
+	    break;
+	  case 'S':
+	    northing = 3500000.0;
+	    break;
+	  case 'T':
+	    northing = 4400000.0;
+	    break;
+	  case 'U':
+	    northing = 5300000.0;
+	    break;
+	  case 'V':
+	    northing = 6200000.0;
+	    break;
+	  case 'W':
+	    northing = 7000000.0;
+	    break;
+	  case 'X':
+	    northing = 7900000.0;
+	    break;
+	  default:
+	    northing = -1.0;
+	  }
+	  if (northing >= 0.0) {
+	    return northing;
+	  }
+	  else {
+	    throw ("Invalid zone letter: " + zoneLetter);
+	  }
+
+	}
+
+	function Point(x, y, z) {
+	  if (!(this instanceof Point)) {
+	    return new Point(x, y, z);
+	  }
+	  if (Array.isArray(x)) {
+	    this.x = x[0];
+	    this.y = x[1];
+	    this.z = x[2] || 0.0;
+	  } else if(typeof x === 'object') {
+	    this.x = x.x;
+	    this.y = x.y;
+	    this.z = x.z || 0.0;
+	  } else if (typeof x === 'string' && typeof y === 'undefined') {
+	    var coords = x.split(',');
+	    this.x = parseFloat(coords[0], 10);
+	    this.y = parseFloat(coords[1], 10);
+	    this.z = parseFloat(coords[2], 10) || 0.0;
+	  } else {
+	    this.x = x;
+	    this.y = y;
+	    this.z = z || 0.0;
+	  }
+	  console.warn('proj4.Point will be removed in version 3, use proj4.toPoint');
+	}
+
+	Point.fromMGRS = function(mgrsStr) {
+	  return new Point(toPoint$1(mgrsStr));
+	};
+	Point.prototype.toMGRS = function(accuracy) {
+	  return forward$1([this.x, this.y], accuracy);
+	};
+
+	var version = "2.4.3";
+
+	var C00 = 1;
+	var C02 = 0.25;
+	var C04 = 0.046875;
+	var C06 = 0.01953125;
+	var C08 = 0.01068115234375;
+	var C22 = 0.75;
+	var C44 = 0.46875;
+	var C46 = 0.01302083333333333333;
+	var C48 = 0.00712076822916666666;
+	var C66 = 0.36458333333333333333;
+	var C68 = 0.00569661458333333333;
+	var C88 = 0.3076171875;
+
+	var pj_enfn = function(es) {
+	  var en = [];
+	  en[0] = C00 - es * (C02 + es * (C04 + es * (C06 + es * C08)));
+	  en[1] = es * (C22 - es * (C04 + es * (C06 + es * C08)));
+	  var t = es * es;
+	  en[2] = t * (C44 - es * (C46 + es * C48));
+	  t *= es;
+	  en[3] = t * (C66 - es * C68);
+	  en[4] = t * es * C88;
+	  return en;
+	};
+
+	var pj_mlfn = function(phi, sphi, cphi, en) {
+	  cphi *= sphi;
+	  sphi *= sphi;
+	  return (en[0] * phi - cphi * (en[1] + sphi * (en[2] + sphi * (en[3] + sphi * en[4]))));
+	};
+
+	var MAX_ITER = 20;
+
+	var pj_inv_mlfn = function(arg, es, en) {
+	  var k = 1 / (1 - es);
+	  var phi = arg;
+	  for (var i = MAX_ITER; i; --i) { /* rarely goes over 2 iterations */
+	    var s = Math.sin(phi);
+	    var t = 1 - es * s * s;
+	    //t = this.pj_mlfn(phi, s, Math.cos(phi), en) - arg;
+	    //phi -= t * (t * Math.sqrt(t)) * k;
+	    t = (pj_mlfn(phi, s, Math.cos(phi), en) - arg) * (t * Math.sqrt(t)) * k;
+	    phi -= t;
+	    if (Math.abs(t) < EPSLN) {
+	      return phi;
+	    }
+	  }
+	  //..reportError("cass:pj_inv_mlfn: Convergence error");
+	  return phi;
+	};
+
+	// Heavily based on this tmerc projection implementation
+	// https://github.com/mbloch/mapshaper-proj/blob/master/src/projections/tmerc.js
+
+	function init$2() {
+	  this.x0 = this.x0 !== undefined ? this.x0 : 0;
+	  this.y0 = this.y0 !== undefined ? this.y0 : 0;
+	  this.long0 = this.long0 !== undefined ? this.long0 : 0;
+	  this.lat0 = this.lat0 !== undefined ? this.lat0 : 0;
+
+	  if (this.es) {
+	    this.en = pj_enfn(this.es);
+	    this.ml0 = pj_mlfn(this.lat0, Math.sin(this.lat0), Math.cos(this.lat0), this.en);
+	  }
+	}
+
+	/**
+	    Transverse Mercator Forward  - long/lat to x/y
+	    long/lat in radians
+	  */
+	function forward$2(p) {
+	  var lon = p.x;
+	  var lat = p.y;
+
+	  var delta_lon = adjust_lon(lon - this.long0);
+	  var con;
+	  var x, y;
+	  var sin_phi = Math.sin(lat);
+	  var cos_phi = Math.cos(lat);
+
+	  if (!this.es) {
+	    var b = cos_phi * Math.sin(delta_lon);
+
+	    if ((Math.abs(Math.abs(b) - 1)) < EPSLN) {
+	      return (93);
+	    }
+	    else {
+	      x = 0.5 * this.a * this.k0 * Math.log((1 + b) / (1 - b)) + this.x0;
+	      y = cos_phi * Math.cos(delta_lon) / Math.sqrt(1 - Math.pow(b, 2));
+	      b = Math.abs(y);
+
+	      if (b >= 1) {
+	        if ((b - 1) > EPSLN) {
+	          return (93);
+	        }
+	        else {
+	          y = 0;
+	        }
+	      }
+	      else {
+	        y = Math.acos(y);
+	      }
+
+	      if (lat < 0) {
+	        y = -y;
+	      }
+
+	      y = this.a * this.k0 * (y - this.lat0) + this.y0;
+	    }
+	  }
+	  else {
+	    var al = cos_phi * delta_lon;
+	    var als = Math.pow(al, 2);
+	    var c = this.ep2 * Math.pow(cos_phi, 2);
+	    var cs = Math.pow(c, 2);
+	    var tq = Math.abs(cos_phi) > EPSLN ? Math.tan(lat) : 0;
+	    var t = Math.pow(tq, 2);
+	    var ts = Math.pow(t, 2);
+	    con = 1 - this.es * Math.pow(sin_phi, 2);
+	    al = al / Math.sqrt(con);
+	    var ml = pj_mlfn(lat, sin_phi, cos_phi, this.en);
+
+	    x = this.a * (this.k0 * al * (1 +
+	      als / 6 * (1 - t + c +
+	      als / 20 * (5 - 18 * t + ts + 14 * c - 58 * t * c +
+	      als / 42 * (61 + 179 * ts - ts * t - 479 * t))))) +
+	      this.x0;
+
+	    y = this.a * (this.k0 * (ml - this.ml0 +
+	      sin_phi * delta_lon * al / 2 * (1 +
+	      als / 12 * (5 - t + 9 * c + 4 * cs +
+	      als / 30 * (61 + ts - 58 * t + 270 * c - 330 * t * c +
+	      als / 56 * (1385 + 543 * ts - ts * t - 3111 * t)))))) +
+	      this.y0;
+	  }
+
+	  p.x = x;
+	  p.y = y;
+
+	  return p;
+	}
+
+	/**
+	    Transverse Mercator Inverse  -  x/y to long/lat
+	  */
+	function inverse$2(p) {
+	  var con, phi;
+	  var lat, lon;
+	  var x = (p.x - this.x0) * (1 / this.a);
+	  var y = (p.y - this.y0) * (1 / this.a);
+
+	  if (!this.es) {
+	    var f = Math.exp(x / this.k0);
+	    var g = 0.5 * (f - 1 / f);
+	    var temp = this.lat0 + y / this.k0;
+	    var h = Math.cos(temp);
+	    con = Math.sqrt((1 - Math.pow(h, 2)) / (1 + Math.pow(g, 2)));
+	    lat = Math.asin(con);
+
+	    if (y < 0) {
+	      lat = -lat;
+	    }
+
+	    if ((g === 0) && (h === 0)) {
+	      lon = 0;
+	    }
+	    else {
+	      lon = adjust_lon(Math.atan2(g, h) + this.long0);
+	    }
+	  }
+	  else { // ellipsoidal form
+	    con = this.ml0 + y / this.k0;
+	    phi = pj_inv_mlfn(con, this.es, this.en);
+
+	    if (Math.abs(phi) < HALF_PI) {
+	      var sin_phi = Math.sin(phi);
+	      var cos_phi = Math.cos(phi);
+	      var tan_phi = Math.abs(cos_phi) > EPSLN ? Math.tan(phi) : 0;
+	      var c = this.ep2 * Math.pow(cos_phi, 2);
+	      var cs = Math.pow(c, 2);
+	      var t = Math.pow(tan_phi, 2);
+	      var ts = Math.pow(t, 2);
+	      con = 1 - this.es * Math.pow(sin_phi, 2);
+	      var d = x * Math.sqrt(con) / this.k0;
+	      var ds = Math.pow(d, 2);
+	      con = con * tan_phi;
+
+	      lat = phi - (con * ds / (1 - this.es)) * 0.5 * (1 -
+	        ds / 12 * (5 + 3 * t - 9 * c * t + c - 4 * cs -
+	        ds / 30 * (61 + 90 * t - 252 * c * t + 45 * ts + 46 * c -
+	        ds / 56 * (1385 + 3633 * t + 4095 * ts + 1574 * ts * t))));
+
+	      lon = adjust_lon(this.long0 + (d * (1 -
+	        ds / 6 * (1 + 2 * t + c -
+	        ds / 20 * (5 + 28 * t + 24 * ts + 8 * c * t + 6 * c -
+	        ds / 42 * (61 + 662 * t + 1320 * ts + 720 * ts * t)))) / cos_phi));
+	    }
+	    else {
+	      lat = HALF_PI * sign(y);
+	      lon = 0;
+	    }
+	  }
+
+	  p.x = lon;
+	  p.y = lat;
+
+	  return p;
+	}
+
+	var names$3 = ["Transverse_Mercator", "Transverse Mercator", "tmerc"];
+	var tmerc = {
+	  init: init$2,
+	  forward: forward$2,
+	  inverse: inverse$2,
+	  names: names$3
+	};
+
+	var sinh = function(x) {
+	  var r = Math.exp(x);
+	  r = (r - 1 / r) / 2;
+	  return r;
+	};
+
+	var hypot = function(x, y) {
+	  x = Math.abs(x);
+	  y = Math.abs(y);
+	  var a = Math.max(x, y);
+	  var b = Math.min(x, y) / (a ? a : 1);
+
+	  return a * Math.sqrt(1 + Math.pow(b, 2));
+	};
+
+	var log1py = function(x) {
+	  var y = 1 + x;
+	  var z = y - 1;
+
+	  return z === 0 ? x : x * Math.log(y) / z;
+	};
+
+	var asinhy = function(x) {
+	  var y = Math.abs(x);
+	  y = log1py(y * (1 + y / (hypot(1, y) + 1)));
+
+	  return x < 0 ? -y : y;
+	};
+
+	var gatg = function(pp, B) {
+	  var cos_2B = 2 * Math.cos(2 * B);
+	  var i = pp.length - 1;
+	  var h1 = pp[i];
+	  var h2 = 0;
+	  var h;
+
+	  while (--i >= 0) {
+	    h = -h2 + cos_2B * h1 + pp[i];
+	    h2 = h1;
+	    h1 = h;
+	  }
+
+	  return (B + h * Math.sin(2 * B));
+	};
+
+	var clens = function(pp, arg_r) {
+	  var r = 2 * Math.cos(arg_r);
+	  var i = pp.length - 1;
+	  var hr1 = pp[i];
+	  var hr2 = 0;
+	  var hr;
+
+	  while (--i >= 0) {
+	    hr = -hr2 + r * hr1 + pp[i];
+	    hr2 = hr1;
+	    hr1 = hr;
+	  }
+
+	  return Math.sin(arg_r) * hr;
+	};
+
+	var cosh = function(x) {
+	  var r = Math.exp(x);
+	  r = (r + 1 / r) / 2;
+	  return r;
+	};
+
+	var clens_cmplx = function(pp, arg_r, arg_i) {
+	  var sin_arg_r = Math.sin(arg_r);
+	  var cos_arg_r = Math.cos(arg_r);
+	  var sinh_arg_i = sinh(arg_i);
+	  var cosh_arg_i = cosh(arg_i);
+	  var r = 2 * cos_arg_r * cosh_arg_i;
+	  var i = -2 * sin_arg_r * sinh_arg_i;
+	  var j = pp.length - 1;
+	  var hr = pp[j];
+	  var hi1 = 0;
+	  var hr1 = 0;
+	  var hi = 0;
+	  var hr2;
+	  var hi2;
+
+	  while (--j >= 0) {
+	    hr2 = hr1;
+	    hi2 = hi1;
+	    hr1 = hr;
+	    hi1 = hi;
+	    hr = -hr2 + r * hr1 - i * hi1 + pp[j];
+	    hi = -hi2 + i * hr1 + r * hi1;
+	  }
+
+	  r = sin_arg_r * cosh_arg_i;
+	  i = cos_arg_r * sinh_arg_i;
+
+	  return [r * hr - i * hi, r * hi + i * hr];
+	};
+
+	// Heavily based on this etmerc projection implementation
+	// https://github.com/mbloch/mapshaper-proj/blob/master/src/projections/etmerc.js
+
+	function init$3() {
+	  if (this.es === undefined || this.es <= 0) {
+	    throw new Error('incorrect elliptical usage');
+	  }
+
+	  this.x0 = this.x0 !== undefined ? this.x0 : 0;
+	  this.y0 = this.y0 !== undefined ? this.y0 : 0;
+	  this.long0 = this.long0 !== undefined ? this.long0 : 0;
+	  this.lat0 = this.lat0 !== undefined ? this.lat0 : 0;
+
+	  this.cgb = [];
+	  this.cbg = [];
+	  this.utg = [];
+	  this.gtu = [];
+
+	  var f = this.es / (1 + Math.sqrt(1 - this.es));
+	  var n = f / (2 - f);
+	  var np = n;
+
+	  this.cgb[0] = n * (2 + n * (-2 / 3 + n * (-2 + n * (116 / 45 + n * (26 / 45 + n * (-2854 / 675 ))))));
+	  this.cbg[0] = n * (-2 + n * ( 2 / 3 + n * ( 4 / 3 + n * (-82 / 45 + n * (32 / 45 + n * (4642 / 4725))))));
+
+	  np = np * n;
+	  this.cgb[1] = np * (7 / 3 + n * (-8 / 5 + n * (-227 / 45 + n * (2704 / 315 + n * (2323 / 945)))));
+	  this.cbg[1] = np * (5 / 3 + n * (-16 / 15 + n * ( -13 / 9 + n * (904 / 315 + n * (-1522 / 945)))));
+
+	  np = np * n;
+	  this.cgb[2] = np * (56 / 15 + n * (-136 / 35 + n * (-1262 / 105 + n * (73814 / 2835))));
+	  this.cbg[2] = np * (-26 / 15 + n * (34 / 21 + n * (8 / 5 + n * (-12686 / 2835))));
+
+	  np = np * n;
+	  this.cgb[3] = np * (4279 / 630 + n * (-332 / 35 + n * (-399572 / 14175)));
+	  this.cbg[3] = np * (1237 / 630 + n * (-12 / 5 + n * ( -24832 / 14175)));
+
+	  np = np * n;
+	  this.cgb[4] = np * (4174 / 315 + n * (-144838 / 6237));
+	  this.cbg[4] = np * (-734 / 315 + n * (109598 / 31185));
+
+	  np = np * n;
+	  this.cgb[5] = np * (601676 / 22275);
+	  this.cbg[5] = np * (444337 / 155925);
+
+	  np = Math.pow(n, 2);
+	  this.Qn = this.k0 / (1 + n) * (1 + np * (1 / 4 + np * (1 / 64 + np / 256)));
+
+	  this.utg[0] = n * (-0.5 + n * ( 2 / 3 + n * (-37 / 96 + n * ( 1 / 360 + n * (81 / 512 + n * (-96199 / 604800))))));
+	  this.gtu[0] = n * (0.5 + n * (-2 / 3 + n * (5 / 16 + n * (41 / 180 + n * (-127 / 288 + n * (7891 / 37800))))));
+
+	  this.utg[1] = np * (-1 / 48 + n * (-1 / 15 + n * (437 / 1440 + n * (-46 / 105 + n * (1118711 / 3870720)))));
+	  this.gtu[1] = np * (13 / 48 + n * (-3 / 5 + n * (557 / 1440 + n * (281 / 630 + n * (-1983433 / 1935360)))));
+
+	  np = np * n;
+	  this.utg[2] = np * (-17 / 480 + n * (37 / 840 + n * (209 / 4480 + n * (-5569 / 90720 ))));
+	  this.gtu[2] = np * (61 / 240 + n * (-103 / 140 + n * (15061 / 26880 + n * (167603 / 181440))));
+
+	  np = np * n;
+	  this.utg[3] = np * (-4397 / 161280 + n * (11 / 504 + n * (830251 / 7257600)));
+	  this.gtu[3] = np * (49561 / 161280 + n * (-179 / 168 + n * (6601661 / 7257600)));
+
+	  np = np * n;
+	  this.utg[4] = np * (-4583 / 161280 + n * (108847 / 3991680));
+	  this.gtu[4] = np * (34729 / 80640 + n * (-3418889 / 1995840));
+
+	  np = np * n;
+	  this.utg[5] = np * (-20648693 / 638668800);
+	  this.gtu[5] = np * (212378941 / 319334400);
+
+	  var Z = gatg(this.cbg, this.lat0);
+	  this.Zb = -this.Qn * (Z + clens(this.gtu, 2 * Z));
+	}
+
+	function forward$3(p) {
+	  var Ce = adjust_lon(p.x - this.long0);
+	  var Cn = p.y;
+
+	  Cn = gatg(this.cbg, Cn);
+	  var sin_Cn = Math.sin(Cn);
+	  var cos_Cn = Math.cos(Cn);
+	  var sin_Ce = Math.sin(Ce);
+	  var cos_Ce = Math.cos(Ce);
+
+	  Cn = Math.atan2(sin_Cn, cos_Ce * cos_Cn);
+	  Ce = Math.atan2(sin_Ce * cos_Cn, hypot(sin_Cn, cos_Cn * cos_Ce));
+	  Ce = asinhy(Math.tan(Ce));
+
+	  var tmp = clens_cmplx(this.gtu, 2 * Cn, 2 * Ce);
+
+	  Cn = Cn + tmp[0];
+	  Ce = Ce + tmp[1];
+
+	  var x;
+	  var y;
+
+	  if (Math.abs(Ce) <= 2.623395162778) {
+	    x = this.a * (this.Qn * Ce) + this.x0;
+	    y = this.a * (this.Qn * Cn + this.Zb) + this.y0;
+	  }
+	  else {
+	    x = Infinity;
+	    y = Infinity;
+	  }
+
+	  p.x = x;
+	  p.y = y;
+
+	  return p;
+	}
+
+	function inverse$3(p) {
+	  var Ce = (p.x - this.x0) * (1 / this.a);
+	  var Cn = (p.y - this.y0) * (1 / this.a);
+
+	  Cn = (Cn - this.Zb) / this.Qn;
+	  Ce = Ce / this.Qn;
+
+	  var lon;
+	  var lat;
+
+	  if (Math.abs(Ce) <= 2.623395162778) {
+	    var tmp = clens_cmplx(this.utg, 2 * Cn, 2 * Ce);
+
+	    Cn = Cn + tmp[0];
+	    Ce = Ce + tmp[1];
+	    Ce = Math.atan(sinh(Ce));
+
+	    var sin_Cn = Math.sin(Cn);
+	    var cos_Cn = Math.cos(Cn);
+	    var sin_Ce = Math.sin(Ce);
+	    var cos_Ce = Math.cos(Ce);
+
+	    Cn = Math.atan2(sin_Cn * cos_Ce, hypot(sin_Ce, cos_Ce * cos_Cn));
+	    Ce = Math.atan2(sin_Ce, cos_Ce * cos_Cn);
+
+	    lon = adjust_lon(Ce + this.long0);
+	    lat = gatg(this.cgb, Cn);
+	  }
+	  else {
+	    lon = Infinity;
+	    lat = Infinity;
+	  }
+
+	  p.x = lon;
+	  p.y = lat;
+
+	  return p;
+	}
+
+	var names$4 = ["Extended_Transverse_Mercator", "Extended Transverse Mercator", "etmerc"];
+	var etmerc = {
+	  init: init$3,
+	  forward: forward$3,
+	  inverse: inverse$3,
+	  names: names$4
+	};
+
+	var adjust_zone = function(zone, lon) {
+	  if (zone === undefined) {
+	    zone = Math.floor((adjust_lon(lon) + Math.PI) * 30 / Math.PI) + 1;
+
+	    if (zone < 0) {
+	      return 0;
+	    } else if (zone > 60) {
+	      return 60;
+	    }
+	  }
+	  return zone;
+	};
+
+	var dependsOn = 'etmerc';
+	function init$4() {
+	  var zone = adjust_zone(this.zone, this.long0);
+	  if (zone === undefined) {
+	    throw new Error('unknown utm zone');
+	  }
+	  this.lat0 = 0;
+	  this.long0 =  ((6 * Math.abs(zone)) - 183) * D2R;
+	  this.x0 = 500000;
+	  this.y0 = this.utmSouth ? 10000000 : 0;
+	  this.k0 = 0.9996;
+
+	  etmerc.init.apply(this);
+	  this.forward = etmerc.forward;
+	  this.inverse = etmerc.inverse;
+	}
+
+	var names$5 = ["Universal Transverse Mercator System", "utm"];
+	var utm = {
+	  init: init$4,
+	  names: names$5,
+	  dependsOn: dependsOn
+	};
+
+	var srat = function(esinp, exp) {
+	  return (Math.pow((1 - esinp) / (1 + esinp), exp));
+	};
+
+	var MAX_ITER$1 = 20;
+	function init$6() {
+	  var sphi = Math.sin(this.lat0);
+	  var cphi = Math.cos(this.lat0);
+	  cphi *= cphi;
+	  this.rc = Math.sqrt(1 - this.es) / (1 - this.es * sphi * sphi);
+	  this.C = Math.sqrt(1 + this.es * cphi * cphi / (1 - this.es));
+	  this.phic0 = Math.asin(sphi / this.C);
+	  this.ratexp = 0.5 * this.C * this.e;
+	  this.K = Math.tan(0.5 * this.phic0 + FORTPI) / (Math.pow(Math.tan(0.5 * this.lat0 + FORTPI), this.C) * srat(this.e * sphi, this.ratexp));
+	}
+
+	function forward$5(p) {
+	  var lon = p.x;
+	  var lat = p.y;
+
+	  p.y = 2 * Math.atan(this.K * Math.pow(Math.tan(0.5 * lat + FORTPI), this.C) * srat(this.e * Math.sin(lat), this.ratexp)) - HALF_PI;
+	  p.x = this.C * lon;
+	  return p;
+	}
+
+	function inverse$5(p) {
+	  var DEL_TOL = 1e-14;
+	  var lon = p.x / this.C;
+	  var lat = p.y;
+	  var num = Math.pow(Math.tan(0.5 * lat + FORTPI) / this.K, 1 / this.C);
+	  for (var i = MAX_ITER$1; i > 0; --i) {
+	    lat = 2 * Math.atan(num * srat(this.e * Math.sin(p.y), - 0.5 * this.e)) - HALF_PI;
+	    if (Math.abs(lat - p.y) < DEL_TOL) {
+	      break;
+	    }
+	    p.y = lat;
+	  }
+	  /* convergence failed */
+	  if (!i) {
+	    return null;
+	  }
+	  p.x = lon;
+	  p.y = lat;
+	  return p;
+	}
+
+	var names$7 = ["gauss"];
+	var gauss = {
+	  init: init$6,
+	  forward: forward$5,
+	  inverse: inverse$5,
+	  names: names$7
+	};
+
+	function init$5() {
+	  gauss.init.apply(this);
+	  if (!this.rc) {
+	    return;
+	  }
+	  this.sinc0 = Math.sin(this.phic0);
+	  this.cosc0 = Math.cos(this.phic0);
+	  this.R2 = 2 * this.rc;
+	  if (!this.title) {
+	    this.title = "Oblique Stereographic Alternative";
+	  }
+	}
+
+	function forward$4(p) {
+	  var sinc, cosc, cosl, k;
+	  p.x = adjust_lon(p.x - this.long0);
+	  gauss.forward.apply(this, [p]);
+	  sinc = Math.sin(p.y);
+	  cosc = Math.cos(p.y);
+	  cosl = Math.cos(p.x);
+	  k = this.k0 * this.R2 / (1 + this.sinc0 * sinc + this.cosc0 * cosc * cosl);
+	  p.x = k * cosc * Math.sin(p.x);
+	  p.y = k * (this.cosc0 * sinc - this.sinc0 * cosc * cosl);
+	  p.x = this.a * p.x + this.x0;
+	  p.y = this.a * p.y + this.y0;
+	  return p;
+	}
+
+	function inverse$4(p) {
+	  var sinc, cosc, lon, lat, rho;
+	  p.x = (p.x - this.x0) / this.a;
+	  p.y = (p.y - this.y0) / this.a;
+
+	  p.x /= this.k0;
+	  p.y /= this.k0;
+	  if ((rho = Math.sqrt(p.x * p.x + p.y * p.y))) {
+	    var c = 2 * Math.atan2(rho, this.R2);
+	    sinc = Math.sin(c);
+	    cosc = Math.cos(c);
+	    lat = Math.asin(cosc * this.sinc0 + p.y * sinc * this.cosc0 / rho);
+	    lon = Math.atan2(p.x * sinc, rho * this.cosc0 * cosc - p.y * this.sinc0 * sinc);
+	  }
+	  else {
+	    lat = this.phic0;
+	    lon = 0;
+	  }
+
+	  p.x = lon;
+	  p.y = lat;
+	  gauss.inverse.apply(this, [p]);
+	  p.x = adjust_lon(p.x + this.long0);
+	  return p;
+	}
+
+	var names$6 = ["Stereographic_North_Pole", "Oblique_Stereographic", "Polar_Stereographic", "sterea","Oblique Stereographic Alternative"];
+	var sterea = {
+	  init: init$5,
+	  forward: forward$4,
+	  inverse: inverse$4,
+	  names: names$6
+	};
+
+	function ssfn_(phit, sinphi, eccen) {
+	  sinphi *= eccen;
+	  return (Math.tan(0.5 * (HALF_PI + phit)) * Math.pow((1 - sinphi) / (1 + sinphi), 0.5 * eccen));
+	}
+
+	function init$7() {
+	  this.coslat0 = Math.cos(this.lat0);
+	  this.sinlat0 = Math.sin(this.lat0);
+	  if (this.sphere) {
+	    if (this.k0 === 1 && !isNaN(this.lat_ts) && Math.abs(this.coslat0) <= EPSLN) {
+	      this.k0 = 0.5 * (1 + sign(this.lat0) * Math.sin(this.lat_ts));
+	    }
+	  }
+	  else {
+	    if (Math.abs(this.coslat0) <= EPSLN) {
+	      if (this.lat0 > 0) {
+	        //North pole
+	        //trace('stere:north pole');
+	        this.con = 1;
+	      }
+	      else {
+	        //South pole
+	        //trace('stere:south pole');
+	        this.con = -1;
+	      }
+	    }
+	    this.cons = Math.sqrt(Math.pow(1 + this.e, 1 + this.e) * Math.pow(1 - this.e, 1 - this.e));
+	    if (this.k0 === 1 && !isNaN(this.lat_ts) && Math.abs(this.coslat0) <= EPSLN) {
+	      this.k0 = 0.5 * this.cons * msfnz(this.e, Math.sin(this.lat_ts), Math.cos(this.lat_ts)) / tsfnz(this.e, this.con * this.lat_ts, this.con * Math.sin(this.lat_ts));
+	    }
+	    this.ms1 = msfnz(this.e, this.sinlat0, this.coslat0);
+	    this.X0 = 2 * Math.atan(this.ssfn_(this.lat0, this.sinlat0, this.e)) - HALF_PI;
+	    this.cosX0 = Math.cos(this.X0);
+	    this.sinX0 = Math.sin(this.X0);
+	  }
+	}
+
+	// Stereographic forward equations--mapping lat,long to x,y
+	function forward$6(p) {
+	  var lon = p.x;
+	  var lat = p.y;
+	  var sinlat = Math.sin(lat);
+	  var coslat = Math.cos(lat);
+	  var A, X, sinX, cosX, ts, rh;
+	  var dlon = adjust_lon(lon - this.long0);
+
+	  if (Math.abs(Math.abs(lon - this.long0) - Math.PI) <= EPSLN && Math.abs(lat + this.lat0) <= EPSLN) {
+	    //case of the origine point
+	    //trace('stere:this is the origin point');
+	    p.x = NaN;
+	    p.y = NaN;
+	    return p;
+	  }
+	  if (this.sphere) {
+	    //trace('stere:sphere case');
+	    A = 2 * this.k0 / (1 + this.sinlat0 * sinlat + this.coslat0 * coslat * Math.cos(dlon));
+	    p.x = this.a * A * coslat * Math.sin(dlon) + this.x0;
+	    p.y = this.a * A * (this.coslat0 * sinlat - this.sinlat0 * coslat * Math.cos(dlon)) + this.y0;
+	    return p;
+	  }
+	  else {
+	    X = 2 * Math.atan(this.ssfn_(lat, sinlat, this.e)) - HALF_PI;
+	    cosX = Math.cos(X);
+	    sinX = Math.sin(X);
+	    if (Math.abs(this.coslat0) <= EPSLN) {
+	      ts = tsfnz(this.e, lat * this.con, this.con * sinlat);
+	      rh = 2 * this.a * this.k0 * ts / this.cons;
+	      p.x = this.x0 + rh * Math.sin(lon - this.long0);
+	      p.y = this.y0 - this.con * rh * Math.cos(lon - this.long0);
+	      //trace(p.toString());
+	      return p;
+	    }
+	    else if (Math.abs(this.sinlat0) < EPSLN) {
+	      //Eq
+	      //trace('stere:equateur');
+	      A = 2 * this.a * this.k0 / (1 + cosX * Math.cos(dlon));
+	      p.y = A * sinX;
+	    }
+	    else {
+	      //other case
+	      //trace('stere:normal case');
+	      A = 2 * this.a * this.k0 * this.ms1 / (this.cosX0 * (1 + this.sinX0 * sinX + this.cosX0 * cosX * Math.cos(dlon)));
+	      p.y = A * (this.cosX0 * sinX - this.sinX0 * cosX * Math.cos(dlon)) + this.y0;
+	    }
+	    p.x = A * cosX * Math.sin(dlon) + this.x0;
+	  }
+	  //trace(p.toString());
+	  return p;
+	}
+
+	//* Stereographic inverse equations--mapping x,y to lat/long
+	function inverse$6(p) {
+	  p.x -= this.x0;
+	  p.y -= this.y0;
+	  var lon, lat, ts, ce, Chi;
+	  var rh = Math.sqrt(p.x * p.x + p.y * p.y);
+	  if (this.sphere) {
+	    var c = 2 * Math.atan(rh / (0.5 * this.a * this.k0));
+	    lon = this.long0;
+	    lat = this.lat0;
+	    if (rh <= EPSLN) {
+	      p.x = lon;
+	      p.y = lat;
+	      return p;
+	    }
+	    lat = Math.asin(Math.cos(c) * this.sinlat0 + p.y * Math.sin(c) * this.coslat0 / rh);
+	    if (Math.abs(this.coslat0) < EPSLN) {
+	      if (this.lat0 > 0) {
+	        lon = adjust_lon(this.long0 + Math.atan2(p.x, - 1 * p.y));
+	      }
+	      else {
+	        lon = adjust_lon(this.long0 + Math.atan2(p.x, p.y));
+	      }
+	    }
+	    else {
+	      lon = adjust_lon(this.long0 + Math.atan2(p.x * Math.sin(c), rh * this.coslat0 * Math.cos(c) - p.y * this.sinlat0 * Math.sin(c)));
+	    }
+	    p.x = lon;
+	    p.y = lat;
+	    return p;
+	  }
+	  else {
+	    if (Math.abs(this.coslat0) <= EPSLN) {
+	      if (rh <= EPSLN) {
+	        lat = this.lat0;
+	        lon = this.long0;
+	        p.x = lon;
+	        p.y = lat;
+	        //trace(p.toString());
+	        return p;
+	      }
+	      p.x *= this.con;
+	      p.y *= this.con;
+	      ts = rh * this.cons / (2 * this.a * this.k0);
+	      lat = this.con * phi2z(this.e, ts);
+	      lon = this.con * adjust_lon(this.con * this.long0 + Math.atan2(p.x, - 1 * p.y));
+	    }
+	    else {
+	      ce = 2 * Math.atan(rh * this.cosX0 / (2 * this.a * this.k0 * this.ms1));
+	      lon = this.long0;
+	      if (rh <= EPSLN) {
+	        Chi = this.X0;
+	      }
+	      else {
+	        Chi = Math.asin(Math.cos(ce) * this.sinX0 + p.y * Math.sin(ce) * this.cosX0 / rh);
+	        lon = adjust_lon(this.long0 + Math.atan2(p.x * Math.sin(ce), rh * this.cosX0 * Math.cos(ce) - p.y * this.sinX0 * Math.sin(ce)));
+	      }
+	      lat = -1 * phi2z(this.e, Math.tan(0.5 * (HALF_PI + Chi)));
+	    }
+	  }
+	  p.x = lon;
+	  p.y = lat;
+
+	  //trace(p.toString());
+	  return p;
+
+	}
+
+	var names$8 = ["stere", "Stereographic_South_Pole", "Polar Stereographic (variant B)"];
+	var stere = {
+	  init: init$7,
+	  forward: forward$6,
+	  inverse: inverse$6,
+	  names: names$8,
+	  ssfn_: ssfn_
+	};
+
+	/*
+	  references:
+	    Formules et constantes pour le Calcul pour la
+	    projection cylindrique conforme à axe oblique et pour la transformation entre
+	    des systèmes de référence.
+	    http://www.swisstopo.admin.ch/internet/swisstopo/fr/home/topics/survey/sys/refsys/switzerland.parsysrelated1.31216.downloadList.77004.DownloadFile.tmp/swissprojectionfr.pdf
+	  */
+
+	function init$8() {
+	  var phy0 = this.lat0;
+	  this.lambda0 = this.long0;
+	  var sinPhy0 = Math.sin(phy0);
+	  var semiMajorAxis = this.a;
+	  var invF = this.rf;
+	  var flattening = 1 / invF;
+	  var e2 = 2 * flattening - Math.pow(flattening, 2);
+	  var e = this.e = Math.sqrt(e2);
+	  this.R = this.k0 * semiMajorAxis * Math.sqrt(1 - e2) / (1 - e2 * Math.pow(sinPhy0, 2));
+	  this.alpha = Math.sqrt(1 + e2 / (1 - e2) * Math.pow(Math.cos(phy0), 4));
+	  this.b0 = Math.asin(sinPhy0 / this.alpha);
+	  var k1 = Math.log(Math.tan(Math.PI / 4 + this.b0 / 2));
+	  var k2 = Math.log(Math.tan(Math.PI / 4 + phy0 / 2));
+	  var k3 = Math.log((1 + e * sinPhy0) / (1 - e * sinPhy0));
+	  this.K = k1 - this.alpha * k2 + this.alpha * e / 2 * k3;
+	}
+
+	function forward$7(p) {
+	  var Sa1 = Math.log(Math.tan(Math.PI / 4 - p.y / 2));
+	  var Sa2 = this.e / 2 * Math.log((1 + this.e * Math.sin(p.y)) / (1 - this.e * Math.sin(p.y)));
+	  var S = -this.alpha * (Sa1 + Sa2) + this.K;
+
+	  // spheric latitude
+	  var b = 2 * (Math.atan(Math.exp(S)) - Math.PI / 4);
+
+	  // spheric longitude
+	  var I = this.alpha * (p.x - this.lambda0);
+
+	  // psoeudo equatorial rotation
+	  var rotI = Math.atan(Math.sin(I) / (Math.sin(this.b0) * Math.tan(b) + Math.cos(this.b0) * Math.cos(I)));
+
+	  var rotB = Math.asin(Math.cos(this.b0) * Math.sin(b) - Math.sin(this.b0) * Math.cos(b) * Math.cos(I));
+
+	  p.y = this.R / 2 * Math.log((1 + Math.sin(rotB)) / (1 - Math.sin(rotB))) + this.y0;
+	  p.x = this.R * rotI + this.x0;
+	  return p;
+	}
+
+	function inverse$7(p) {
+	  var Y = p.x - this.x0;
+	  var X = p.y - this.y0;
+
+	  var rotI = Y / this.R;
+	  var rotB = 2 * (Math.atan(Math.exp(X / this.R)) - Math.PI / 4);
+
+	  var b = Math.asin(Math.cos(this.b0) * Math.sin(rotB) + Math.sin(this.b0) * Math.cos(rotB) * Math.cos(rotI));
+	  var I = Math.atan(Math.sin(rotI) / (Math.cos(this.b0) * Math.cos(rotI) - Math.sin(this.b0) * Math.tan(rotB)));
+
+	  var lambda = this.lambda0 + I / this.alpha;
+
+	  var S = 0;
+	  var phy = b;
+	  var prevPhy = -1000;
+	  var iteration = 0;
+	  while (Math.abs(phy - prevPhy) > 0.0000001) {
+	    if (++iteration > 20) {
+	      //...reportError("omercFwdInfinity");
+	      return;
+	    }
+	    //S = Math.log(Math.tan(Math.PI / 4 + phy / 2));
+	    S = 1 / this.alpha * (Math.log(Math.tan(Math.PI / 4 + b / 2)) - this.K) + this.e * Math.log(Math.tan(Math.PI / 4 + Math.asin(this.e * Math.sin(phy)) / 2));
+	    prevPhy = phy;
+	    phy = 2 * Math.atan(Math.exp(S)) - Math.PI / 2;
+	  }
+
+	  p.x = lambda;
+	  p.y = phy;
+	  return p;
+	}
+
+	var names$9 = ["somerc"];
+	var somerc = {
+	  init: init$8,
+	  forward: forward$7,
+	  inverse: inverse$7,
+	  names: names$9
+	};
+
+	/* Initialize the Oblique Mercator  projection
+	    ------------------------------------------*/
+	function init$9() {
+	  this.no_off = this.no_off || false;
+	  this.no_rot = this.no_rot || false;
+
+	  if (isNaN(this.k0)) {
+	    this.k0 = 1;
+	  }
+	  var sinlat = Math.sin(this.lat0);
+	  var coslat = Math.cos(this.lat0);
+	  var con = this.e * sinlat;
+
+	  this.bl = Math.sqrt(1 + this.es / (1 - this.es) * Math.pow(coslat, 4));
+	  this.al = this.a * this.bl * this.k0 * Math.sqrt(1 - this.es) / (1 - con * con);
+	  var t0 = tsfnz(this.e, this.lat0, sinlat);
+	  var dl = this.bl / coslat * Math.sqrt((1 - this.es) / (1 - con * con));
+	  if (dl * dl < 1) {
+	    dl = 1;
+	  }
+	  var fl;
+	  var gl;
+	  if (!isNaN(this.longc)) {
+	    //Central point and azimuth method
+
+	    if (this.lat0 >= 0) {
+	      fl = dl + Math.sqrt(dl * dl - 1);
+	    }
+	    else {
+	      fl = dl - Math.sqrt(dl * dl - 1);
+	    }
+	    this.el = fl * Math.pow(t0, this.bl);
+	    gl = 0.5 * (fl - 1 / fl);
+	    this.gamma0 = Math.asin(Math.sin(this.alpha) / dl);
+	    this.long0 = this.longc - Math.asin(gl * Math.tan(this.gamma0)) / this.bl;
+
+	  }
+	  else {
+	    //2 points method
+	    var t1 = tsfnz(this.e, this.lat1, Math.sin(this.lat1));
+	    var t2 = tsfnz(this.e, this.lat2, Math.sin(this.lat2));
+	    if (this.lat0 >= 0) {
+	      this.el = (dl + Math.sqrt(dl * dl - 1)) * Math.pow(t0, this.bl);
+	    }
+	    else {
+	      this.el = (dl - Math.sqrt(dl * dl - 1)) * Math.pow(t0, this.bl);
+	    }
+	    var hl = Math.pow(t1, this.bl);
+	    var ll = Math.pow(t2, this.bl);
+	    fl = this.el / hl;
+	    gl = 0.5 * (fl - 1 / fl);
+	    var jl = (this.el * this.el - ll * hl) / (this.el * this.el + ll * hl);
+	    var pl = (ll - hl) / (ll + hl);
+	    var dlon12 = adjust_lon(this.long1 - this.long2);
+	    this.long0 = 0.5 * (this.long1 + this.long2) - Math.atan(jl * Math.tan(0.5 * this.bl * (dlon12)) / pl) / this.bl;
+	    this.long0 = adjust_lon(this.long0);
+	    var dlon10 = adjust_lon(this.long1 - this.long0);
+	    this.gamma0 = Math.atan(Math.sin(this.bl * (dlon10)) / gl);
+	    this.alpha = Math.asin(dl * Math.sin(this.gamma0));
+	  }
+
+	  if (this.no_off) {
+	    this.uc = 0;
+	  }
+	  else {
+	    if (this.lat0 >= 0) {
+	      this.uc = this.al / this.bl * Math.atan2(Math.sqrt(dl * dl - 1), Math.cos(this.alpha));
+	    }
+	    else {
+	      this.uc = -1 * this.al / this.bl * Math.atan2(Math.sqrt(dl * dl - 1), Math.cos(this.alpha));
+	    }
+	  }
+
+	}
+
+	/* Oblique Mercator forward equations--mapping lat,long to x,y
+	    ----------------------------------------------------------*/
+	function forward$8(p) {
+	  var lon = p.x;
+	  var lat = p.y;
+	  var dlon = adjust_lon(lon - this.long0);
+	  var us, vs;
+	  var con;
+	  if (Math.abs(Math.abs(lat) - HALF_PI) <= EPSLN) {
+	    if (lat > 0) {
+	      con = -1;
+	    }
+	    else {
+	      con = 1;
+	    }
+	    vs = this.al / this.bl * Math.log(Math.tan(FORTPI + con * this.gamma0 * 0.5));
+	    us = -1 * con * HALF_PI * this.al / this.bl;
+	  }
+	  else {
+	    var t = tsfnz(this.e, lat, Math.sin(lat));
+	    var ql = this.el / Math.pow(t, this.bl);
+	    var sl = 0.5 * (ql - 1 / ql);
+	    var tl = 0.5 * (ql + 1 / ql);
+	    var vl = Math.sin(this.bl * (dlon));
+	    var ul = (sl * Math.sin(this.gamma0) - vl * Math.cos(this.gamma0)) / tl;
+	    if (Math.abs(Math.abs(ul) - 1) <= EPSLN) {
+	      vs = Number.POSITIVE_INFINITY;
+	    }
+	    else {
+	      vs = 0.5 * this.al * Math.log((1 - ul) / (1 + ul)) / this.bl;
+	    }
+	    if (Math.abs(Math.cos(this.bl * (dlon))) <= EPSLN) {
+	      us = this.al * this.bl * (dlon);
+	    }
+	    else {
+	      us = this.al * Math.atan2(sl * Math.cos(this.gamma0) + vl * Math.sin(this.gamma0), Math.cos(this.bl * dlon)) / this.bl;
+	    }
+	  }
+
+	  if (this.no_rot) {
+	    p.x = this.x0 + us;
+	    p.y = this.y0 + vs;
+	  }
+	  else {
+
+	    us -= this.uc;
+	    p.x = this.x0 + vs * Math.cos(this.alpha) + us * Math.sin(this.alpha);
+	    p.y = this.y0 + us * Math.cos(this.alpha) - vs * Math.sin(this.alpha);
+	  }
+	  return p;
+	}
+
+	function inverse$8(p) {
+	  var us, vs;
+	  if (this.no_rot) {
+	    vs = p.y - this.y0;
+	    us = p.x - this.x0;
+	  }
+	  else {
+	    vs = (p.x - this.x0) * Math.cos(this.alpha) - (p.y - this.y0) * Math.sin(this.alpha);
+	    us = (p.y - this.y0) * Math.cos(this.alpha) + (p.x - this.x0) * Math.sin(this.alpha);
+	    us += this.uc;
+	  }
+	  var qp = Math.exp(-1 * this.bl * vs / this.al);
+	  var sp = 0.5 * (qp - 1 / qp);
+	  var tp = 0.5 * (qp + 1 / qp);
+	  var vp = Math.sin(this.bl * us / this.al);
+	  var up = (vp * Math.cos(this.gamma0) + sp * Math.sin(this.gamma0)) / tp;
+	  var ts = Math.pow(this.el / Math.sqrt((1 + up) / (1 - up)), 1 / this.bl);
+	  if (Math.abs(up - 1) < EPSLN) {
+	    p.x = this.long0;
+	    p.y = HALF_PI;
+	  }
+	  else if (Math.abs(up + 1) < EPSLN) {
+	    p.x = this.long0;
+	    p.y = -1 * HALF_PI;
+	  }
+	  else {
+	    p.y = phi2z(this.e, ts);
+	    p.x = adjust_lon(this.long0 - Math.atan2(sp * Math.cos(this.gamma0) - vp * Math.sin(this.gamma0), Math.cos(this.bl * us / this.al)) / this.bl);
+	  }
+	  return p;
+	}
+
+	var names$10 = ["Hotine_Oblique_Mercator", "Hotine Oblique Mercator", "Hotine_Oblique_Mercator_Azimuth_Natural_Origin", "Hotine_Oblique_Mercator_Azimuth_Center", "omerc"];
+	var omerc = {
+	  init: init$9,
+	  forward: forward$8,
+	  inverse: inverse$8,
+	  names: names$10
+	};
+
+	function init$10() {
+
+	  // array of:  r_maj,r_min,lat1,lat2,c_lon,c_lat,false_east,false_north
+	  //double c_lat;                   /* center latitude                      */
+	  //double c_lon;                   /* center longitude                     */
+	  //double lat1;                    /* first standard parallel              */
+	  //double lat2;                    /* second standard parallel             */
+	  //double r_maj;                   /* major axis                           */
+	  //double r_min;                   /* minor axis                           */
+	  //double false_east;              /* x offset in meters                   */
+	  //double false_north;             /* y offset in meters                   */
+
+	  if (!this.lat2) {
+	    this.lat2 = this.lat1;
+	  } //if lat2 is not defined
+	  if (!this.k0) {
+	    this.k0 = 1;
+	  }
+	  this.x0 = this.x0 || 0;
+	  this.y0 = this.y0 || 0;
+	  // Standard Parallels cannot be equal and on opposite sides of the equator
+	  if (Math.abs(this.lat1 + this.lat2) < EPSLN) {
+	    return;
+	  }
+
+	  var temp = this.b / this.a;
+	  this.e = Math.sqrt(1 - temp * temp);
+
+	  var sin1 = Math.sin(this.lat1);
+	  var cos1 = Math.cos(this.lat1);
+	  var ms1 = msfnz(this.e, sin1, cos1);
+	  var ts1 = tsfnz(this.e, this.lat1, sin1);
+
+	  var sin2 = Math.sin(this.lat2);
+	  var cos2 = Math.cos(this.lat2);
+	  var ms2 = msfnz(this.e, sin2, cos2);
+	  var ts2 = tsfnz(this.e, this.lat2, sin2);
+
+	  var ts0 = tsfnz(this.e, this.lat0, Math.sin(this.lat0));
+
+	  if (Math.abs(this.lat1 - this.lat2) > EPSLN) {
+	    this.ns = Math.log(ms1 / ms2) / Math.log(ts1 / ts2);
+	  }
+	  else {
+	    this.ns = sin1;
+	  }
+	  if (isNaN(this.ns)) {
+	    this.ns = sin1;
+	  }
+	  this.f0 = ms1 / (this.ns * Math.pow(ts1, this.ns));
+	  this.rh = this.a * this.f0 * Math.pow(ts0, this.ns);
+	  if (!this.title) {
+	    this.title = "Lambert Conformal Conic";
+	  }
+	}
+
+	// Lambert Conformal conic forward equations--mapping lat,long to x,y
+	// -----------------------------------------------------------------
+	function forward$9(p) {
+
+	  var lon = p.x;
+	  var lat = p.y;
+
+	  // singular cases :
+	  if (Math.abs(2 * Math.abs(lat) - Math.PI) <= EPSLN) {
+	    lat = sign(lat) * (HALF_PI - 2 * EPSLN);
+	  }
+
+	  var con = Math.abs(Math.abs(lat) - HALF_PI);
+	  var ts, rh1;
+	  if (con > EPSLN) {
+	    ts = tsfnz(this.e, lat, Math.sin(lat));
+	    rh1 = this.a * this.f0 * Math.pow(ts, this.ns);
+	  }
+	  else {
+	    con = lat * this.ns;
+	    if (con <= 0) {
+	      return null;
+	    }
+	    rh1 = 0;
+	  }
+	  var theta = this.ns * adjust_lon(lon - this.long0);
+	  p.x = this.k0 * (rh1 * Math.sin(theta)) + this.x0;
+	  p.y = this.k0 * (this.rh - rh1 * Math.cos(theta)) + this.y0;
+
+	  return p;
+	}
+
+	// Lambert Conformal Conic inverse equations--mapping x,y to lat/long
+	// -----------------------------------------------------------------
+	function inverse$9(p) {
+
+	  var rh1, con, ts;
+	  var lat, lon;
+	  var x = (p.x - this.x0) / this.k0;
+	  var y = (this.rh - (p.y - this.y0) / this.k0);
+	  if (this.ns > 0) {
+	    rh1 = Math.sqrt(x * x + y * y);
+	    con = 1;
+	  }
+	  else {
+	    rh1 = -Math.sqrt(x * x + y * y);
+	    con = -1;
+	  }
+	  var theta = 0;
+	  if (rh1 !== 0) {
+	    theta = Math.atan2((con * x), (con * y));
+	  }
+	  if ((rh1 !== 0) || (this.ns > 0)) {
+	    con = 1 / this.ns;
+	    ts = Math.pow((rh1 / (this.a * this.f0)), con);
+	    lat = phi2z(this.e, ts);
+	    if (lat === -9999) {
+	      return null;
+	    }
+	  }
+	  else {
+	    lat = -HALF_PI;
+	  }
+	  lon = adjust_lon(theta / this.ns + this.long0);
+
+	  p.x = lon;
+	  p.y = lat;
+	  return p;
+	}
+
+	var names$11 = ["Lambert Tangential Conformal Conic Projection", "Lambert_Conformal_Conic", "Lambert_Conformal_Conic_2SP", "lcc"];
+	var lcc = {
+	  init: init$10,
+	  forward: forward$9,
+	  inverse: inverse$9,
+	  names: names$11
+	};
+
+	function init$11() {
+	  this.a = 6377397.155;
+	  this.es = 0.006674372230614;
+	  this.e = Math.sqrt(this.es);
+	  if (!this.lat0) {
+	    this.lat0 = 0.863937979737193;
+	  }
+	  if (!this.long0) {
+	    this.long0 = 0.7417649320975901 - 0.308341501185665;
+	  }
+	  /* if scale not set default to 0.9999 */
+	  if (!this.k0) {
+	    this.k0 = 0.9999;
+	  }
+	  this.s45 = 0.785398163397448; /* 45 */
+	  this.s90 = 2 * this.s45;
+	  this.fi0 = this.lat0;
+	  this.e2 = this.es;
+	  this.e = Math.sqrt(this.e2);
+	  this.alfa = Math.sqrt(1 + (this.e2 * Math.pow(Math.cos(this.fi0), 4)) / (1 - this.e2));
+	  this.uq = 1.04216856380474;
+	  this.u0 = Math.asin(Math.sin(this.fi0) / this.alfa);
+	  this.g = Math.pow((1 + this.e * Math.sin(this.fi0)) / (1 - this.e * Math.sin(this.fi0)), this.alfa * this.e / 2);
+	  this.k = Math.tan(this.u0 / 2 + this.s45) / Math.pow(Math.tan(this.fi0 / 2 + this.s45), this.alfa) * this.g;
+	  this.k1 = this.k0;
+	  this.n0 = this.a * Math.sqrt(1 - this.e2) / (1 - this.e2 * Math.pow(Math.sin(this.fi0), 2));
+	  this.s0 = 1.37008346281555;
+	  this.n = Math.sin(this.s0);
+	  this.ro0 = this.k1 * this.n0 / Math.tan(this.s0);
+	  this.ad = this.s90 - this.uq;
+	}
+
+	/* ellipsoid */
+	/* calculate xy from lat/lon */
+	/* Constants, identical to inverse transform function */
+	function forward$10(p) {
+	  var gfi, u, deltav, s, d, eps, ro;
+	  var lon = p.x;
+	  var lat = p.y;
+	  var delta_lon = adjust_lon(lon - this.long0);
+	  /* Transformation */
+	  gfi = Math.pow(((1 + this.e * Math.sin(lat)) / (1 - this.e * Math.sin(lat))), (this.alfa * this.e / 2));
+	  u = 2 * (Math.atan(this.k * Math.pow(Math.tan(lat / 2 + this.s45), this.alfa) / gfi) - this.s45);
+	  deltav = -delta_lon * this.alfa;
+	  s = Math.asin(Math.cos(this.ad) * Math.sin(u) + Math.sin(this.ad) * Math.cos(u) * Math.cos(deltav));
+	  d = Math.asin(Math.cos(u) * Math.sin(deltav) / Math.cos(s));
+	  eps = this.n * d;
+	  ro = this.ro0 * Math.pow(Math.tan(this.s0 / 2 + this.s45), this.n) / Math.pow(Math.tan(s / 2 + this.s45), this.n);
+	  p.y = ro * Math.cos(eps) / 1;
+	  p.x = ro * Math.sin(eps) / 1;
+
+	  if (!this.czech) {
+	    p.y *= -1;
+	    p.x *= -1;
+	  }
+	  return (p);
+	}
+
+	/* calculate lat/lon from xy */
+	function inverse$10(p) {
+	  var u, deltav, s, d, eps, ro, fi1;
+	  var ok;
+
+	  /* Transformation */
+	  /* revert y, x*/
+	  var tmp = p.x;
+	  p.x = p.y;
+	  p.y = tmp;
+	  if (!this.czech) {
+	    p.y *= -1;
+	    p.x *= -1;
+	  }
+	  ro = Math.sqrt(p.x * p.x + p.y * p.y);
+	  eps = Math.atan2(p.y, p.x);
+	  d = eps / Math.sin(this.s0);
+	  s = 2 * (Math.atan(Math.pow(this.ro0 / ro, 1 / this.n) * Math.tan(this.s0 / 2 + this.s45)) - this.s45);
+	  u = Math.asin(Math.cos(this.ad) * Math.sin(s) - Math.sin(this.ad) * Math.cos(s) * Math.cos(d));
+	  deltav = Math.asin(Math.cos(s) * Math.sin(d) / Math.cos(u));
+	  p.x = this.long0 - deltav / this.alfa;
+	  fi1 = u;
+	  ok = 0;
+	  var iter = 0;
+	  do {
+	    p.y = 2 * (Math.atan(Math.pow(this.k, - 1 / this.alfa) * Math.pow(Math.tan(u / 2 + this.s45), 1 / this.alfa) * Math.pow((1 + this.e * Math.sin(fi1)) / (1 - this.e * Math.sin(fi1)), this.e / 2)) - this.s45);
+	    if (Math.abs(fi1 - p.y) < 0.0000000001) {
+	      ok = 1;
+	    }
+	    fi1 = p.y;
+	    iter += 1;
+	  } while (ok === 0 && iter < 15);
+	  if (iter >= 15) {
+	    return null;
+	  }
+
+	  return (p);
+	}
+
+	var names$12 = ["Krovak", "krovak"];
+	var krovak = {
+	  init: init$11,
+	  forward: forward$10,
+	  inverse: inverse$10,
+	  names: names$12
+	};
+
+	var mlfn = function(e0, e1, e2, e3, phi) {
+	  return (e0 * phi - e1 * Math.sin(2 * phi) + e2 * Math.sin(4 * phi) - e3 * Math.sin(6 * phi));
+	};
+
+	var e0fn = function(x) {
+	  return (1 - 0.25 * x * (1 + x / 16 * (3 + 1.25 * x)));
+	};
+
+	var e1fn = function(x) {
+	  return (0.375 * x * (1 + 0.25 * x * (1 + 0.46875 * x)));
+	};
+
+	var e2fn = function(x) {
+	  return (0.05859375 * x * x * (1 + 0.75 * x));
+	};
+
+	var e3fn = function(x) {
+	  return (x * x * x * (35 / 3072));
+	};
+
+	var gN = function(a, e, sinphi) {
+	  var temp = e * sinphi;
+	  return a / Math.sqrt(1 - temp * temp);
+	};
+
+	var adjust_lat = function(x) {
+	  return (Math.abs(x) < HALF_PI) ? x : (x - (sign(x) * Math.PI));
+	};
+
+	var imlfn = function(ml, e0, e1, e2, e3) {
+	  var phi;
+	  var dphi;
+
+	  phi = ml / e0;
+	  for (var i = 0; i < 15; i++) {
+	    dphi = (ml - (e0 * phi - e1 * Math.sin(2 * phi) + e2 * Math.sin(4 * phi) - e3 * Math.sin(6 * phi))) / (e0 - 2 * e1 * Math.cos(2 * phi) + 4 * e2 * Math.cos(4 * phi) - 6 * e3 * Math.cos(6 * phi));
+	    phi += dphi;
+	    if (Math.abs(dphi) <= 0.0000000001) {
+	      return phi;
+	    }
+	  }
+
+	  //..reportError("IMLFN-CONV:Latitude failed to converge after 15 iterations");
+	  return NaN;
+	};
+
+	function init$12() {
+	  if (!this.sphere) {
+	    this.e0 = e0fn(this.es);
+	    this.e1 = e1fn(this.es);
+	    this.e2 = e2fn(this.es);
+	    this.e3 = e3fn(this.es);
+	    this.ml0 = this.a * mlfn(this.e0, this.e1, this.e2, this.e3, this.lat0);
+	  }
+	}
+
+	/* Cassini forward equations--mapping lat,long to x,y
+	  -----------------------------------------------------------------------*/
+	function forward$11(p) {
+
+	  /* Forward equations
+	      -----------------*/
+	  var x, y;
+	  var lam = p.x;
+	  var phi = p.y;
+	  lam = adjust_lon(lam - this.long0);
+
+	  if (this.sphere) {
+	    x = this.a * Math.asin(Math.cos(phi) * Math.sin(lam));
+	    y = this.a * (Math.atan2(Math.tan(phi), Math.cos(lam)) - this.lat0);
+	  }
+	  else {
+	    //ellipsoid
+	    var sinphi = Math.sin(phi);
+	    var cosphi = Math.cos(phi);
+	    var nl = gN(this.a, this.e, sinphi);
+	    var tl = Math.tan(phi) * Math.tan(phi);
+	    var al = lam * Math.cos(phi);
+	    var asq = al * al;
+	    var cl = this.es * cosphi * cosphi / (1 - this.es);
+	    var ml = this.a * mlfn(this.e0, this.e1, this.e2, this.e3, phi);
+
+	    x = nl * al * (1 - asq * tl * (1 / 6 - (8 - tl + 8 * cl) * asq / 120));
+	    y = ml - this.ml0 + nl * sinphi / cosphi * asq * (0.5 + (5 - tl + 6 * cl) * asq / 24);
+
+
+	  }
+
+	  p.x = x + this.x0;
+	  p.y = y + this.y0;
+	  return p;
+	}
+
+	/* Inverse equations
+	  -----------------*/
+	function inverse$11(p) {
+	  p.x -= this.x0;
+	  p.y -= this.y0;
+	  var x = p.x / this.a;
+	  var y = p.y / this.a;
+	  var phi, lam;
+
+	  if (this.sphere) {
+	    var dd = y + this.lat0;
+	    phi = Math.asin(Math.sin(dd) * Math.cos(x));
+	    lam = Math.atan2(Math.tan(x), Math.cos(dd));
+	  }
+	  else {
+	    /* ellipsoid */
+	    var ml1 = this.ml0 / this.a + y;
+	    var phi1 = imlfn(ml1, this.e0, this.e1, this.e2, this.e3);
+	    if (Math.abs(Math.abs(phi1) - HALF_PI) <= EPSLN) {
+	      p.x = this.long0;
+	      p.y = HALF_PI;
+	      if (y < 0) {
+	        p.y *= -1;
+	      }
+	      return p;
+	    }
+	    var nl1 = gN(this.a, this.e, Math.sin(phi1));
+
+	    var rl1 = nl1 * nl1 * nl1 / this.a / this.a * (1 - this.es);
+	    var tl1 = Math.pow(Math.tan(phi1), 2);
+	    var dl = x * this.a / nl1;
+	    var dsq = dl * dl;
+	    phi = phi1 - nl1 * Math.tan(phi1) / rl1 * dl * dl * (0.5 - (1 + 3 * tl1) * dl * dl / 24);
+	    lam = dl * (1 - dsq * (tl1 / 3 + (1 + 3 * tl1) * tl1 * dsq / 15)) / Math.cos(phi1);
+
+	  }
+
+	  p.x = adjust_lon(lam + this.long0);
+	  p.y = adjust_lat(phi);
+	  return p;
+
+	}
+
+	var names$13 = ["Cassini", "Cassini_Soldner", "cass"];
+	var cass = {
+	  init: init$12,
+	  forward: forward$11,
+	  inverse: inverse$11,
+	  names: names$13
+	};
+
+	var qsfnz = function(eccent, sinphi) {
+	  var con;
+	  if (eccent > 1.0e-7) {
+	    con = eccent * sinphi;
+	    return ((1 - eccent * eccent) * (sinphi / (1 - con * con) - (0.5 / eccent) * Math.log((1 - con) / (1 + con))));
+	  }
+	  else {
+	    return (2 * sinphi);
+	  }
+	};
+
+	/*
+	  reference
+	    "New Equal-Area Map Projections for Noncircular Regions", John P. Snyder,
+	    The American Cartographer, Vol 15, No. 4, October 1988, pp. 341-355.
+	  */
+
+	var S_POLE = 1;
+
+	var N_POLE = 2;
+	var EQUIT = 3;
+	var OBLIQ = 4;
+
+	/* Initialize the Lambert Azimuthal Equal Area projection
+	  ------------------------------------------------------*/
+	function init$13() {
+	  var t = Math.abs(this.lat0);
+	  if (Math.abs(t - HALF_PI) < EPSLN) {
+	    this.mode = this.lat0 < 0 ? this.S_POLE : this.N_POLE;
+	  }
+	  else if (Math.abs(t) < EPSLN) {
+	    this.mode = this.EQUIT;
+	  }
+	  else {
+	    this.mode = this.OBLIQ;
+	  }
+	  if (this.es > 0) {
+	    var sinphi;
+
+	    this.qp = qsfnz(this.e, 1);
+	    this.mmf = 0.5 / (1 - this.es);
+	    this.apa = authset(this.es);
+	    switch (this.mode) {
+	    case this.N_POLE:
+	      this.dd = 1;
+	      break;
+	    case this.S_POLE:
+	      this.dd = 1;
+	      break;
+	    case this.EQUIT:
+	      this.rq = Math.sqrt(0.5 * this.qp);
+	      this.dd = 1 / this.rq;
+	      this.xmf = 1;
+	      this.ymf = 0.5 * this.qp;
+	      break;
+	    case this.OBLIQ:
+	      this.rq = Math.sqrt(0.5 * this.qp);
+	      sinphi = Math.sin(this.lat0);
+	      this.sinb1 = qsfnz(this.e, sinphi) / this.qp;
+	      this.cosb1 = Math.sqrt(1 - this.sinb1 * this.sinb1);
+	      this.dd = Math.cos(this.lat0) / (Math.sqrt(1 - this.es * sinphi * sinphi) * this.rq * this.cosb1);
+	      this.ymf = (this.xmf = this.rq) / this.dd;
+	      this.xmf *= this.dd;
+	      break;
+	    }
+	  }
+	  else {
+	    if (this.mode === this.OBLIQ) {
+	      this.sinph0 = Math.sin(this.lat0);
+	      this.cosph0 = Math.cos(this.lat0);
+	    }
+	  }
+	}
+
+	/* Lambert Azimuthal Equal Area forward equations--mapping lat,long to x,y
+	  -----------------------------------------------------------------------*/
+	function forward$12(p) {
+
+	  /* Forward equations
+	      -----------------*/
+	  var x, y, coslam, sinlam, sinphi, q, sinb, cosb, b, cosphi;
+	  var lam = p.x;
+	  var phi = p.y;
+
+	  lam = adjust_lon(lam - this.long0);
+	  if (this.sphere) {
+	    sinphi = Math.sin(phi);
+	    cosphi = Math.cos(phi);
+	    coslam = Math.cos(lam);
+	    if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
+	      y = (this.mode === this.EQUIT) ? 1 + cosphi * coslam : 1 + this.sinph0 * sinphi + this.cosph0 * cosphi * coslam;
+	      if (y <= EPSLN) {
+	        return null;
+	      }
+	      y = Math.sqrt(2 / y);
+	      x = y * cosphi * Math.sin(lam);
+	      y *= (this.mode === this.EQUIT) ? sinphi : this.cosph0 * sinphi - this.sinph0 * cosphi * coslam;
+	    }
+	    else if (this.mode === this.N_POLE || this.mode === this.S_POLE) {
+	      if (this.mode === this.N_POLE) {
+	        coslam = -coslam;
+	      }
+	      if (Math.abs(phi + this.phi0) < EPSLN) {
+	        return null;
+	      }
+	      y = FORTPI - phi * 0.5;
+	      y = 2 * ((this.mode === this.S_POLE) ? Math.cos(y) : Math.sin(y));
+	      x = y * Math.sin(lam);
+	      y *= coslam;
+	    }
+	  }
+	  else {
+	    sinb = 0;
+	    cosb = 0;
+	    b = 0;
+	    coslam = Math.cos(lam);
+	    sinlam = Math.sin(lam);
+	    sinphi = Math.sin(phi);
+	    q = qsfnz(this.e, sinphi);
+	    if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
+	      sinb = q / this.qp;
+	      cosb = Math.sqrt(1 - sinb * sinb);
+	    }
+	    switch (this.mode) {
+	    case this.OBLIQ:
+	      b = 1 + this.sinb1 * sinb + this.cosb1 * cosb * coslam;
+	      break;
+	    case this.EQUIT:
+	      b = 1 + cosb * coslam;
+	      break;
+	    case this.N_POLE:
+	      b = HALF_PI + phi;
+	      q = this.qp - q;
+	      break;
+	    case this.S_POLE:
+	      b = phi - HALF_PI;
+	      q = this.qp + q;
+	      break;
+	    }
+	    if (Math.abs(b) < EPSLN) {
+	      return null;
+	    }
+	    switch (this.mode) {
+	    case this.OBLIQ:
+	    case this.EQUIT:
+	      b = Math.sqrt(2 / b);
+	      if (this.mode === this.OBLIQ) {
+	        y = this.ymf * b * (this.cosb1 * sinb - this.sinb1 * cosb * coslam);
+	      }
+	      else {
+	        y = (b = Math.sqrt(2 / (1 + cosb * coslam))) * sinb * this.ymf;
+	      }
+	      x = this.xmf * b * cosb * sinlam;
+	      break;
+	    case this.N_POLE:
+	    case this.S_POLE:
+	      if (q >= 0) {
+	        x = (b = Math.sqrt(q)) * sinlam;
+	        y = coslam * ((this.mode === this.S_POLE) ? b : -b);
+	      }
+	      else {
+	        x = y = 0;
+	      }
+	      break;
+	    }
+	  }
+
+	  p.x = this.a * x + this.x0;
+	  p.y = this.a * y + this.y0;
+	  return p;
+	}
+
+	/* Inverse equations
+	  -----------------*/
+	function inverse$12(p) {
+	  p.x -= this.x0;
+	  p.y -= this.y0;
+	  var x = p.x / this.a;
+	  var y = p.y / this.a;
+	  var lam, phi, cCe, sCe, q, rho, ab;
+	  if (this.sphere) {
+	    var cosz = 0,
+	      rh, sinz = 0;
+
+	    rh = Math.sqrt(x * x + y * y);
+	    phi = rh * 0.5;
+	    if (phi > 1) {
+	      return null;
+	    }
+	    phi = 2 * Math.asin(phi);
+	    if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
+	      sinz = Math.sin(phi);
+	      cosz = Math.cos(phi);
+	    }
+	    switch (this.mode) {
+	    case this.EQUIT:
+	      phi = (Math.abs(rh) <= EPSLN) ? 0 : Math.asin(y * sinz / rh);
+	      x *= sinz;
+	      y = cosz * rh;
+	      break;
+	    case this.OBLIQ:
+	      phi = (Math.abs(rh) <= EPSLN) ? this.phi0 : Math.asin(cosz * this.sinph0 + y * sinz * this.cosph0 / rh);
+	      x *= sinz * this.cosph0;
+	      y = (cosz - Math.sin(phi) * this.sinph0) * rh;
+	      break;
+	    case this.N_POLE:
+	      y = -y;
+	      phi = HALF_PI - phi;
+	      break;
+	    case this.S_POLE:
+	      phi -= HALF_PI;
+	      break;
+	    }
+	    lam = (y === 0 && (this.mode === this.EQUIT || this.mode === this.OBLIQ)) ? 0 : Math.atan2(x, y);
+	  }
+	  else {
+	    ab = 0;
+	    if (this.mode === this.OBLIQ || this.mode === this.EQUIT) {
+	      x /= this.dd;
+	      y *= this.dd;
+	      rho = Math.sqrt(x * x + y * y);
+	      if (rho < EPSLN) {
+	        p.x = 0;
+	        p.y = this.phi0;
+	        return p;
+	      }
+	      sCe = 2 * Math.asin(0.5 * rho / this.rq);
+	      cCe = Math.cos(sCe);
+	      x *= (sCe = Math.sin(sCe));
+	      if (this.mode === this.OBLIQ) {
+	        ab = cCe * this.sinb1 + y * sCe * this.cosb1 / rho;
+	        q = this.qp * ab;
+	        y = rho * this.cosb1 * cCe - y * this.sinb1 * sCe;
+	      }
+	      else {
+	        ab = y * sCe / rho;
+	        q = this.qp * ab;
+	        y = rho * cCe;
+	      }
+	    }
+	    else if (this.mode === this.N_POLE || this.mode === this.S_POLE) {
+	      if (this.mode === this.N_POLE) {
+	        y = -y;
+	      }
+	      q = (x * x + y * y);
+	      if (!q) {
+	        p.x = 0;
+	        p.y = this.phi0;
+	        return p;
+	      }
+	      ab = 1 - q / this.qp;
+	      if (this.mode === this.S_POLE) {
+	        ab = -ab;
+	      }
+	    }
+	    lam = Math.atan2(x, y);
+	    phi = authlat(Math.asin(ab), this.apa);
+	  }
+
+	  p.x = adjust_lon(this.long0 + lam);
+	  p.y = phi;
+	  return p;
+	}
+
+	/* determine latitude from authalic latitude */
+	var P00 = 0.33333333333333333333;
+
+	var P01 = 0.17222222222222222222;
+	var P02 = 0.10257936507936507936;
+	var P10 = 0.06388888888888888888;
+	var P11 = 0.06640211640211640211;
+	var P20 = 0.01641501294219154443;
+
+	function authset(es) {
+	  var t;
+	  var APA = [];
+	  APA[0] = es * P00;
+	  t = es * es;
+	  APA[0] += t * P01;
+	  APA[1] = t * P10;
+	  t *= es;
+	  APA[0] += t * P02;
+	  APA[1] += t * P11;
+	  APA[2] = t * P20;
+	  return APA;
+	}
+
+	function authlat(beta, APA) {
+	  var t = beta + beta;
+	  return (beta + APA[0] * Math.sin(t) + APA[1] * Math.sin(t + t) + APA[2] * Math.sin(t + t + t));
+	}
+
+	var names$14 = ["Lambert Azimuthal Equal Area", "Lambert_Azimuthal_Equal_Area", "laea"];
+	var laea = {
+	  init: init$13,
+	  forward: forward$12,
+	  inverse: inverse$12,
+	  names: names$14,
+	  S_POLE: S_POLE,
+	  N_POLE: N_POLE,
+	  EQUIT: EQUIT,
+	  OBLIQ: OBLIQ
+	};
+
+	var asinz = function(x) {
+	  if (Math.abs(x) > 1) {
+	    x = (x > 1) ? 1 : -1;
+	  }
+	  return Math.asin(x);
+	};
+
+	function init$14() {
+
+	  if (Math.abs(this.lat1 + this.lat2) < EPSLN) {
+	    return;
+	  }
+	  this.temp = this.b / this.a;
+	  this.es = 1 - Math.pow(this.temp, 2);
+	  this.e3 = Math.sqrt(this.es);
+
+	  this.sin_po = Math.sin(this.lat1);
+	  this.cos_po = Math.cos(this.lat1);
+	  this.t1 = this.sin_po;
+	  this.con = this.sin_po;
+	  this.ms1 = msfnz(this.e3, this.sin_po, this.cos_po);
+	  this.qs1 = qsfnz(this.e3, this.sin_po, this.cos_po);
+
+	  this.sin_po = Math.sin(this.lat2);
+	  this.cos_po = Math.cos(this.lat2);
+	  this.t2 = this.sin_po;
+	  this.ms2 = msfnz(this.e3, this.sin_po, this.cos_po);
+	  this.qs2 = qsfnz(this.e3, this.sin_po, this.cos_po);
+
+	  this.sin_po = Math.sin(this.lat0);
+	  this.cos_po = Math.cos(this.lat0);
+	  this.t3 = this.sin_po;
+	  this.qs0 = qsfnz(this.e3, this.sin_po, this.cos_po);
+
+	  if (Math.abs(this.lat1 - this.lat2) > EPSLN) {
+	    this.ns0 = (this.ms1 * this.ms1 - this.ms2 * this.ms2) / (this.qs2 - this.qs1);
+	  }
+	  else {
+	    this.ns0 = this.con;
+	  }
+	  this.c = this.ms1 * this.ms1 + this.ns0 * this.qs1;
+	  this.rh = this.a * Math.sqrt(this.c - this.ns0 * this.qs0) / this.ns0;
+	}
+
+	/* Albers Conical Equal Area forward equations--mapping lat,long to x,y
+	  -------------------------------------------------------------------*/
+	function forward$13(p) {
+
+	  var lon = p.x;
+	  var lat = p.y;
+
+	  this.sin_phi = Math.sin(lat);
+	  this.cos_phi = Math.cos(lat);
+
+	  var qs = qsfnz(this.e3, this.sin_phi, this.cos_phi);
+	  var rh1 = this.a * Math.sqrt(this.c - this.ns0 * qs) / this.ns0;
+	  var theta = this.ns0 * adjust_lon(lon - this.long0);
+	  var x = rh1 * Math.sin(theta) + this.x0;
+	  var y = this.rh - rh1 * Math.cos(theta) + this.y0;
+
+	  p.x = x;
+	  p.y = y;
+	  return p;
+	}
+
+	function inverse$13(p) {
+	  var rh1, qs, con, theta, lon, lat;
+
+	  p.x -= this.x0;
+	  p.y = this.rh - p.y + this.y0;
+	  if (this.ns0 >= 0) {
+	    rh1 = Math.sqrt(p.x * p.x + p.y * p.y);
+	    con = 1;
+	  }
+	  else {
+	    rh1 = -Math.sqrt(p.x * p.x + p.y * p.y);
+	    con = -1;
+	  }
+	  theta = 0;
+	  if (rh1 !== 0) {
+	    theta = Math.atan2(con * p.x, con * p.y);
+	  }
+	  con = rh1 * this.ns0 / this.a;
+	  if (this.sphere) {
+	    lat = Math.asin((this.c - con * con) / (2 * this.ns0));
+	  }
+	  else {
+	    qs = (this.c - con * con) / this.ns0;
+	    lat = this.phi1z(this.e3, qs);
+	  }
+
+	  lon = adjust_lon(theta / this.ns0 + this.long0);
+	  p.x = lon;
+	  p.y = lat;
+	  return p;
+	}
+
+	/* Function to compute phi1, the latitude for the inverse of the
+	   Albers Conical Equal-Area projection.
+	-------------------------------------------*/
+	function phi1z(eccent, qs) {
+	  var sinphi, cosphi, con, com, dphi;
+	  var phi = asinz(0.5 * qs);
+	  if (eccent < EPSLN) {
+	    return phi;
+	  }
+
+	  var eccnts = eccent * eccent;
+	  for (var i = 1; i <= 25; i++) {
+	    sinphi = Math.sin(phi);
+	    cosphi = Math.cos(phi);
+	    con = eccent * sinphi;
+	    com = 1 - con * con;
+	    dphi = 0.5 * com * com / cosphi * (qs / (1 - eccnts) - sinphi / com + 0.5 / eccent * Math.log((1 - con) / (1 + con)));
+	    phi = phi + dphi;
+	    if (Math.abs(dphi) <= 1e-7) {
+	      return phi;
+	    }
+	  }
+	  return null;
+	}
+
+	var names$15 = ["Albers_Conic_Equal_Area", "Albers", "aea"];
+	var aea = {
+	  init: init$14,
+	  forward: forward$13,
+	  inverse: inverse$13,
+	  names: names$15,
+	  phi1z: phi1z
+	};
+
+	/*
+	  reference:
+	    Wolfram Mathworld "Gnomonic Projection"
+	    http://mathworld.wolfram.com/GnomonicProjection.html
+	    Accessed: 12th November 2009
+	  */
+	function init$15() {
+
+	  /* Place parameters in static storage for common use
+	      -------------------------------------------------*/
+	  this.sin_p14 = Math.sin(this.lat0);
+	  this.cos_p14 = Math.cos(this.lat0);
+	  // Approximation for projecting points to the horizon (infinity)
+	  this.infinity_dist = 1000 * this.a;
+	  this.rc = 1;
+	}
+
+	/* Gnomonic forward equations--mapping lat,long to x,y
+	    ---------------------------------------------------*/
+	function forward$14(p) {
+	  var sinphi, cosphi; /* sin and cos value        */
+	  var dlon; /* delta longitude value      */
+	  var coslon; /* cos of longitude        */
+	  var ksp; /* scale factor          */
+	  var g;
+	  var x, y;
+	  var lon = p.x;
+	  var lat = p.y;
+	  /* Forward equations
+	      -----------------*/
+	  dlon = adjust_lon(lon - this.long0);
+
+	  sinphi = Math.sin(lat);
+	  cosphi = Math.cos(lat);
+
+	  coslon = Math.cos(dlon);
+	  g = this.sin_p14 * sinphi + this.cos_p14 * cosphi * coslon;
+	  ksp = 1;
+	  if ((g > 0) || (Math.abs(g) <= EPSLN)) {
+	    x = this.x0 + this.a * ksp * cosphi * Math.sin(dlon) / g;
+	    y = this.y0 + this.a * ksp * (this.cos_p14 * sinphi - this.sin_p14 * cosphi * coslon) / g;
+	  }
+	  else {
+
+	    // Point is in the opposing hemisphere and is unprojectable
+	    // We still need to return a reasonable point, so we project
+	    // to infinity, on a bearing
+	    // equivalent to the northern hemisphere equivalent
+	    // This is a reasonable approximation for short shapes and lines that
+	    // straddle the horizon.
+
+	    x = this.x0 + this.infinity_dist * cosphi * Math.sin(dlon);
+	    y = this.y0 + this.infinity_dist * (this.cos_p14 * sinphi - this.sin_p14 * cosphi * coslon);
+
+	  }
+	  p.x = x;
+	  p.y = y;
+	  return p;
+	}
+
+	function inverse$14(p) {
+	  var rh; /* Rho */
+	  var sinc, cosc;
+	  var c;
+	  var lon, lat;
+
+	  /* Inverse equations
+	      -----------------*/
+	  p.x = (p.x - this.x0) / this.a;
+	  p.y = (p.y - this.y0) / this.a;
+
+	  p.x /= this.k0;
+	  p.y /= this.k0;
+
+	  if ((rh = Math.sqrt(p.x * p.x + p.y * p.y))) {
+	    c = Math.atan2(rh, this.rc);
+	    sinc = Math.sin(c);
+	    cosc = Math.cos(c);
+
+	    lat = asinz(cosc * this.sin_p14 + (p.y * sinc * this.cos_p14) / rh);
+	    lon = Math.atan2(p.x * sinc, rh * this.cos_p14 * cosc - p.y * this.sin_p14 * sinc);
+	    lon = adjust_lon(this.long0 + lon);
+	  }
+	  else {
+	    lat = this.phic0;
+	    lon = 0;
+	  }
+
+	  p.x = lon;
+	  p.y = lat;
+	  return p;
+	}
+
+	var names$16 = ["gnom"];
+	var gnom = {
+	  init: init$15,
+	  forward: forward$14,
+	  inverse: inverse$14,
+	  names: names$16
+	};
+
+	var iqsfnz = function(eccent, q) {
+	  var temp = 1 - (1 - eccent * eccent) / (2 * eccent) * Math.log((1 - eccent) / (1 + eccent));
+	  if (Math.abs(Math.abs(q) - temp) < 1.0E-6) {
+	    if (q < 0) {
+	      return (-1 * HALF_PI);
+	    }
+	    else {
+	      return HALF_PI;
+	    }
+	  }
+	  //var phi = 0.5* q/(1-eccent*eccent);
+	  var phi = Math.asin(0.5 * q);
+	  var dphi;
+	  var sin_phi;
+	  var cos_phi;
+	  var con;
+	  for (var i = 0; i < 30; i++) {
+	    sin_phi = Math.sin(phi);
+	    cos_phi = Math.cos(phi);
+	    con = eccent * sin_phi;
+	    dphi = Math.pow(1 - con * con, 2) / (2 * cos_phi) * (q / (1 - eccent * eccent) - sin_phi / (1 - con * con) + 0.5 / eccent * Math.log((1 - con) / (1 + con)));
+	    phi += dphi;
+	    if (Math.abs(dphi) <= 0.0000000001) {
+	      return phi;
+	    }
+	  }
+
+	  //console.log("IQSFN-CONV:Latitude failed to converge after 30 iterations");
+	  return NaN;
+	};
+
+	/*
+	  reference:
+	    "Cartographic Projection Procedures for the UNIX Environment-
+	    A User's Manual" by Gerald I. Evenden,
+	    USGS Open File Report 90-284and Release 4 Interim Reports (2003)
+	*/
+	function init$16() {
+	  //no-op
+	  if (!this.sphere) {
+	    this.k0 = msfnz(this.e, Math.sin(this.lat_ts), Math.cos(this.lat_ts));
+	  }
+	}
+
+	/* Cylindrical Equal Area forward equations--mapping lat,long to x,y
+	    ------------------------------------------------------------*/
+	function forward$15(p) {
+	  var lon = p.x;
+	  var lat = p.y;
+	  var x, y;
+	  /* Forward equations
+	      -----------------*/
+	  var dlon = adjust_lon(lon - this.long0);
+	  if (this.sphere) {
+	    x = this.x0 + this.a * dlon * Math.cos(this.lat_ts);
+	    y = this.y0 + this.a * Math.sin(lat) / Math.cos(this.lat_ts);
+	  }
+	  else {
+	    var qs = qsfnz(this.e, Math.sin(lat));
+	    x = this.x0 + this.a * this.k0 * dlon;
+	    y = this.y0 + this.a * qs * 0.5 / this.k0;
+	  }
+
+	  p.x = x;
+	  p.y = y;
+	  return p;
+	}
+
+	/* Cylindrical Equal Area inverse equations--mapping x,y to lat/long
+	    ------------------------------------------------------------*/
+	function inverse$15(p) {
+	  p.x -= this.x0;
+	  p.y -= this.y0;
+	  var lon, lat;
+
+	  if (this.sphere) {
+	    lon = adjust_lon(this.long0 + (p.x / this.a) / Math.cos(this.lat_ts));
+	    lat = Math.asin((p.y / this.a) * Math.cos(this.lat_ts));
+	  }
+	  else {
+	    lat = iqsfnz(this.e, 2 * p.y * this.k0 / this.a);
+	    lon = adjust_lon(this.long0 + p.x / (this.a * this.k0));
+	  }
+
+	  p.x = lon;
+	  p.y = lat;
+	  return p;
+	}
+
+	var names$17 = ["cea"];
+	var cea = {
+	  init: init$16,
+	  forward: forward$15,
+	  inverse: inverse$15,
+	  names: names$17
+	};
+
+	function init$17() {
+
+	  this.x0 = this.x0 || 0;
+	  this.y0 = this.y0 || 0;
+	  this.lat0 = this.lat0 || 0;
+	  this.long0 = this.long0 || 0;
+	  this.lat_ts = this.lat_ts || 0;
+	  this.title = this.title || "Equidistant Cylindrical (Plate Carre)";
+
+	  this.rc = Math.cos(this.lat_ts);
+	}
+
+	// forward equations--mapping lat,long to x,y
+	// -----------------------------------------------------------------
+	function forward$16(p) {
+
+	  var lon = p.x;
+	  var lat = p.y;
+
+	  var dlon = adjust_lon(lon - this.long0);
+	  var dlat = adjust_lat(lat - this.lat0);
+	  p.x = this.x0 + (this.a * dlon * this.rc);
+	  p.y = this.y0 + (this.a * dlat);
+	  return p;
+	}
+
+	// inverse equations--mapping x,y to lat/long
+	// -----------------------------------------------------------------
+	function inverse$16(p) {
+
+	  var x = p.x;
+	  var y = p.y;
+
+	  p.x = adjust_lon(this.long0 + ((x - this.x0) / (this.a * this.rc)));
+	  p.y = adjust_lat(this.lat0 + ((y - this.y0) / (this.a)));
+	  return p;
+	}
+
+	var names$18 = ["Equirectangular", "Equidistant_Cylindrical", "eqc"];
+	var eqc = {
+	  init: init$17,
+	  forward: forward$16,
+	  inverse: inverse$16,
+	  names: names$18
+	};
+
+	var MAX_ITER$2 = 20;
+
+	function init$18() {
+	  /* Place parameters in static storage for common use
+	      -------------------------------------------------*/
+	  this.temp = this.b / this.a;
+	  this.es = 1 - Math.pow(this.temp, 2); // devait etre dans tmerc.js mais n y est pas donc je commente sinon retour de valeurs nulles
+	  this.e = Math.sqrt(this.es);
+	  this.e0 = e0fn(this.es);
+	  this.e1 = e1fn(this.es);
+	  this.e2 = e2fn(this.es);
+	  this.e3 = e3fn(this.es);
+	  this.ml0 = this.a * mlfn(this.e0, this.e1, this.e2, this.e3, this.lat0); //si que des zeros le calcul ne se fait pas
+	}
+
+	/* Polyconic forward equations--mapping lat,long to x,y
+	    ---------------------------------------------------*/
+	function forward$17(p) {
+	  var lon = p.x;
+	  var lat = p.y;
+	  var x, y, el;
+	  var dlon = adjust_lon(lon - this.long0);
+	  el = dlon * Math.sin(lat);
+	  if (this.sphere) {
+	    if (Math.abs(lat) <= EPSLN) {
+	      x = this.a * dlon;
+	      y = -1 * this.a * this.lat0;
+	    }
+	    else {
+	      x = this.a * Math.sin(el) / Math.tan(lat);
+	      y = this.a * (adjust_lat(lat - this.lat0) + (1 - Math.cos(el)) / Math.tan(lat));
+	    }
+	  }
+	  else {
+	    if (Math.abs(lat) <= EPSLN) {
+	      x = this.a * dlon;
+	      y = -1 * this.ml0;
+	    }
+	    else {
+	      var nl = gN(this.a, this.e, Math.sin(lat)) / Math.tan(lat);
+	      x = nl * Math.sin(el);
+	      y = this.a * mlfn(this.e0, this.e1, this.e2, this.e3, lat) - this.ml0 + nl * (1 - Math.cos(el));
+	    }
+
+	  }
+	  p.x = x + this.x0;
+	  p.y = y + this.y0;
+	  return p;
+	}
+
+	/* Inverse equations
+	  -----------------*/
+	function inverse$17(p) {
+	  var lon, lat, x, y, i;
+	  var al, bl;
+	  var phi, dphi;
+	  x = p.x - this.x0;
+	  y = p.y - this.y0;
+
+	  if (this.sphere) {
+	    if (Math.abs(y + this.a * this.lat0) <= EPSLN) {
+	      lon = adjust_lon(x / this.a + this.long0);
+	      lat = 0;
+	    }
+	    else {
+	      al = this.lat0 + y / this.a;
+	      bl = x * x / this.a / this.a + al * al;
+	      phi = al;
+	      var tanphi;
+	      for (i = MAX_ITER$2; i; --i) {
+	        tanphi = Math.tan(phi);
+	        dphi = -1 * (al * (phi * tanphi + 1) - phi - 0.5 * (phi * phi + bl) * tanphi) / ((phi - al) / tanphi - 1);
+	        phi += dphi;
+	        if (Math.abs(dphi) <= EPSLN) {
+	          lat = phi;
+	          break;
+	        }
+	      }
+	      lon = adjust_lon(this.long0 + (Math.asin(x * Math.tan(phi) / this.a)) / Math.sin(lat));
+	    }
+	  }
+	  else {
+	    if (Math.abs(y + this.ml0) <= EPSLN) {
+	      lat = 0;
+	      lon = adjust_lon(this.long0 + x / this.a);
+	    }
+	    else {
+
+	      al = (this.ml0 + y) / this.a;
+	      bl = x * x / this.a / this.a + al * al;
+	      phi = al;
+	      var cl, mln, mlnp, ma;
+	      var con;
+	      for (i = MAX_ITER$2; i; --i) {
+	        con = this.e * Math.sin(phi);
+	        cl = Math.sqrt(1 - con * con) * Math.tan(phi);
+	        mln = this.a * mlfn(this.e0, this.e1, this.e2, this.e3, phi);
+	        mlnp = this.e0 - 2 * this.e1 * Math.cos(2 * phi) + 4 * this.e2 * Math.cos(4 * phi) - 6 * this.e3 * Math.cos(6 * phi);
+	        ma = mln / this.a;
+	        dphi = (al * (cl * ma + 1) - ma - 0.5 * cl * (ma * ma + bl)) / (this.es * Math.sin(2 * phi) * (ma * ma + bl - 2 * al * ma) / (4 * cl) + (al - ma) * (cl * mlnp - 2 / Math.sin(2 * phi)) - mlnp);
+	        phi -= dphi;
+	        if (Math.abs(dphi) <= EPSLN) {
+	          lat = phi;
+	          break;
+	        }
+	      }
+
+	      //lat=phi4z(this.e,this.e0,this.e1,this.e2,this.e3,al,bl,0,0);
+	      cl = Math.sqrt(1 - this.es * Math.pow(Math.sin(lat), 2)) * Math.tan(lat);
+	      lon = adjust_lon(this.long0 + Math.asin(x * cl / this.a) / Math.sin(lat));
+	    }
+	  }
+
+	  p.x = lon;
+	  p.y = lat;
+	  return p;
+	}
+
+	var names$19 = ["Polyconic", "poly"];
+	var poly = {
+	  init: init$18,
+	  forward: forward$17,
+	  inverse: inverse$17,
+	  names: names$19
+	};
+
+	/*
+	  reference
+	    Department of Land and Survey Technical Circular 1973/32
+	      http://www.linz.govt.nz/docs/miscellaneous/nz-map-definition.pdf
+	    OSG Technical Report 4.1
+	      http://www.linz.govt.nz/docs/miscellaneous/nzmg.pdf
+	  */
+
+	/**
+	 * iterations: Number of iterations to refine inverse transform.
+	 *     0 -> km accuracy
+	 *     1 -> m accuracy -- suitable for most mapping applications
+	 *     2 -> mm accuracy
+	 */
+
+
+	function init$19() {
+	  this.A = [];
+	  this.A[1] = 0.6399175073;
+	  this.A[2] = -0.1358797613;
+	  this.A[3] = 0.063294409;
+	  this.A[4] = -0.02526853;
+	  this.A[5] = 0.0117879;
+	  this.A[6] = -0.0055161;
+	  this.A[7] = 0.0026906;
+	  this.A[8] = -0.001333;
+	  this.A[9] = 0.00067;
+	  this.A[10] = -0.00034;
+
+	  this.B_re = [];
+	  this.B_im = [];
+	  this.B_re[1] = 0.7557853228;
+	  this.B_im[1] = 0;
+	  this.B_re[2] = 0.249204646;
+	  this.B_im[2] = 0.003371507;
+	  this.B_re[3] = -0.001541739;
+	  this.B_im[3] = 0.041058560;
+	  this.B_re[4] = -0.10162907;
+	  this.B_im[4] = 0.01727609;
+	  this.B_re[5] = -0.26623489;
+	  this.B_im[5] = -0.36249218;
+	  this.B_re[6] = -0.6870983;
+	  this.B_im[6] = -1.1651967;
+
+	  this.C_re = [];
+	  this.C_im = [];
+	  this.C_re[1] = 1.3231270439;
+	  this.C_im[1] = 0;
+	  this.C_re[2] = -0.577245789;
+	  this.C_im[2] = -0.007809598;
+	  this.C_re[3] = 0.508307513;
+	  this.C_im[3] = -0.112208952;
+	  this.C_re[4] = -0.15094762;
+	  this.C_im[4] = 0.18200602;
+	  this.C_re[5] = 1.01418179;
+	  this.C_im[5] = 1.64497696;
+	  this.C_re[6] = 1.9660549;
+	  this.C_im[6] = 2.5127645;
+
+	  this.D = [];
+	  this.D[1] = 1.5627014243;
+	  this.D[2] = 0.5185406398;
+	  this.D[3] = -0.03333098;
+	  this.D[4] = -0.1052906;
+	  this.D[5] = -0.0368594;
+	  this.D[6] = 0.007317;
+	  this.D[7] = 0.01220;
+	  this.D[8] = 0.00394;
+	  this.D[9] = -0.0013;
+	}
+
+	/**
+	    New Zealand Map Grid Forward  - long/lat to x/y
+	    long/lat in radians
+	  */
+	function forward$18(p) {
+	  var n;
+	  var lon = p.x;
+	  var lat = p.y;
+
+	  var delta_lat = lat - this.lat0;
+	  var delta_lon = lon - this.long0;
+
+	  // 1. Calculate d_phi and d_psi    ...                          // and d_lambda
+	  // For this algorithm, delta_latitude is in seconds of arc x 10-5, so we need to scale to those units. Longitude is radians.
+	  var d_phi = delta_lat / SEC_TO_RAD * 1E-5;
+	  var d_lambda = delta_lon;
+	  var d_phi_n = 1; // d_phi^0
+
+	  var d_psi = 0;
+	  for (n = 1; n <= 10; n++) {
+	    d_phi_n = d_phi_n * d_phi;
+	    d_psi = d_psi + this.A[n] * d_phi_n;
+	  }
+
+	  // 2. Calculate theta
+	  var th_re = d_psi;
+	  var th_im = d_lambda;
+
+	  // 3. Calculate z
+	  var th_n_re = 1;
+	  var th_n_im = 0; // theta^0
+	  var th_n_re1;
+	  var th_n_im1;
+
+	  var z_re = 0;
+	  var z_im = 0;
+	  for (n = 1; n <= 6; n++) {
+	    th_n_re1 = th_n_re * th_re - th_n_im * th_im;
+	    th_n_im1 = th_n_im * th_re + th_n_re * th_im;
+	    th_n_re = th_n_re1;
+	    th_n_im = th_n_im1;
+	    z_re = z_re + this.B_re[n] * th_n_re - this.B_im[n] * th_n_im;
+	    z_im = z_im + this.B_im[n] * th_n_re + this.B_re[n] * th_n_im;
+	  }
+
+	  // 4. Calculate easting and northing
+	  p.x = (z_im * this.a) + this.x0;
+	  p.y = (z_re * this.a) + this.y0;
+
+	  return p;
+	}
+
+	/**
+	    New Zealand Map Grid Inverse  -  x/y to long/lat
+	  */
+	function inverse$18(p) {
+	  var n;
+	  var x = p.x;
+	  var y = p.y;
+
+	  var delta_x = x - this.x0;
+	  var delta_y = y - this.y0;
+
+	  // 1. Calculate z
+	  var z_re = delta_y / this.a;
+	  var z_im = delta_x / this.a;
+
+	  // 2a. Calculate theta - first approximation gives km accuracy
+	  var z_n_re = 1;
+	  var z_n_im = 0; // z^0
+	  var z_n_re1;
+	  var z_n_im1;
+
+	  var th_re = 0;
+	  var th_im = 0;
+	  for (n = 1; n <= 6; n++) {
+	    z_n_re1 = z_n_re * z_re - z_n_im * z_im;
+	    z_n_im1 = z_n_im * z_re + z_n_re * z_im;
+	    z_n_re = z_n_re1;
+	    z_n_im = z_n_im1;
+	    th_re = th_re + this.C_re[n] * z_n_re - this.C_im[n] * z_n_im;
+	    th_im = th_im + this.C_im[n] * z_n_re + this.C_re[n] * z_n_im;
+	  }
+
+	  // 2b. Iterate to refine the accuracy of the calculation
+	  //        0 iterations gives km accuracy
+	  //        1 iteration gives m accuracy -- good enough for most mapping applications
+	  //        2 iterations bives mm accuracy
+	  for (var i = 0; i < this.iterations; i++) {
+	    var th_n_re = th_re;
+	    var th_n_im = th_im;
+	    var th_n_re1;
+	    var th_n_im1;
+
+	    var num_re = z_re;
+	    var num_im = z_im;
+	    for (n = 2; n <= 6; n++) {
+	      th_n_re1 = th_n_re * th_re - th_n_im * th_im;
+	      th_n_im1 = th_n_im * th_re + th_n_re * th_im;
+	      th_n_re = th_n_re1;
+	      th_n_im = th_n_im1;
+	      num_re = num_re + (n - 1) * (this.B_re[n] * th_n_re - this.B_im[n] * th_n_im);
+	      num_im = num_im + (n - 1) * (this.B_im[n] * th_n_re + this.B_re[n] * th_n_im);
+	    }
+
+	    th_n_re = 1;
+	    th_n_im = 0;
+	    var den_re = this.B_re[1];
+	    var den_im = this.B_im[1];
+	    for (n = 2; n <= 6; n++) {
+	      th_n_re1 = th_n_re * th_re - th_n_im * th_im;
+	      th_n_im1 = th_n_im * th_re + th_n_re * th_im;
+	      th_n_re = th_n_re1;
+	      th_n_im = th_n_im1;
+	      den_re = den_re + n * (this.B_re[n] * th_n_re - this.B_im[n] * th_n_im);
+	      den_im = den_im + n * (this.B_im[n] * th_n_re + this.B_re[n] * th_n_im);
+	    }
+
+	    // Complex division
+	    var den2 = den_re * den_re + den_im * den_im;
+	    th_re = (num_re * den_re + num_im * den_im) / den2;
+	    th_im = (num_im * den_re - num_re * den_im) / den2;
+	  }
+
+	  // 3. Calculate d_phi              ...                                    // and d_lambda
+	  var d_psi = th_re;
+	  var d_lambda = th_im;
+	  var d_psi_n = 1; // d_psi^0
+
+	  var d_phi = 0;
+	  for (n = 1; n <= 9; n++) {
+	    d_psi_n = d_psi_n * d_psi;
+	    d_phi = d_phi + this.D[n] * d_psi_n;
+	  }
+
+	  // 4. Calculate latitude and longitude
+	  // d_phi is calcuated in second of arc * 10^-5, so we need to scale back to radians. d_lambda is in radians.
+	  var lat = this.lat0 + (d_phi * SEC_TO_RAD * 1E5);
+	  var lon = this.long0 + d_lambda;
+
+	  p.x = lon;
+	  p.y = lat;
+
+	  return p;
+	}
+
+	var names$20 = ["New_Zealand_Map_Grid", "nzmg"];
+	var nzmg = {
+	  init: init$19,
+	  forward: forward$18,
+	  inverse: inverse$18,
+	  names: names$20
+	};
+
+	/*
+	  reference
+	    "New Equal-Area Map Projections for Noncircular Regions", John P. Snyder,
+	    The American Cartographer, Vol 15, No. 4, October 1988, pp. 341-355.
+	  */
+
+
+	/* Initialize the Miller Cylindrical projection
+	  -------------------------------------------*/
+	function init$20() {
+	  //no-op
+	}
+
+	/* Miller Cylindrical forward equations--mapping lat,long to x,y
+	    ------------------------------------------------------------*/
+	function forward$19(p) {
+	  var lon = p.x;
+	  var lat = p.y;
+	  /* Forward equations
+	      -----------------*/
+	  var dlon = adjust_lon(lon - this.long0);
+	  var x = this.x0 + this.a * dlon;
+	  var y = this.y0 + this.a * Math.log(Math.tan((Math.PI / 4) + (lat / 2.5))) * 1.25;
+
+	  p.x = x;
+	  p.y = y;
+	  return p;
+	}
+
+	/* Miller Cylindrical inverse equations--mapping x,y to lat/long
+	    ------------------------------------------------------------*/
+	function inverse$19(p) {
+	  p.x -= this.x0;
+	  p.y -= this.y0;
+
+	  var lon = adjust_lon(this.long0 + p.x / this.a);
+	  var lat = 2.5 * (Math.atan(Math.exp(0.8 * p.y / this.a)) - Math.PI / 4);
+
+	  p.x = lon;
+	  p.y = lat;
+	  return p;
+	}
+
+	var names$21 = ["Miller_Cylindrical", "mill"];
+	var mill = {
+	  init: init$20,
+	  forward: forward$19,
+	  inverse: inverse$19,
+	  names: names$21
+	};
+
+	var MAX_ITER$3 = 20;
+	function init$21() {
+	  /* Place parameters in static storage for common use
+	    -------------------------------------------------*/
+
+
+	  if (!this.sphere) {
+	    this.en = pj_enfn(this.es);
+	  }
+	  else {
+	    this.n = 1;
+	    this.m = 0;
+	    this.es = 0;
+	    this.C_y = Math.sqrt((this.m + 1) / this.n);
+	    this.C_x = this.C_y / (this.m + 1);
+	  }
+
+	}
+
+	/* Sinusoidal forward equations--mapping lat,long to x,y
+	  -----------------------------------------------------*/
+	function forward$20(p) {
+	  var x, y;
+	  var lon = p.x;
+	  var lat = p.y;
+	  /* Forward equations
+	    -----------------*/
+	  lon = adjust_lon(lon - this.long0);
+
+	  if (this.sphere) {
+	    if (!this.m) {
+	      lat = this.n !== 1 ? Math.asin(this.n * Math.sin(lat)) : lat;
+	    }
+	    else {
+	      var k = this.n * Math.sin(lat);
+	      for (var i = MAX_ITER$3; i; --i) {
+	        var V = (this.m * lat + Math.sin(lat) - k) / (this.m + Math.cos(lat));
+	        lat -= V;
+	        if (Math.abs(V) < EPSLN) {
+	          break;
+	        }
+	      }
+	    }
+	    x = this.a * this.C_x * lon * (this.m + Math.cos(lat));
+	    y = this.a * this.C_y * lat;
+
+	  }
+	  else {
+
+	    var s = Math.sin(lat);
+	    var c = Math.cos(lat);
+	    y = this.a * pj_mlfn(lat, s, c, this.en);
+	    x = this.a * lon * c / Math.sqrt(1 - this.es * s * s);
+	  }
+
+	  p.x = x;
+	  p.y = y;
+	  return p;
+	}
+
+	function inverse$20(p) {
+	  var lat, temp, lon, s;
+
+	  p.x -= this.x0;
+	  lon = p.x / this.a;
+	  p.y -= this.y0;
+	  lat = p.y / this.a;
+
+	  if (this.sphere) {
+	    lat /= this.C_y;
+	    lon = lon / (this.C_x * (this.m + Math.cos(lat)));
+	    if (this.m) {
+	      lat = asinz((this.m * lat + Math.sin(lat)) / this.n);
+	    }
+	    else if (this.n !== 1) {
+	      lat = asinz(Math.sin(lat) / this.n);
+	    }
+	    lon = adjust_lon(lon + this.long0);
+	    lat = adjust_lat(lat);
+	  }
+	  else {
+	    lat = pj_inv_mlfn(p.y / this.a, this.es, this.en);
+	    s = Math.abs(lat);
+	    if (s < HALF_PI) {
+	      s = Math.sin(lat);
+	      temp = this.long0 + p.x * Math.sqrt(1 - this.es * s * s) / (this.a * Math.cos(lat));
+	      //temp = this.long0 + p.x / (this.a * Math.cos(lat));
+	      lon = adjust_lon(temp);
+	    }
+	    else if ((s - EPSLN) < HALF_PI) {
+	      lon = this.long0;
+	    }
+	  }
+	  p.x = lon;
+	  p.y = lat;
+	  return p;
+	}
+
+	var names$22 = ["Sinusoidal", "sinu"];
+	var sinu = {
+	  init: init$21,
+	  forward: forward$20,
+	  inverse: inverse$20,
+	  names: names$22
+	};
+
+	function init$22() {}
+	/* Mollweide forward equations--mapping lat,long to x,y
+	    ----------------------------------------------------*/
+	function forward$21(p) {
+
+	  /* Forward equations
+	      -----------------*/
+	  var lon = p.x;
+	  var lat = p.y;
+
+	  var delta_lon = adjust_lon(lon - this.long0);
+	  var theta = lat;
+	  var con = Math.PI * Math.sin(lat);
+
+	  /* Iterate using the Newton-Raphson method to find theta
+	      -----------------------------------------------------*/
+	  for (var i = 0; true; i++) {
+	    var delta_theta = -(theta + Math.sin(theta) - con) / (1 + Math.cos(theta));
+	    theta += delta_theta;
+	    if (Math.abs(delta_theta) < EPSLN) {
+	      break;
+	    }
+	  }
+	  theta /= 2;
+
+	  /* If the latitude is 90 deg, force the x coordinate to be "0 + false easting"
+	       this is done here because of precision problems with "cos(theta)"
+	       --------------------------------------------------------------------------*/
+	  if (Math.PI / 2 - Math.abs(lat) < EPSLN) {
+	    delta_lon = 0;
+	  }
+	  var x = 0.900316316158 * this.a * delta_lon * Math.cos(theta) + this.x0;
+	  var y = 1.4142135623731 * this.a * Math.sin(theta) + this.y0;
+
+	  p.x = x;
+	  p.y = y;
+	  return p;
+	}
+
+	function inverse$21(p) {
+	  var theta;
+	  var arg;
+
+	  /* Inverse equations
+	      -----------------*/
+	  p.x -= this.x0;
+	  p.y -= this.y0;
+	  arg = p.y / (1.4142135623731 * this.a);
+
+	  /* Because of division by zero problems, 'arg' can not be 1.  Therefore
+	       a number very close to one is used instead.
+	       -------------------------------------------------------------------*/
+	  if (Math.abs(arg) > 0.999999999999) {
+	    arg = 0.999999999999;
+	  }
+	  theta = Math.asin(arg);
+	  var lon = adjust_lon(this.long0 + (p.x / (0.900316316158 * this.a * Math.cos(theta))));
+	  if (lon < (-Math.PI)) {
+	    lon = -Math.PI;
+	  }
+	  if (lon > Math.PI) {
+	    lon = Math.PI;
+	  }
+	  arg = (2 * theta + Math.sin(2 * theta)) / Math.PI;
+	  if (Math.abs(arg) > 1) {
+	    arg = 1;
+	  }
+	  var lat = Math.asin(arg);
+
+	  p.x = lon;
+	  p.y = lat;
+	  return p;
+	}
+
+	var names$23 = ["Mollweide", "moll"];
+	var moll = {
+	  init: init$22,
+	  forward: forward$21,
+	  inverse: inverse$21,
+	  names: names$23
+	};
+
+	function init$23() {
+
+	  /* Place parameters in static storage for common use
+	      -------------------------------------------------*/
+	  // Standard Parallels cannot be equal and on opposite sides of the equator
+	  if (Math.abs(this.lat1 + this.lat2) < EPSLN) {
+	    return;
+	  }
+	  this.lat2 = this.lat2 || this.lat1;
+	  this.temp = this.b / this.a;
+	  this.es = 1 - Math.pow(this.temp, 2);
+	  this.e = Math.sqrt(this.es);
+	  this.e0 = e0fn(this.es);
+	  this.e1 = e1fn(this.es);
+	  this.e2 = e2fn(this.es);
+	  this.e3 = e3fn(this.es);
+
+	  this.sinphi = Math.sin(this.lat1);
+	  this.cosphi = Math.cos(this.lat1);
+
+	  this.ms1 = msfnz(this.e, this.sinphi, this.cosphi);
+	  this.ml1 = mlfn(this.e0, this.e1, this.e2, this.e3, this.lat1);
+
+	  if (Math.abs(this.lat1 - this.lat2) < EPSLN) {
+	    this.ns = this.sinphi;
+	  }
+	  else {
+	    this.sinphi = Math.sin(this.lat2);
+	    this.cosphi = Math.cos(this.lat2);
+	    this.ms2 = msfnz(this.e, this.sinphi, this.cosphi);
+	    this.ml2 = mlfn(this.e0, this.e1, this.e2, this.e3, this.lat2);
+	    this.ns = (this.ms1 - this.ms2) / (this.ml2 - this.ml1);
+	  }
+	  this.g = this.ml1 + this.ms1 / this.ns;
+	  this.ml0 = mlfn(this.e0, this.e1, this.e2, this.e3, this.lat0);
+	  this.rh = this.a * (this.g - this.ml0);
+	}
+
+	/* Equidistant Conic forward equations--mapping lat,long to x,y
+	  -----------------------------------------------------------*/
+	function forward$22(p) {
+	  var lon = p.x;
+	  var lat = p.y;
+	  var rh1;
+
+	  /* Forward equations
+	      -----------------*/
+	  if (this.sphere) {
+	    rh1 = this.a * (this.g - lat);
+	  }
+	  else {
+	    var ml = mlfn(this.e0, this.e1, this.e2, this.e3, lat);
+	    rh1 = this.a * (this.g - ml);
+	  }
+	  var theta = this.ns * adjust_lon(lon - this.long0);
+	  var x = this.x0 + rh1 * Math.sin(theta);
+	  var y = this.y0 + this.rh - rh1 * Math.cos(theta);
+	  p.x = x;
+	  p.y = y;
+	  return p;
+	}
+
+	/* Inverse equations
+	  -----------------*/
+	function inverse$22(p) {
+	  p.x -= this.x0;
+	  p.y = this.rh - p.y + this.y0;
+	  var con, rh1, lat, lon;
+	  if (this.ns >= 0) {
+	    rh1 = Math.sqrt(p.x * p.x + p.y * p.y);
+	    con = 1;
+	  }
+	  else {
+	    rh1 = -Math.sqrt(p.x * p.x + p.y * p.y);
+	    con = -1;
+	  }
+	  var theta = 0;
+	  if (rh1 !== 0) {
+	    theta = Math.atan2(con * p.x, con * p.y);
+	  }
+
+	  if (this.sphere) {
+	    lon = adjust_lon(this.long0 + theta / this.ns);
+	    lat = adjust_lat(this.g - rh1 / this.a);
+	    p.x = lon;
+	    p.y = lat;
+	    return p;
+	  }
+	  else {
+	    var ml = this.g - rh1 / this.a;
+	    lat = imlfn(ml, this.e0, this.e1, this.e2, this.e3);
+	    lon = adjust_lon(this.long0 + theta / this.ns);
+	    p.x = lon;
+	    p.y = lat;
+	    return p;
+	  }
+
+	}
+
+	var names$24 = ["Equidistant_Conic", "eqdc"];
+	var eqdc = {
+	  init: init$23,
+	  forward: forward$22,
+	  inverse: inverse$22,
+	  names: names$24
+	};
+
+	/* Initialize the Van Der Grinten projection
+	  ----------------------------------------*/
+	function init$24() {
+	  //this.R = 6370997; //Radius of earth
+	  this.R = this.a;
+	}
+
+	function forward$23(p) {
+
+	  var lon = p.x;
+	  var lat = p.y;
+
+	  /* Forward equations
+	    -----------------*/
+	  var dlon = adjust_lon(lon - this.long0);
+	  var x, y;
+
+	  if (Math.abs(lat) <= EPSLN) {
+	    x = this.x0 + this.R * dlon;
+	    y = this.y0;
+	  }
+	  var theta = asinz(2 * Math.abs(lat / Math.PI));
+	  if ((Math.abs(dlon) <= EPSLN) || (Math.abs(Math.abs(lat) - HALF_PI) <= EPSLN)) {
+	    x = this.x0;
+	    if (lat >= 0) {
+	      y = this.y0 + Math.PI * this.R * Math.tan(0.5 * theta);
+	    }
+	    else {
+	      y = this.y0 + Math.PI * this.R * -Math.tan(0.5 * theta);
+	    }
+	    //  return(OK);
+	  }
+	  var al = 0.5 * Math.abs((Math.PI / dlon) - (dlon / Math.PI));
+	  var asq = al * al;
+	  var sinth = Math.sin(theta);
+	  var costh = Math.cos(theta);
+
+	  var g = costh / (sinth + costh - 1);
+	  var gsq = g * g;
+	  var m = g * (2 / sinth - 1);
+	  var msq = m * m;
+	  var con = Math.PI * this.R * (al * (g - msq) + Math.sqrt(asq * (g - msq) * (g - msq) - (msq + asq) * (gsq - msq))) / (msq + asq);
+	  if (dlon < 0) {
+	    con = -con;
+	  }
+	  x = this.x0 + con;
+	  //con = Math.abs(con / (Math.PI * this.R));
+	  var q = asq + g;
+	  con = Math.PI * this.R * (m * q - al * Math.sqrt((msq + asq) * (asq + 1) - q * q)) / (msq + asq);
+	  if (lat >= 0) {
+	    //y = this.y0 + Math.PI * this.R * Math.sqrt(1 - con * con - 2 * al * con);
+	    y = this.y0 + con;
+	  }
+	  else {
+	    //y = this.y0 - Math.PI * this.R * Math.sqrt(1 - con * con - 2 * al * con);
+	    y = this.y0 - con;
+	  }
+	  p.x = x;
+	  p.y = y;
+	  return p;
+	}
+
+	/* Van Der Grinten inverse equations--mapping x,y to lat/long
+	  ---------------------------------------------------------*/
+	function inverse$23(p) {
+	  var lon, lat;
+	  var xx, yy, xys, c1, c2, c3;
+	  var a1;
+	  var m1;
+	  var con;
+	  var th1;
+	  var d;
+
+	  /* inverse equations
+	    -----------------*/
+	  p.x -= this.x0;
+	  p.y -= this.y0;
+	  con = Math.PI * this.R;
+	  xx = p.x / con;
+	  yy = p.y / con;
+	  xys = xx * xx + yy * yy;
+	  c1 = -Math.abs(yy) * (1 + xys);
+	  c2 = c1 - 2 * yy * yy + xx * xx;
+	  c3 = -2 * c1 + 1 + 2 * yy * yy + xys * xys;
+	  d = yy * yy / c3 + (2 * c2 * c2 * c2 / c3 / c3 / c3 - 9 * c1 * c2 / c3 / c3) / 27;
+	  a1 = (c1 - c2 * c2 / 3 / c3) / c3;
+	  m1 = 2 * Math.sqrt(-a1 / 3);
+	  con = ((3 * d) / a1) / m1;
+	  if (Math.abs(con) > 1) {
+	    if (con >= 0) {
+	      con = 1;
+	    }
+	    else {
+	      con = -1;
+	    }
+	  }
+	  th1 = Math.acos(con) / 3;
+	  if (p.y >= 0) {
+	    lat = (-m1 * Math.cos(th1 + Math.PI / 3) - c2 / 3 / c3) * Math.PI;
+	  }
+	  else {
+	    lat = -(-m1 * Math.cos(th1 + Math.PI / 3) - c2 / 3 / c3) * Math.PI;
+	  }
+
+	  if (Math.abs(xx) < EPSLN) {
+	    lon = this.long0;
+	  }
+	  else {
+	    lon = adjust_lon(this.long0 + Math.PI * (xys - 1 + Math.sqrt(1 + 2 * (xx * xx - yy * yy) + xys * xys)) / 2 / xx);
+	  }
+
+	  p.x = lon;
+	  p.y = lat;
+	  return p;
+	}
+
+	var names$25 = ["Van_der_Grinten_I", "VanDerGrinten", "vandg"];
+	var vandg = {
+	  init: init$24,
+	  forward: forward$23,
+	  inverse: inverse$23,
+	  names: names$25
+	};
+
+	function init$25() {
+	  this.sin_p12 = Math.sin(this.lat0);
+	  this.cos_p12 = Math.cos(this.lat0);
+	}
+
+	function forward$24(p) {
+	  var lon = p.x;
+	  var lat = p.y;
+	  var sinphi = Math.sin(p.y);
+	  var cosphi = Math.cos(p.y);
+	  var dlon = adjust_lon(lon - this.long0);
+	  var e0, e1, e2, e3, Mlp, Ml, tanphi, Nl1, Nl, psi, Az, G, H, GH, Hs, c, kp, cos_c, s, s2, s3, s4, s5;
+	  if (this.sphere) {
+	    if (Math.abs(this.sin_p12 - 1) <= EPSLN) {
+	      //North Pole case
+	      p.x = this.x0 + this.a * (HALF_PI - lat) * Math.sin(dlon);
+	      p.y = this.y0 - this.a * (HALF_PI - lat) * Math.cos(dlon);
+	      return p;
+	    }
+	    else if (Math.abs(this.sin_p12 + 1) <= EPSLN) {
+	      //South Pole case
+	      p.x = this.x0 + this.a * (HALF_PI + lat) * Math.sin(dlon);
+	      p.y = this.y0 + this.a * (HALF_PI + lat) * Math.cos(dlon);
+	      return p;
+	    }
+	    else {
+	      //default case
+	      cos_c = this.sin_p12 * sinphi + this.cos_p12 * cosphi * Math.cos(dlon);
+	      c = Math.acos(cos_c);
+	      kp = c / Math.sin(c);
+	      p.x = this.x0 + this.a * kp * cosphi * Math.sin(dlon);
+	      p.y = this.y0 + this.a * kp * (this.cos_p12 * sinphi - this.sin_p12 * cosphi * Math.cos(dlon));
+	      return p;
+	    }
+	  }
+	  else {
+	    e0 = e0fn(this.es);
+	    e1 = e1fn(this.es);
+	    e2 = e2fn(this.es);
+	    e3 = e3fn(this.es);
+	    if (Math.abs(this.sin_p12 - 1) <= EPSLN) {
+	      //North Pole case
+	      Mlp = this.a * mlfn(e0, e1, e2, e3, HALF_PI);
+	      Ml = this.a * mlfn(e0, e1, e2, e3, lat);
+	      p.x = this.x0 + (Mlp - Ml) * Math.sin(dlon);
+	      p.y = this.y0 - (Mlp - Ml) * Math.cos(dlon);
+	      return p;
+	    }
+	    else if (Math.abs(this.sin_p12 + 1) <= EPSLN) {
+	      //South Pole case
+	      Mlp = this.a * mlfn(e0, e1, e2, e3, HALF_PI);
+	      Ml = this.a * mlfn(e0, e1, e2, e3, lat);
+	      p.x = this.x0 + (Mlp + Ml) * Math.sin(dlon);
+	      p.y = this.y0 + (Mlp + Ml) * Math.cos(dlon);
+	      return p;
+	    }
+	    else {
+	      //Default case
+	      tanphi = sinphi / cosphi;
+	      Nl1 = gN(this.a, this.e, this.sin_p12);
+	      Nl = gN(this.a, this.e, sinphi);
+	      psi = Math.atan((1 - this.es) * tanphi + this.es * Nl1 * this.sin_p12 / (Nl * cosphi));
+	      Az = Math.atan2(Math.sin(dlon), this.cos_p12 * Math.tan(psi) - this.sin_p12 * Math.cos(dlon));
+	      if (Az === 0) {
+	        s = Math.asin(this.cos_p12 * Math.sin(psi) - this.sin_p12 * Math.cos(psi));
+	      }
+	      else if (Math.abs(Math.abs(Az) - Math.PI) <= EPSLN) {
+	        s = -Math.asin(this.cos_p12 * Math.sin(psi) - this.sin_p12 * Math.cos(psi));
+	      }
+	      else {
+	        s = Math.asin(Math.sin(dlon) * Math.cos(psi) / Math.sin(Az));
+	      }
+	      G = this.e * this.sin_p12 / Math.sqrt(1 - this.es);
+	      H = this.e * this.cos_p12 * Math.cos(Az) / Math.sqrt(1 - this.es);
+	      GH = G * H;
+	      Hs = H * H;
+	      s2 = s * s;
+	      s3 = s2 * s;
+	      s4 = s3 * s;
+	      s5 = s4 * s;
+	      c = Nl1 * s * (1 - s2 * Hs * (1 - Hs) / 6 + s3 / 8 * GH * (1 - 2 * Hs) + s4 / 120 * (Hs * (4 - 7 * Hs) - 3 * G * G * (1 - 7 * Hs)) - s5 / 48 * GH);
+	      p.x = this.x0 + c * Math.sin(Az);
+	      p.y = this.y0 + c * Math.cos(Az);
+	      return p;
+	    }
+	  }
+
+
+	}
+
+	function inverse$24(p) {
+	  p.x -= this.x0;
+	  p.y -= this.y0;
+	  var rh, z, sinz, cosz, lon, lat, con, e0, e1, e2, e3, Mlp, M, N1, psi, Az, cosAz, tmp, A, B, D, Ee, F;
+	  if (this.sphere) {
+	    rh = Math.sqrt(p.x * p.x + p.y * p.y);
+	    if (rh > (2 * HALF_PI * this.a)) {
+	      return;
+	    }
+	    z = rh / this.a;
+
+	    sinz = Math.sin(z);
+	    cosz = Math.cos(z);
+
+	    lon = this.long0;
+	    if (Math.abs(rh) <= EPSLN) {
+	      lat = this.lat0;
+	    }
+	    else {
+	      lat = asinz(cosz * this.sin_p12 + (p.y * sinz * this.cos_p12) / rh);
+	      con = Math.abs(this.lat0) - HALF_PI;
+	      if (Math.abs(con) <= EPSLN) {
+	        if (this.lat0 >= 0) {
+	          lon = adjust_lon(this.long0 + Math.atan2(p.x, - p.y));
+	        }
+	        else {
+	          lon = adjust_lon(this.long0 - Math.atan2(-p.x, p.y));
+	        }
+	      }
+	      else {
+	        /*con = cosz - this.sin_p12 * Math.sin(lat);
+	        if ((Math.abs(con) < EPSLN) && (Math.abs(p.x) < EPSLN)) {
+	          //no-op, just keep the lon value as is
+	        } else {
+	          var temp = Math.atan2((p.x * sinz * this.cos_p12), (con * rh));
+	          lon = adjust_lon(this.long0 + Math.atan2((p.x * sinz * this.cos_p12), (con * rh)));
+	        }*/
+	        lon = adjust_lon(this.long0 + Math.atan2(p.x * sinz, rh * this.cos_p12 * cosz - p.y * this.sin_p12 * sinz));
+	      }
+	    }
+
+	    p.x = lon;
+	    p.y = lat;
+	    return p;
+	  }
+	  else {
+	    e0 = e0fn(this.es);
+	    e1 = e1fn(this.es);
+	    e2 = e2fn(this.es);
+	    e3 = e3fn(this.es);
+	    if (Math.abs(this.sin_p12 - 1) <= EPSLN) {
+	      //North pole case
+	      Mlp = this.a * mlfn(e0, e1, e2, e3, HALF_PI);
+	      rh = Math.sqrt(p.x * p.x + p.y * p.y);
+	      M = Mlp - rh;
+	      lat = imlfn(M / this.a, e0, e1, e2, e3);
+	      lon = adjust_lon(this.long0 + Math.atan2(p.x, - 1 * p.y));
+	      p.x = lon;
+	      p.y = lat;
+	      return p;
+	    }
+	    else if (Math.abs(this.sin_p12 + 1) <= EPSLN) {
+	      //South pole case
+	      Mlp = this.a * mlfn(e0, e1, e2, e3, HALF_PI);
+	      rh = Math.sqrt(p.x * p.x + p.y * p.y);
+	      M = rh - Mlp;
+
+	      lat = imlfn(M / this.a, e0, e1, e2, e3);
+	      lon = adjust_lon(this.long0 + Math.atan2(p.x, p.y));
+	      p.x = lon;
+	      p.y = lat;
+	      return p;
+	    }
+	    else {
+	      //default case
+	      rh = Math.sqrt(p.x * p.x + p.y * p.y);
+	      Az = Math.atan2(p.x, p.y);
+	      N1 = gN(this.a, this.e, this.sin_p12);
+	      cosAz = Math.cos(Az);
+	      tmp = this.e * this.cos_p12 * cosAz;
+	      A = -tmp * tmp / (1 - this.es);
+	      B = 3 * this.es * (1 - A) * this.sin_p12 * this.cos_p12 * cosAz / (1 - this.es);
+	      D = rh / N1;
+	      Ee = D - A * (1 + A) * Math.pow(D, 3) / 6 - B * (1 + 3 * A) * Math.pow(D, 4) / 24;
+	      F = 1 - A * Ee * Ee / 2 - D * Ee * Ee * Ee / 6;
+	      psi = Math.asin(this.sin_p12 * Math.cos(Ee) + this.cos_p12 * Math.sin(Ee) * cosAz);
+	      lon = adjust_lon(this.long0 + Math.asin(Math.sin(Az) * Math.sin(Ee) / Math.cos(psi)));
+	      lat = Math.atan((1 - this.es * F * this.sin_p12 / Math.sin(psi)) * Math.tan(psi) / (1 - this.es));
+	      p.x = lon;
+	      p.y = lat;
+	      return p;
+	    }
+	  }
+
+	}
+
+	var names$26 = ["Azimuthal_Equidistant", "aeqd"];
+	var aeqd = {
+	  init: init$25,
+	  forward: forward$24,
+	  inverse: inverse$24,
+	  names: names$26
+	};
+
+	function init$26() {
+	  //double temp;      /* temporary variable    */
+
+	  /* Place parameters in static storage for common use
+	      -------------------------------------------------*/
+	  this.sin_p14 = Math.sin(this.lat0);
+	  this.cos_p14 = Math.cos(this.lat0);
+	}
+
+	/* Orthographic forward equations--mapping lat,long to x,y
+	    ---------------------------------------------------*/
+	function forward$25(p) {
+	  var sinphi, cosphi; /* sin and cos value        */
+	  var dlon; /* delta longitude value      */
+	  var coslon; /* cos of longitude        */
+	  var ksp; /* scale factor          */
+	  var g, x, y;
+	  var lon = p.x;
+	  var lat = p.y;
+	  /* Forward equations
+	      -----------------*/
+	  dlon = adjust_lon(lon - this.long0);
+
+	  sinphi = Math.sin(lat);
+	  cosphi = Math.cos(lat);
+
+	  coslon = Math.cos(dlon);
+	  g = this.sin_p14 * sinphi + this.cos_p14 * cosphi * coslon;
+	  ksp = 1;
+	  if ((g > 0) || (Math.abs(g) <= EPSLN)) {
+	    x = this.a * ksp * cosphi * Math.sin(dlon);
+	    y = this.y0 + this.a * ksp * (this.cos_p14 * sinphi - this.sin_p14 * cosphi * coslon);
+	  }
+	  p.x = x;
+	  p.y = y;
+	  return p;
+	}
+
+	function inverse$25(p) {
+	  var rh; /* height above ellipsoid      */
+	  var z; /* angle          */
+	  var sinz, cosz; /* sin of z and cos of z      */
+	  var con;
+	  var lon, lat;
+	  /* Inverse equations
+	      -----------------*/
+	  p.x -= this.x0;
+	  p.y -= this.y0;
+	  rh = Math.sqrt(p.x * p.x + p.y * p.y);
+	  z = asinz(rh / this.a);
+
+	  sinz = Math.sin(z);
+	  cosz = Math.cos(z);
+
+	  lon = this.long0;
+	  if (Math.abs(rh) <= EPSLN) {
+	    lat = this.lat0;
+	    p.x = lon;
+	    p.y = lat;
+	    return p;
+	  }
+	  lat = asinz(cosz * this.sin_p14 + (p.y * sinz * this.cos_p14) / rh);
+	  con = Math.abs(this.lat0) - HALF_PI;
+	  if (Math.abs(con) <= EPSLN) {
+	    if (this.lat0 >= 0) {
+	      lon = adjust_lon(this.long0 + Math.atan2(p.x, - p.y));
+	    }
+	    else {
+	      lon = adjust_lon(this.long0 - Math.atan2(-p.x, p.y));
+	    }
+	    p.x = lon;
+	    p.y = lat;
+	    return p;
+	  }
+	  lon = adjust_lon(this.long0 + Math.atan2((p.x * sinz), rh * this.cos_p14 * cosz - p.y * this.sin_p14 * sinz));
+	  p.x = lon;
+	  p.y = lat;
+	  return p;
+	}
+
+	var names$27 = ["ortho"];
+	var ortho = {
+	  init: init$26,
+	  forward: forward$25,
+	  inverse: inverse$25,
+	  names: names$27
+	};
+
+	var includedProjections = function(proj4){
+	  proj4.Proj.projections.add(tmerc);
+	  proj4.Proj.projections.add(etmerc);
+	  proj4.Proj.projections.add(utm);
+	  proj4.Proj.projections.add(sterea);
+	  proj4.Proj.projections.add(stere);
+	  proj4.Proj.projections.add(somerc);
+	  proj4.Proj.projections.add(omerc);
+	  proj4.Proj.projections.add(lcc);
+	  proj4.Proj.projections.add(krovak);
+	  proj4.Proj.projections.add(cass);
+	  proj4.Proj.projections.add(laea);
+	  proj4.Proj.projections.add(aea);
+	  proj4.Proj.projections.add(gnom);
+	  proj4.Proj.projections.add(cea);
+	  proj4.Proj.projections.add(eqc);
+	  proj4.Proj.projections.add(poly);
+	  proj4.Proj.projections.add(nzmg);
+	  proj4.Proj.projections.add(mill);
+	  proj4.Proj.projections.add(sinu);
+	  proj4.Proj.projections.add(moll);
+	  proj4.Proj.projections.add(eqdc);
+	  proj4.Proj.projections.add(vandg);
+	  proj4.Proj.projections.add(aeqd);
+	  proj4.Proj.projections.add(ortho);
+	};
+
+	proj4$1.defaultDatum = 'WGS84'; //default datum
+	proj4$1.Proj = Projection$1;
+	proj4$1.WGS84 = new proj4$1.Proj('WGS84');
+	proj4$1.Point = Point;
+	proj4$1.toPoint = toPoint;
+	proj4$1.defs = defs;
+	proj4$1.transform = transform;
+	proj4$1.mgrs = mgrs;
+	proj4$1.version = version;
+	includedProjections(proj4$1);
+
+	return proj4$1;
+
+})));
+
+},{}],91:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var Buffer = require('buffer').Buffer;
+
+var isBufferEncoding = Buffer.isEncoding
+  || function(encoding) {
+       switch (encoding && encoding.toLowerCase()) {
+         case 'hex': case 'utf8': case 'utf-8': case 'ascii': case 'binary': case 'base64': case 'ucs2': case 'ucs-2': case 'utf16le': case 'utf-16le': case 'raw': return true;
+         default: return false;
+       }
+     }
+
+
+function assertEncoding(encoding) {
+  if (encoding && !isBufferEncoding(encoding)) {
+    throw new Error('Unknown encoding: ' + encoding);
+  }
+}
+
+// StringDecoder provides an interface for efficiently splitting a series of
+// buffers into a series of JS strings without breaking apart multi-byte
+// characters. CESU-8 is handled as part of the UTF-8 encoding.
+//
+// @TODO Handling all encodings inside a single object makes it very difficult
+// to reason about this code, so it should be split up in the future.
+// @TODO There should be a utf8-strict encoding that rejects invalid UTF-8 code
+// points as used by CESU-8.
+var StringDecoder = exports.StringDecoder = function(encoding) {
+  this.encoding = (encoding || 'utf8').toLowerCase().replace(/[-_]/, '');
+  assertEncoding(encoding);
+  switch (this.encoding) {
+    case 'utf8':
+      // CESU-8 represents each of Surrogate Pair by 3-bytes
+      this.surrogateSize = 3;
+      break;
+    case 'ucs2':
+    case 'utf16le':
+      // UTF-16 represents each of Surrogate Pair by 2-bytes
+      this.surrogateSize = 2;
+      this.detectIncompleteChar = utf16DetectIncompleteChar;
+      break;
+    case 'base64':
+      // Base-64 stores 3 bytes in 4 chars, and pads the remainder.
+      this.surrogateSize = 3;
+      this.detectIncompleteChar = base64DetectIncompleteChar;
+      break;
+    default:
+      this.write = passThroughWrite;
+      return;
   }
 
-  var zoneLetter = mgrsString.charAt(i++);
+  // Enough space to store all bytes of a single character. UTF-8 needs 4
+  // bytes, but CESU-8 may require up to 6 (3 bytes per surrogate).
+  this.charBuffer = new Buffer(6);
+  // Number of bytes received for the current incomplete multi-byte character.
+  this.charReceived = 0;
+  // Number of bytes expected for the current incomplete multi-byte character.
+  this.charLength = 0;
+};
 
-  // Should we check the zone letter here? Why not.
-  if (zoneLetter <= 'A' || zoneLetter === 'B' || zoneLetter === 'Y' || zoneLetter >= 'Z' || zoneLetter === 'I' || zoneLetter === 'O') {
-    throw ("MGRSPoint zone letter " + zoneLetter + " not handled: " + mgrsString);
+
+// write decodes the given buffer and returns it as JS string that is
+// guaranteed to not contain any partial multi-byte characters. Any partial
+// character found at the end of the buffer is buffered up, and will be
+// returned when calling write again with the remaining bytes.
+//
+// Note: Converting a Buffer containing an orphan surrogate to a String
+// currently works, but converting a String to a Buffer (via `new Buffer`, or
+// Buffer#write) will replace incomplete surrogates with the unicode
+// replacement character. See https://codereview.chromium.org/121173009/ .
+StringDecoder.prototype.write = function(buffer) {
+  var charStr = '';
+  // if our last write ended with an incomplete multibyte character
+  while (this.charLength) {
+    // determine how many remaining bytes this buffer has to offer for this char
+    var available = (buffer.length >= this.charLength - this.charReceived) ?
+        this.charLength - this.charReceived :
+        buffer.length;
+
+    // add the new bytes to the char buffer
+    buffer.copy(this.charBuffer, this.charReceived, 0, available);
+    this.charReceived += available;
+
+    if (this.charReceived < this.charLength) {
+      // still not enough chars in this buffer? wait for more ...
+      return '';
+    }
+
+    // remove bytes belonging to the current character from the buffer
+    buffer = buffer.slice(available, buffer.length);
+
+    // get the character that was split
+    charStr = this.charBuffer.slice(0, this.charLength).toString(this.encoding);
+
+    // CESU-8: lead surrogate (D800-DBFF) is also the incomplete character
+    var charCode = charStr.charCodeAt(charStr.length - 1);
+    if (charCode >= 0xD800 && charCode <= 0xDBFF) {
+      this.charLength += this.surrogateSize;
+      charStr = '';
+      continue;
+    }
+    this.charReceived = this.charLength = 0;
+
+    // if there are no more bytes in this buffer, just emit our char
+    if (buffer.length === 0) {
+      return charStr;
+    }
+    break;
   }
 
-  hunK = mgrsString.substring(i, i += 2);
+  // determine and set charLength / charReceived
+  this.detectIncompleteChar(buffer);
 
-  var set = get100kSetForZone(zoneNumber);
-
-  var east100k = getEastingFromChar(hunK.charAt(0), set);
-  var north100k = getNorthingFromChar(hunK.charAt(1), set);
-
-  // We have a bug where the northing may be 2000000 too low.
-  // How
-  // do we know when to roll over?
-
-  while (north100k < getMinNorthing(zoneLetter)) {
-    north100k += 2000000;
+  var end = buffer.length;
+  if (this.charLength) {
+    // buffer the incomplete character bytes we got
+    buffer.copy(this.charBuffer, 0, buffer.length - this.charReceived, end);
+    end -= this.charReceived;
   }
 
-  // calculate the char index for easting/northing separator
-  var remainder = length - i;
+  charStr += buffer.toString(this.encoding, 0, end);
 
-  if (remainder % 2 !== 0) {
-    throw ("MGRSPoint has to have an even number \nof digits after the zone letter and two 100km letters - front \nhalf for easting meters, second half for \nnorthing meters" + mgrsString);
+  var end = charStr.length - 1;
+  var charCode = charStr.charCodeAt(end);
+  // CESU-8: lead surrogate (D800-DBFF) is also the incomplete character
+  if (charCode >= 0xD800 && charCode <= 0xDBFF) {
+    var size = this.surrogateSize;
+    this.charLength += size;
+    this.charReceived += size;
+    this.charBuffer.copy(this.charBuffer, size, 0, size);
+    buffer.copy(this.charBuffer, 0, 0, size);
+    return charStr.substring(0, end);
   }
 
-  var sep = remainder / 2;
+  // or just emit the charStr
+  return charStr;
+};
 
-  var sepEasting = 0.0;
-  var sepNorthing = 0.0;
-  var accuracyBonus, sepEastingString, sepNorthingString, easting, northing;
-  if (sep > 0) {
-    accuracyBonus = 100000.0 / Math.pow(10, sep);
-    sepEastingString = mgrsString.substring(i, i + sep);
-    sepEasting = parseFloat(sepEastingString) * accuracyBonus;
-    sepNorthingString = mgrsString.substring(i + sep);
-    sepNorthing = parseFloat(sepNorthingString) * accuracyBonus;
+// detectIncompleteChar determines if there is an incomplete UTF-8 character at
+// the end of the given buffer. If so, it sets this.charLength to the byte
+// length that character, and sets this.charReceived to the number of bytes
+// that are available for this character.
+StringDecoder.prototype.detectIncompleteChar = function(buffer) {
+  // determine how many bytes we have to check at the end of this buffer
+  var i = (buffer.length >= 3) ? 3 : buffer.length;
+
+  // Figure out if one of the last i bytes of our buffer announces an
+  // incomplete char.
+  for (; i > 0; i--) {
+    var c = buffer[buffer.length - i];
+
+    // See http://en.wikipedia.org/wiki/UTF-8#Description
+
+    // 110XXXXX
+    if (i == 1 && c >> 5 == 0x06) {
+      this.charLength = 2;
+      break;
+    }
+
+    // 1110XXXX
+    if (i <= 2 && c >> 4 == 0x0E) {
+      this.charLength = 3;
+      break;
+    }
+
+    // 11110XXX
+    if (i <= 3 && c >> 3 == 0x1E) {
+      this.charLength = 4;
+      break;
+    }
+  }
+  this.charReceived = i;
+};
+
+StringDecoder.prototype.end = function(buffer) {
+  var res = '';
+  if (buffer && buffer.length)
+    res = this.write(buffer);
+
+  if (this.charReceived) {
+    var cr = this.charReceived;
+    var buf = this.charBuffer;
+    var enc = this.encoding;
+    res += buf.slice(0, cr).toString(enc);
   }
 
-  easting = sepEasting + east100k;
-  northing = sepNorthing + north100k;
+  return res;
+};
 
-  return {
-    easting: easting,
-    northing: northing,
-    zoneLetter: zoneLetter,
-    zoneNumber: zoneNumber,
-    accuracy: accuracyBonus
+function passThroughWrite(buffer) {
+  return buffer.toString(this.encoding);
+}
+
+function utf16DetectIncompleteChar(buffer) {
+  this.charReceived = buffer.length % 2;
+  this.charLength = this.charReceived ? 2 : 0;
+}
+
+function base64DetectIncompleteChar(buffer) {
+  this.charReceived = buffer.length % 3;
+  this.charLength = this.charReceived ? 3 : 0;
+}
+
+},{"buffer":8}],92:[function(require,module,exports){
+// This is free and unencumbered software released into the public domain.
+// See LICENSE.md for more information.
+
+module.exports = require("./lib/encoding.js");
+
+},{"./lib/encoding.js":93}],93:[function(require,module,exports){
+// This is free and unencumbered software released into the public domain.
+// See LICENSE.md for more information.
+
+/**
+ * @fileoverview Global |this| required for resolving indexes in node.
+ * @suppress {globalThis}
+ */
+(function(global) {
+  'use strict';
+
+  // If we're in node require encoding-indexes and attach it to the global.
+  if (typeof module !== "undefined" && module.exports &&
+    !global["encoding-indexes"]) {
+      require("./encoding-indexes.js");
+  }
+
+  //
+  // Utilities
+  //
+
+  /**
+   * @param {number} a The number to test.
+   * @param {number} min The minimum value in the range, inclusive.
+   * @param {number} max The maximum value in the range, inclusive.
+   * @return {boolean} True if a >= min and a <= max.
+   */
+  function inRange(a, min, max) {
+    return min <= a && a <= max;
+  }
+
+  /**
+   * @param {!Array.<*>} array The array to check.
+   * @param {*} item The item to look for in the array.
+   * @return {boolean} True if the item appears in the array.
+   */
+  function includes(array, item) {
+    return array.indexOf(item) !== -1;
+  }
+
+  var floor = Math.floor;
+
+  /**
+   * @param {*} o
+   * @return {Object}
+   */
+  function ToDictionary(o) {
+    if (o === undefined) return {};
+    if (o === Object(o)) return o;
+    throw TypeError('Could not convert argument to dictionary');
+  }
+
+  /**
+   * @param {string} string Input string of UTF-16 code units.
+   * @return {!Array.<number>} Code points.
+   */
+  function stringToCodePoints(string) {
+    // https://heycam.github.io/webidl/#dfn-obtain-unicode
+
+    // 1. Let S be the DOMString value.
+    var s = String(string);
+
+    // 2. Let n be the length of S.
+    var n = s.length;
+
+    // 3. Initialize i to 0.
+    var i = 0;
+
+    // 4. Initialize U to be an empty sequence of Unicode characters.
+    var u = [];
+
+    // 5. While i < n:
+    while (i < n) {
+
+      // 1. Let c be the code unit in S at index i.
+      var c = s.charCodeAt(i);
+
+      // 2. Depending on the value of c:
+
+      // c < 0xD800 or c > 0xDFFF
+      if (c < 0xD800 || c > 0xDFFF) {
+        // Append to U the Unicode character with code point c.
+        u.push(c);
+      }
+
+      // 0xDC00 ≤ c ≤ 0xDFFF
+      else if (0xDC00 <= c && c <= 0xDFFF) {
+        // Append to U a U+FFFD REPLACEMENT CHARACTER.
+        u.push(0xFFFD);
+      }
+
+      // 0xD800 ≤ c ≤ 0xDBFF
+      else if (0xD800 <= c && c <= 0xDBFF) {
+        // 1. If i = n−1, then append to U a U+FFFD REPLACEMENT
+        // CHARACTER.
+        if (i === n - 1) {
+          u.push(0xFFFD);
+        }
+        // 2. Otherwise, i < n−1:
+        else {
+          // 1. Let d be the code unit in S at index i+1.
+          var d = s.charCodeAt(i + 1);
+
+          // 2. If 0xDC00 ≤ d ≤ 0xDFFF, then:
+          if (0xDC00 <= d && d <= 0xDFFF) {
+            // 1. Let a be c & 0x3FF.
+            var a = c & 0x3FF;
+
+            // 2. Let b be d & 0x3FF.
+            var b = d & 0x3FF;
+
+            // 3. Append to U the Unicode character with code point
+            // 2^16+2^10*a+b.
+            u.push(0x10000 + (a << 10) + b);
+
+            // 4. Set i to i+1.
+            i += 1;
+          }
+
+          // 3. Otherwise, d < 0xDC00 or d > 0xDFFF. Append to U a
+          // U+FFFD REPLACEMENT CHARACTER.
+          else  {
+            u.push(0xFFFD);
+          }
+        }
+      }
+
+      // 3. Set i to i+1.
+      i += 1;
+    }
+
+    // 6. Return U.
+    return u;
+  }
+
+  /**
+   * @param {!Array.<number>} code_points Array of code points.
+   * @return {string} string String of UTF-16 code units.
+   */
+  function codePointsToString(code_points) {
+    var s = '';
+    for (var i = 0; i < code_points.length; ++i) {
+      var cp = code_points[i];
+      if (cp <= 0xFFFF) {
+        s += String.fromCharCode(cp);
+      } else {
+        cp -= 0x10000;
+        s += String.fromCharCode((cp >> 10) + 0xD800,
+                                 (cp & 0x3FF) + 0xDC00);
+      }
+    }
+    return s;
+  }
+
+
+  //
+  // Implementation of Encoding specification
+  // https://encoding.spec.whatwg.org/
+  //
+
+  //
+  // 4. Terminology
+  //
+
+  /**
+   * An ASCII byte is a byte in the range 0x00 to 0x7F, inclusive.
+   * @param {number} a The number to test.
+   * @return {boolean} True if a is in the range 0x00 to 0x7F, inclusive.
+   */
+  function isASCIIByte(a) {
+    return 0x00 <= a && a <= 0x7F;
+  }
+
+  /**
+   * An ASCII code point is a code point in the range U+0000 to
+   * U+007F, inclusive.
+   */
+  var isASCIICodePoint = isASCIIByte;
+
+
+  /**
+   * End-of-stream is a special token that signifies no more tokens
+   * are in the stream.
+   * @const
+   */ var end_of_stream = -1;
+
+  /**
+   * A stream represents an ordered sequence of tokens.
+   *
+   * @constructor
+   * @param {!(Array.<number>|Uint8Array)} tokens Array of tokens that provide
+   * the stream.
+   */
+  function Stream(tokens) {
+    /** @type {!Array.<number>} */
+    this.tokens = [].slice.call(tokens);
+    // Reversed as push/pop is more efficient than shift/unshift.
+    this.tokens.reverse();
+  }
+
+  Stream.prototype = {
+    /**
+     * @return {boolean} True if end-of-stream has been hit.
+     */
+    endOfStream: function() {
+      return !this.tokens.length;
+    },
+
+    /**
+     * When a token is read from a stream, the first token in the
+     * stream must be returned and subsequently removed, and
+     * end-of-stream must be returned otherwise.
+     *
+     * @return {number} Get the next token from the stream, or
+     * end_of_stream.
+     */
+     read: function() {
+      if (!this.tokens.length)
+        return end_of_stream;
+       return this.tokens.pop();
+     },
+
+    /**
+     * When one or more tokens are prepended to a stream, those tokens
+     * must be inserted, in given order, before the first token in the
+     * stream.
+     *
+     * @param {(number|!Array.<number>)} token The token(s) to prepend to the
+     * stream.
+     */
+    prepend: function(token) {
+      if (Array.isArray(token)) {
+        var tokens = /**@type {!Array.<number>}*/(token);
+        while (tokens.length)
+          this.tokens.push(tokens.pop());
+      } else {
+        this.tokens.push(token);
+      }
+    },
+
+    /**
+     * When one or more tokens are pushed to a stream, those tokens
+     * must be inserted, in given order, after the last token in the
+     * stream.
+     *
+     * @param {(number|!Array.<number>)} token The tokens(s) to push to the
+     * stream.
+     */
+    push: function(token) {
+      if (Array.isArray(token)) {
+        var tokens = /**@type {!Array.<number>}*/(token);
+        while (tokens.length)
+          this.tokens.unshift(tokens.shift());
+      } else {
+        this.tokens.unshift(token);
+      }
+    }
   };
-}
 
-/**
- * Given the first letter from a two-letter MGRS 100k zone, and given the
- * MGRS table set for the zone number, figure out the easting value that
- * should be added to the other, secondary easting value.
- *
- * @private
- * @param {char} e The first letter from a two-letter MGRS 100´k zone.
- * @param {number} set The MGRS table set for the zone number.
- * @return {number} The easting value for the given letter and set.
- */
-function getEastingFromChar(e, set) {
-  // colOrigin is the letter at the origin of the set for the
-  // column
-  var curCol = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(set - 1);
-  var eastingValue = 100000.0;
-  var rewindMarker = false;
+  //
+  // 5. Encodings
+  //
 
-  while (curCol !== e.charCodeAt(0)) {
-    curCol++;
-    if (curCol === I) {
-      curCol++;
+  // 5.1 Encoders and decoders
+
+  /** @const */
+  var finished = -1;
+
+  /**
+   * @param {boolean} fatal If true, decoding errors raise an exception.
+   * @param {number=} opt_code_point Override the standard fallback code point.
+   * @return {number} The code point to insert on a decoding error.
+   */
+  function decoderError(fatal, opt_code_point) {
+    if (fatal)
+      throw TypeError('Decoder error');
+    return opt_code_point || 0xFFFD;
+  }
+
+  /**
+   * @param {number} code_point The code point that could not be encoded.
+   * @return {number} Always throws, no value is actually returned.
+   */
+  function encoderError(code_point) {
+    throw TypeError('The code point ' + code_point + ' could not be encoded.');
+  }
+
+  /** @interface */
+  function Decoder() {}
+  Decoder.prototype = {
+    /**
+     * @param {Stream} stream The stream of bytes being decoded.
+     * @param {number} bite The next byte read from the stream.
+     * @return {?(number|!Array.<number>)} The next code point(s)
+     *     decoded, or null if not enough data exists in the input
+     *     stream to decode a complete code point, or |finished|.
+     */
+    handler: function(stream, bite) {}
+  };
+
+  /** @interface */
+  function Encoder() {}
+  Encoder.prototype = {
+    /**
+     * @param {Stream} stream The stream of code points being encoded.
+     * @param {number} code_point Next code point read from the stream.
+     * @return {(number|!Array.<number>)} Byte(s) to emit, or |finished|.
+     */
+    handler: function(stream, code_point) {}
+  };
+
+  // 5.2 Names and labels
+
+  // TODO: Define @typedef for Encoding: {name:string,labels:Array.<string>}
+  // https://github.com/google/closure-compiler/issues/247
+
+  /**
+   * @param {string} label The encoding label.
+   * @return {?{name:string,labels:Array.<string>}}
+   */
+  function getEncoding(label) {
+    // 1. Remove any leading and trailing ASCII whitespace from label.
+    label = String(label).trim().toLowerCase();
+
+    // 2. If label is an ASCII case-insensitive match for any of the
+    // labels listed in the table below, return the corresponding
+    // encoding, and failure otherwise.
+    if (Object.prototype.hasOwnProperty.call(label_to_encoding, label)) {
+      return label_to_encoding[label];
     }
-    if (curCol === O) {
-      curCol++;
+    return null;
+  }
+
+  /**
+   * Encodings table: https://encoding.spec.whatwg.org/encodings.json
+   * @const
+   * @type {!Array.<{
+   *          heading: string,
+   *          encodings: Array.<{name:string,labels:Array.<string>}>
+   *        }>}
+   */
+  var encodings = [
+    {
+      "encodings": [
+        {
+          "labels": [
+            "unicode-1-1-utf-8",
+            "utf-8",
+            "utf8"
+          ],
+          "name": "UTF-8"
+        }
+      ],
+      "heading": "The Encoding"
+    },
+    {
+      "encodings": [
+        {
+          "labels": [
+            "866",
+            "cp866",
+            "csibm866",
+            "ibm866"
+          ],
+          "name": "IBM866"
+        },
+        {
+          "labels": [
+            "csisolatin2",
+            "iso-8859-2",
+            "iso-ir-101",
+            "iso8859-2",
+            "iso88592",
+            "iso_8859-2",
+            "iso_8859-2:1987",
+            "l2",
+            "latin2"
+          ],
+          "name": "ISO-8859-2"
+        },
+        {
+          "labels": [
+            "csisolatin3",
+            "iso-8859-3",
+            "iso-ir-109",
+            "iso8859-3",
+            "iso88593",
+            "iso_8859-3",
+            "iso_8859-3:1988",
+            "l3",
+            "latin3"
+          ],
+          "name": "ISO-8859-3"
+        },
+        {
+          "labels": [
+            "csisolatin4",
+            "iso-8859-4",
+            "iso-ir-110",
+            "iso8859-4",
+            "iso88594",
+            "iso_8859-4",
+            "iso_8859-4:1988",
+            "l4",
+            "latin4"
+          ],
+          "name": "ISO-8859-4"
+        },
+        {
+          "labels": [
+            "csisolatincyrillic",
+            "cyrillic",
+            "iso-8859-5",
+            "iso-ir-144",
+            "iso8859-5",
+            "iso88595",
+            "iso_8859-5",
+            "iso_8859-5:1988"
+          ],
+          "name": "ISO-8859-5"
+        },
+        {
+          "labels": [
+            "arabic",
+            "asmo-708",
+            "csiso88596e",
+            "csiso88596i",
+            "csisolatinarabic",
+            "ecma-114",
+            "iso-8859-6",
+            "iso-8859-6-e",
+            "iso-8859-6-i",
+            "iso-ir-127",
+            "iso8859-6",
+            "iso88596",
+            "iso_8859-6",
+            "iso_8859-6:1987"
+          ],
+          "name": "ISO-8859-6"
+        },
+        {
+          "labels": [
+            "csisolatingreek",
+            "ecma-118",
+            "elot_928",
+            "greek",
+            "greek8",
+            "iso-8859-7",
+            "iso-ir-126",
+            "iso8859-7",
+            "iso88597",
+            "iso_8859-7",
+            "iso_8859-7:1987",
+            "sun_eu_greek"
+          ],
+          "name": "ISO-8859-7"
+        },
+        {
+          "labels": [
+            "csiso88598e",
+            "csisolatinhebrew",
+            "hebrew",
+            "iso-8859-8",
+            "iso-8859-8-e",
+            "iso-ir-138",
+            "iso8859-8",
+            "iso88598",
+            "iso_8859-8",
+            "iso_8859-8:1988",
+            "visual"
+          ],
+          "name": "ISO-8859-8"
+        },
+        {
+          "labels": [
+            "csiso88598i",
+            "iso-8859-8-i",
+            "logical"
+          ],
+          "name": "ISO-8859-8-I"
+        },
+        {
+          "labels": [
+            "csisolatin6",
+            "iso-8859-10",
+            "iso-ir-157",
+            "iso8859-10",
+            "iso885910",
+            "l6",
+            "latin6"
+          ],
+          "name": "ISO-8859-10"
+        },
+        {
+          "labels": [
+            "iso-8859-13",
+            "iso8859-13",
+            "iso885913"
+          ],
+          "name": "ISO-8859-13"
+        },
+        {
+          "labels": [
+            "iso-8859-14",
+            "iso8859-14",
+            "iso885914"
+          ],
+          "name": "ISO-8859-14"
+        },
+        {
+          "labels": [
+            "csisolatin9",
+            "iso-8859-15",
+            "iso8859-15",
+            "iso885915",
+            "iso_8859-15",
+            "l9"
+          ],
+          "name": "ISO-8859-15"
+        },
+        {
+          "labels": [
+            "iso-8859-16"
+          ],
+          "name": "ISO-8859-16"
+        },
+        {
+          "labels": [
+            "cskoi8r",
+            "koi",
+            "koi8",
+            "koi8-r",
+            "koi8_r"
+          ],
+          "name": "KOI8-R"
+        },
+        {
+          "labels": [
+            "koi8-ru",
+            "koi8-u"
+          ],
+          "name": "KOI8-U"
+        },
+        {
+          "labels": [
+            "csmacintosh",
+            "mac",
+            "macintosh",
+            "x-mac-roman"
+          ],
+          "name": "macintosh"
+        },
+        {
+          "labels": [
+            "dos-874",
+            "iso-8859-11",
+            "iso8859-11",
+            "iso885911",
+            "tis-620",
+            "windows-874"
+          ],
+          "name": "windows-874"
+        },
+        {
+          "labels": [
+            "cp1250",
+            "windows-1250",
+            "x-cp1250"
+          ],
+          "name": "windows-1250"
+        },
+        {
+          "labels": [
+            "cp1251",
+            "windows-1251",
+            "x-cp1251"
+          ],
+          "name": "windows-1251"
+        },
+        {
+          "labels": [
+            "ansi_x3.4-1968",
+            "ascii",
+            "cp1252",
+            "cp819",
+            "csisolatin1",
+            "ibm819",
+            "iso-8859-1",
+            "iso-ir-100",
+            "iso8859-1",
+            "iso88591",
+            "iso_8859-1",
+            "iso_8859-1:1987",
+            "l1",
+            "latin1",
+            "us-ascii",
+            "windows-1252",
+            "x-cp1252"
+          ],
+          "name": "windows-1252"
+        },
+        {
+          "labels": [
+            "cp1253",
+            "windows-1253",
+            "x-cp1253"
+          ],
+          "name": "windows-1253"
+        },
+        {
+          "labels": [
+            "cp1254",
+            "csisolatin5",
+            "iso-8859-9",
+            "iso-ir-148",
+            "iso8859-9",
+            "iso88599",
+            "iso_8859-9",
+            "iso_8859-9:1989",
+            "l5",
+            "latin5",
+            "windows-1254",
+            "x-cp1254"
+          ],
+          "name": "windows-1254"
+        },
+        {
+          "labels": [
+            "cp1255",
+            "windows-1255",
+            "x-cp1255"
+          ],
+          "name": "windows-1255"
+        },
+        {
+          "labels": [
+            "cp1256",
+            "windows-1256",
+            "x-cp1256"
+          ],
+          "name": "windows-1256"
+        },
+        {
+          "labels": [
+            "cp1257",
+            "windows-1257",
+            "x-cp1257"
+          ],
+          "name": "windows-1257"
+        },
+        {
+          "labels": [
+            "cp1258",
+            "windows-1258",
+            "x-cp1258"
+          ],
+          "name": "windows-1258"
+        },
+        {
+          "labels": [
+            "x-mac-cyrillic",
+            "x-mac-ukrainian"
+          ],
+          "name": "x-mac-cyrillic"
+        }
+      ],
+      "heading": "Legacy single-byte encodings"
+    },
+    {
+      "encodings": [
+        {
+          "labels": [
+            "chinese",
+            "csgb2312",
+            "csiso58gb231280",
+            "gb2312",
+            "gb_2312",
+            "gb_2312-80",
+            "gbk",
+            "iso-ir-58",
+            "x-gbk"
+          ],
+          "name": "GBK"
+        },
+        {
+          "labels": [
+            "gb18030"
+          ],
+          "name": "gb18030"
+        }
+      ],
+      "heading": "Legacy multi-byte Chinese (simplified) encodings"
+    },
+    {
+      "encodings": [
+        {
+          "labels": [
+            "big5",
+            "big5-hkscs",
+            "cn-big5",
+            "csbig5",
+            "x-x-big5"
+          ],
+          "name": "Big5"
+        }
+      ],
+      "heading": "Legacy multi-byte Chinese (traditional) encodings"
+    },
+    {
+      "encodings": [
+        {
+          "labels": [
+            "cseucpkdfmtjapanese",
+            "euc-jp",
+            "x-euc-jp"
+          ],
+          "name": "EUC-JP"
+        },
+        {
+          "labels": [
+            "csiso2022jp",
+            "iso-2022-jp"
+          ],
+          "name": "ISO-2022-JP"
+        },
+        {
+          "labels": [
+            "csshiftjis",
+            "ms932",
+            "ms_kanji",
+            "shift-jis",
+            "shift_jis",
+            "sjis",
+            "windows-31j",
+            "x-sjis"
+          ],
+          "name": "Shift_JIS"
+        }
+      ],
+      "heading": "Legacy multi-byte Japanese encodings"
+    },
+    {
+      "encodings": [
+        {
+          "labels": [
+            "cseuckr",
+            "csksc56011987",
+            "euc-kr",
+            "iso-ir-149",
+            "korean",
+            "ks_c_5601-1987",
+            "ks_c_5601-1989",
+            "ksc5601",
+            "ksc_5601",
+            "windows-949"
+          ],
+          "name": "EUC-KR"
+        }
+      ],
+      "heading": "Legacy multi-byte Korean encodings"
+    },
+    {
+      "encodings": [
+        {
+          "labels": [
+            "csiso2022kr",
+            "hz-gb-2312",
+            "iso-2022-cn",
+            "iso-2022-cn-ext",
+            "iso-2022-kr"
+          ],
+          "name": "replacement"
+        },
+        {
+          "labels": [
+            "utf-16be"
+          ],
+          "name": "UTF-16BE"
+        },
+        {
+          "labels": [
+            "utf-16",
+            "utf-16le"
+          ],
+          "name": "UTF-16LE"
+        },
+        {
+          "labels": [
+            "x-user-defined"
+          ],
+          "name": "x-user-defined"
+        }
+      ],
+      "heading": "Legacy miscellaneous encodings"
     }
-    if (curCol > Z) {
-      if (rewindMarker) {
-        throw ("Bad character: " + e);
+  ];
+
+  // Label to encoding registry.
+  /** @type {Object.<string,{name:string,labels:Array.<string>}>} */
+  var label_to_encoding = {};
+  encodings.forEach(function(category) {
+    category.encodings.forEach(function(encoding) {
+      encoding.labels.forEach(function(label) {
+        label_to_encoding[label] = encoding;
+      });
+    });
+  });
+
+  // Registry of of encoder/decoder factories, by encoding name.
+  /** @type {Object.<string, function({fatal:boolean}): Encoder>} */
+  var encoders = {};
+  /** @type {Object.<string, function({fatal:boolean}): Decoder>} */
+  var decoders = {};
+
+  //
+  // 6. Indexes
+  //
+
+  /**
+   * @param {number} pointer The |pointer| to search for.
+   * @param {(!Array.<?number>|undefined)} index The |index| to search within.
+   * @return {?number} The code point corresponding to |pointer| in |index|,
+   *     or null if |code point| is not in |index|.
+   */
+  function indexCodePointFor(pointer, index) {
+    if (!index) return null;
+    return index[pointer] || null;
+  }
+
+  /**
+   * @param {number} code_point The |code point| to search for.
+   * @param {!Array.<?number>} index The |index| to search within.
+   * @return {?number} The first pointer corresponding to |code point| in
+   *     |index|, or null if |code point| is not in |index|.
+   */
+  function indexPointerFor(code_point, index) {
+    var pointer = index.indexOf(code_point);
+    return pointer === -1 ? null : pointer;
+  }
+
+  /**
+   * @param {string} name Name of the index.
+   * @return {(!Array.<number>|!Array.<Array.<number>>)}
+   *  */
+  function index(name) {
+    if (!('encoding-indexes' in global)) {
+      throw Error("Indexes missing." +
+                  " Did you forget to include encoding-indexes.js first?");
+    }
+    return global['encoding-indexes'][name];
+  }
+
+  /**
+   * @param {number} pointer The |pointer| to search for in the gb18030 index.
+   * @return {?number} The code point corresponding to |pointer| in |index|,
+   *     or null if |code point| is not in the gb18030 index.
+   */
+  function indexGB18030RangesCodePointFor(pointer) {
+    // 1. If pointer is greater than 39419 and less than 189000, or
+    // pointer is greater than 1237575, return null.
+    if ((pointer > 39419 && pointer < 189000) || (pointer > 1237575))
+      return null;
+
+    // 2. If pointer is 7457, return code point U+E7C7.
+    if (pointer === 7457) return 0xE7C7;
+
+    // 3. Let offset be the last pointer in index gb18030 ranges that
+    // is equal to or less than pointer and let code point offset be
+    // its corresponding code point.
+    var offset = 0;
+    var code_point_offset = 0;
+    var idx = index('gb18030-ranges');
+    var i;
+    for (i = 0; i < idx.length; ++i) {
+      /** @type {!Array.<number>} */
+      var entry = idx[i];
+      if (entry[0] <= pointer) {
+        offset = entry[0];
+        code_point_offset = entry[1];
+      } else {
+        break;
       }
-      curCol = A;
-      rewindMarker = true;
     }
-    eastingValue += 100000.0;
+
+    // 4. Return a code point whose value is code point offset +
+    // pointer − offset.
+    return code_point_offset + pointer - offset;
   }
 
-  return eastingValue;
-}
+  /**
+   * @param {number} code_point The |code point| to locate in the gb18030 index.
+   * @return {number} The first pointer corresponding to |code point| in the
+   *     gb18030 index.
+   */
+  function indexGB18030RangesPointerFor(code_point) {
+    // 1. If code point is U+E7C7, return pointer 7457.
+    if (code_point === 0xE7C7) return 7457;
 
-/**
- * Given the second letter from a two-letter MGRS 100k zone, and given the
- * MGRS table set for the zone number, figure out the northing value that
- * should be added to the other, secondary northing value. You have to
- * remember that Northings are determined from the equator, and the vertical
- * cycle of letters mean a 2000000 additional northing meters. This happens
- * approx. every 18 degrees of latitude. This method does *NOT* count any
- * additional northings. You have to figure out how many 2000000 meters need
- * to be added for the zone letter of the MGRS coordinate.
- *
- * @private
- * @param {char} n Second letter of the MGRS 100k zone
- * @param {number} set The MGRS table set number, which is dependent on the
- *     UTM zone number.
- * @return {number} The northing value for the given letter and set.
- */
-function getNorthingFromChar(n, set) {
-
-  if (n > 'V') {
-    throw ("MGRSPoint given invalid Northing " + n);
-  }
-
-  // rowOrigin is the letter at the origin of the set for the
-  // column
-  var curRow = SET_ORIGIN_ROW_LETTERS.charCodeAt(set - 1);
-  var northingValue = 0.0;
-  var rewindMarker = false;
-
-  while (curRow !== n.charCodeAt(0)) {
-    curRow++;
-    if (curRow === I) {
-      curRow++;
-    }
-    if (curRow === O) {
-      curRow++;
-    }
-    // fixing a bug making whole application hang in this loop
-    // when 'n' is a wrong character
-    if (curRow > V) {
-      if (rewindMarker) { // making sure that this loop ends
-        throw ("Bad character: " + n);
+    // 2. Let offset be the last code point in index gb18030 ranges
+    // that is equal to or less than code point and let pointer offset
+    // be its corresponding pointer.
+    var offset = 0;
+    var pointer_offset = 0;
+    var idx = index('gb18030-ranges');
+    var i;
+    for (i = 0; i < idx.length; ++i) {
+      /** @type {!Array.<number>} */
+      var entry = idx[i];
+      if (entry[1] <= code_point) {
+        offset = entry[1];
+        pointer_offset = entry[0];
+      } else {
+        break;
       }
-      curRow = A;
-      rewindMarker = true;
     }
-    northingValue += 100000.0;
+
+    // 3. Return a pointer whose value is pointer offset + code point
+    // − offset.
+    return pointer_offset + code_point - offset;
   }
 
-  return northingValue;
+  /**
+   * @param {number} code_point The |code_point| to search for in the Shift_JIS
+   *     index.
+   * @return {?number} The code point corresponding to |pointer| in |index|,
+   *     or null if |code point| is not in the Shift_JIS index.
+   */
+  function indexShiftJISPointerFor(code_point) {
+    // 1. Let index be index jis0208 excluding all entries whose
+    // pointer is in the range 8272 to 8835, inclusive.
+    shift_jis_index = shift_jis_index ||
+      index('jis0208').map(function(code_point, pointer) {
+        return inRange(pointer, 8272, 8835) ? null : code_point;
+      });
+    var index_ = shift_jis_index;
+
+    // 2. Return the index pointer for code point in index.
+    return index_.indexOf(code_point);
+  }
+  var shift_jis_index;
+
+  /**
+   * @param {number} code_point The |code_point| to search for in the big5
+   *     index.
+   * @return {?number} The code point corresponding to |pointer| in |index|,
+   *     or null if |code point| is not in the big5 index.
+   */
+  function indexBig5PointerFor(code_point) {
+    // 1. Let index be index Big5 excluding all entries whose pointer
+    big5_index_no_hkscs = big5_index_no_hkscs ||
+      index('big5').map(function(code_point, pointer) {
+        return (pointer < (0xA1 - 0x81) * 157) ? null : code_point;
+      });
+    var index_ = big5_index_no_hkscs;
+
+    // 2. If code point is U+2550, U+255E, U+2561, U+256A, U+5341, or
+    // U+5345, return the last pointer corresponding to code point in
+    // index.
+    if (code_point === 0x2550 || code_point === 0x255E ||
+        code_point === 0x2561 || code_point === 0x256A ||
+        code_point === 0x5341 || code_point === 0x5345) {
+      return index_.lastIndexOf(code_point);
+    }
+
+    // 3. Return the index pointer for code point in index.
+    return indexPointerFor(code_point, index_);
+  }
+  var big5_index_no_hkscs;
+
+  //
+  // 8. API
+  //
+
+  /** @const */ var DEFAULT_ENCODING = 'utf-8';
+
+  // 8.1 Interface TextDecoder
+
+  /**
+   * @constructor
+   * @param {string=} label The label of the encoding;
+   *     defaults to 'utf-8'.
+   * @param {Object=} options
+   */
+  function TextDecoder(label, options) {
+    // Web IDL conventions
+    if (!(this instanceof TextDecoder))
+      throw TypeError('Called as a function. Did you forget \'new\'?');
+    label = label !== undefined ? String(label) : DEFAULT_ENCODING;
+    options = ToDictionary(options);
+
+    // A TextDecoder object has an associated encoding, decoder,
+    // stream, ignore BOM flag (initially unset), BOM seen flag
+    // (initially unset), error mode (initially replacement), and do
+    // not flush flag (initially unset).
+
+    /** @private */
+    this._encoding = null;
+    /** @private @type {?Decoder} */
+    this._decoder = null;
+    /** @private @type {boolean} */
+    this._ignoreBOM = false;
+    /** @private @type {boolean} */
+    this._BOMseen = false;
+    /** @private @type {string} */
+    this._error_mode = 'replacement';
+    /** @private @type {boolean} */
+    this._do_not_flush = false;
+
+
+    // 1. Let encoding be the result of getting an encoding from
+    // label.
+    var encoding = getEncoding(label);
+
+    // 2. If encoding is failure or replacement, throw a RangeError.
+    if (encoding === null || encoding.name === 'replacement')
+      throw RangeError('Unknown encoding: ' + label);
+    if (!decoders[encoding.name]) {
+      throw Error('Decoder not present.' +
+                  ' Did you forget to include encoding-indexes.js first?');
+    }
+
+    // 3. Let dec be a new TextDecoder object.
+    var dec = this;
+
+    // 4. Set dec's encoding to encoding.
+    dec._encoding = encoding;
+
+    // 5. If options's fatal member is true, set dec's error mode to
+    // fatal.
+    if (Boolean(options['fatal']))
+      dec._error_mode = 'fatal';
+
+    // 6. If options's ignoreBOM member is true, set dec's ignore BOM
+    // flag.
+    if (Boolean(options['ignoreBOM']))
+      dec._ignoreBOM = true;
+
+    // For pre-ES5 runtimes:
+    if (!Object.defineProperty) {
+      this.encoding = dec._encoding.name.toLowerCase();
+      this.fatal = dec._error_mode === 'fatal';
+      this.ignoreBOM = dec._ignoreBOM;
+    }
+
+    // 7. Return dec.
+    return dec;
+  }
+
+  if (Object.defineProperty) {
+    // The encoding attribute's getter must return encoding's name.
+    Object.defineProperty(TextDecoder.prototype, 'encoding', {
+      /** @this {TextDecoder} */
+      get: function() { return this._encoding.name.toLowerCase(); }
+    });
+
+    // The fatal attribute's getter must return true if error mode
+    // is fatal, and false otherwise.
+    Object.defineProperty(TextDecoder.prototype, 'fatal', {
+      /** @this {TextDecoder} */
+      get: function() { return this._error_mode === 'fatal'; }
+    });
+
+    // The ignoreBOM attribute's getter must return true if ignore
+    // BOM flag is set, and false otherwise.
+    Object.defineProperty(TextDecoder.prototype, 'ignoreBOM', {
+      /** @this {TextDecoder} */
+      get: function() { return this._ignoreBOM; }
+    });
+  }
+
+  /**
+   * @param {BufferSource=} input The buffer of bytes to decode.
+   * @param {Object=} options
+   * @return {string} The decoded string.
+   */
+  TextDecoder.prototype.decode = function decode(input, options) {
+    var bytes;
+    if (typeof input === 'object' && input instanceof ArrayBuffer) {
+      bytes = new Uint8Array(input);
+    } else if (typeof input === 'object' && 'buffer' in input &&
+               input.buffer instanceof ArrayBuffer) {
+      bytes = new Uint8Array(input.buffer,
+                             input.byteOffset,
+                             input.byteLength);
+    } else {
+      bytes = new Uint8Array(0);
+    }
+
+    options = ToDictionary(options);
+
+    // 1. If the do not flush flag is unset, set decoder to a new
+    // encoding's decoder, set stream to a new stream, and unset the
+    // BOM seen flag.
+    if (!this._do_not_flush) {
+      this._decoder = decoders[this._encoding.name]({
+        fatal: this._error_mode === 'fatal'});
+      this._BOMseen = false;
+    }
+
+    // 2. If options's stream is true, set the do not flush flag, and
+    // unset the do not flush flag otherwise.
+    this._do_not_flush = Boolean(options['stream']);
+
+    // 3. If input is given, push a copy of input to stream.
+    // TODO: Align with spec algorithm - maintain stream on instance.
+    var input_stream = new Stream(bytes);
+
+    // 4. Let output be a new stream.
+    var output = [];
+
+    /** @type {?(number|!Array.<number>)} */
+    var result;
+
+    // 5. While true:
+    while (true) {
+      // 1. Let token be the result of reading from stream.
+      var token = input_stream.read();
+
+      // 2. If token is end-of-stream and the do not flush flag is
+      // set, return output, serialized.
+      // TODO: Align with spec algorithm.
+      if (token === end_of_stream)
+        break;
+
+      // 3. Otherwise, run these subsubsteps:
+
+      // 1. Let result be the result of processing token for decoder,
+      // stream, output, and error mode.
+      result = this._decoder.handler(input_stream, token);
+
+      // 2. If result is finished, return output, serialized.
+      if (result === finished)
+        break;
+
+      if (result !== null) {
+        if (Array.isArray(result))
+          output.push.apply(output, /**@type {!Array.<number>}*/(result));
+        else
+          output.push(result);
+      }
+
+      // 3. Otherwise, if result is error, throw a TypeError.
+      // (Thrown in handler)
+
+      // 4. Otherwise, do nothing.
+    }
+    // TODO: Align with spec algorithm.
+    if (!this._do_not_flush) {
+      do {
+        result = this._decoder.handler(input_stream, input_stream.read());
+        if (result === finished)
+          break;
+        if (result === null)
+          continue;
+        if (Array.isArray(result))
+          output.push.apply(output, /**@type {!Array.<number>}*/(result));
+        else
+          output.push(result);
+      } while (!input_stream.endOfStream());
+      this._decoder = null;
+    }
+
+    // A TextDecoder object also has an associated serialize stream
+    // algorithm...
+    /**
+     * @param {!Array.<number>} stream
+     * @return {string}
+     * @this {TextDecoder}
+     */
+    function serializeStream(stream) {
+      // 1. Let token be the result of reading from stream.
+      // (Done in-place on array, rather than as a stream)
+
+      // 2. If encoding is UTF-8, UTF-16BE, or UTF-16LE, and ignore
+      // BOM flag and BOM seen flag are unset, run these subsubsteps:
+      if (includes(['UTF-8', 'UTF-16LE', 'UTF-16BE'], this._encoding.name) &&
+          !this._ignoreBOM && !this._BOMseen) {
+        if (stream.length > 0 && stream[0] === 0xFEFF) {
+          // 1. If token is U+FEFF, set BOM seen flag.
+          this._BOMseen = true;
+          stream.shift();
+        } else if (stream.length > 0) {
+          // 2. Otherwise, if token is not end-of-stream, set BOM seen
+          // flag and append token to stream.
+          this._BOMseen = true;
+        } else {
+          // 3. Otherwise, if token is not end-of-stream, append token
+          // to output.
+          // (no-op)
+        }
+      }
+      // 4. Otherwise, return output.
+      return codePointsToString(stream);
+    }
+
+    return serializeStream.call(this, output);
+  };
+
+  // 8.2 Interface TextEncoder
+
+  /**
+   * @constructor
+   * @param {string=} label The label of the encoding. NONSTANDARD.
+   * @param {Object=} options NONSTANDARD.
+   */
+  function TextEncoder(label, options) {
+    // Web IDL conventions
+    if (!(this instanceof TextEncoder))
+      throw TypeError('Called as a function. Did you forget \'new\'?');
+    options = ToDictionary(options);
+
+    // A TextEncoder object has an associated encoding and encoder.
+
+    /** @private */
+    this._encoding = null;
+    /** @private @type {?Encoder} */
+    this._encoder = null;
+
+    // Non-standard
+    /** @private @type {boolean} */
+    this._do_not_flush = false;
+    /** @private @type {string} */
+    this._fatal = Boolean(options['fatal']) ? 'fatal' : 'replacement';
+
+    // 1. Let enc be a new TextEncoder object.
+    var enc = this;
+
+    // 2. Set enc's encoding to UTF-8's encoder.
+    if (Boolean(options['NONSTANDARD_allowLegacyEncoding'])) {
+      // NONSTANDARD behavior.
+      label = label !== undefined ? String(label) : DEFAULT_ENCODING;
+      var encoding = getEncoding(label);
+      if (encoding === null || encoding.name === 'replacement')
+        throw RangeError('Unknown encoding: ' + label);
+      if (!encoders[encoding.name]) {
+        throw Error('Encoder not present.' +
+                    ' Did you forget to include encoding-indexes.js first?');
+      }
+      enc._encoding = encoding;
+    } else {
+      // Standard behavior.
+      enc._encoding = getEncoding('utf-8');
+
+      if (label !== undefined && 'console' in global) {
+        console.warn('TextEncoder constructor called with encoding label, '
+                     + 'which is ignored.');
+      }
+    }
+
+    // For pre-ES5 runtimes:
+    if (!Object.defineProperty)
+      this.encoding = enc._encoding.name.toLowerCase();
+
+    // 3. Return enc.
+    return enc;
+  }
+
+  if (Object.defineProperty) {
+    // The encoding attribute's getter must return encoding's name.
+    Object.defineProperty(TextEncoder.prototype, 'encoding', {
+      /** @this {TextEncoder} */
+      get: function() { return this._encoding.name.toLowerCase(); }
+    });
+  }
+
+  /**
+   * @param {string=} opt_string The string to encode.
+   * @param {Object=} options
+   * @return {!Uint8Array} Encoded bytes, as a Uint8Array.
+   */
+  TextEncoder.prototype.encode = function encode(opt_string, options) {
+    opt_string = opt_string === undefined ? '' : String(opt_string);
+    options = ToDictionary(options);
+
+    // NOTE: This option is nonstandard. None of the encodings
+    // permitted for encoding (i.e. UTF-8, UTF-16) are stateful when
+    // the input is a USVString so streaming is not necessary.
+    if (!this._do_not_flush)
+      this._encoder = encoders[this._encoding.name]({
+        fatal: this._fatal === 'fatal'});
+    this._do_not_flush = Boolean(options['stream']);
+
+    // 1. Convert input to a stream.
+    var input = new Stream(stringToCodePoints(opt_string));
+
+    // 2. Let output be a new stream
+    var output = [];
+
+    /** @type {?(number|!Array.<number>)} */
+    var result;
+    // 3. While true, run these substeps:
+    while (true) {
+      // 1. Let token be the result of reading from input.
+      var token = input.read();
+      if (token === end_of_stream)
+        break;
+      // 2. Let result be the result of processing token for encoder,
+      // input, output.
+      result = this._encoder.handler(input, token);
+      if (result === finished)
+        break;
+      if (Array.isArray(result))
+        output.push.apply(output, /**@type {!Array.<number>}*/(result));
+      else
+        output.push(result);
+    }
+    // TODO: Align with spec algorithm.
+    if (!this._do_not_flush) {
+      while (true) {
+        result = this._encoder.handler(input, input.read());
+        if (result === finished)
+          break;
+        if (Array.isArray(result))
+          output.push.apply(output, /**@type {!Array.<number>}*/(result));
+        else
+          output.push(result);
+      }
+      this._encoder = null;
+    }
+    // 3. If result is finished, convert output into a byte sequence,
+    // and then return a Uint8Array object wrapping an ArrayBuffer
+    // containing output.
+    return new Uint8Array(output);
+  };
+
+
+  //
+  // 9. The encoding
+  //
+
+  // 9.1 utf-8
+
+  // 9.1.1 utf-8 decoder
+  /**
+   * @constructor
+   * @implements {Decoder}
+   * @param {{fatal: boolean}} options
+   */
+  function UTF8Decoder(options) {
+    var fatal = options.fatal;
+
+    // utf-8's decoder's has an associated utf-8 code point, utf-8
+    // bytes seen, and utf-8 bytes needed (all initially 0), a utf-8
+    // lower boundary (initially 0x80), and a utf-8 upper boundary
+    // (initially 0xBF).
+    var /** @type {number} */ utf8_code_point = 0,
+        /** @type {number} */ utf8_bytes_seen = 0,
+        /** @type {number} */ utf8_bytes_needed = 0,
+        /** @type {number} */ utf8_lower_boundary = 0x80,
+        /** @type {number} */ utf8_upper_boundary = 0xBF;
+
+    /**
+     * @param {Stream} stream The stream of bytes being decoded.
+     * @param {number} bite The next byte read from the stream.
+     * @return {?(number|!Array.<number>)} The next code point(s)
+     *     decoded, or null if not enough data exists in the input
+     *     stream to decode a complete code point.
+     */
+    this.handler = function(stream, bite) {
+      // 1. If byte is end-of-stream and utf-8 bytes needed is not 0,
+      // set utf-8 bytes needed to 0 and return error.
+      if (bite === end_of_stream && utf8_bytes_needed !== 0) {
+        utf8_bytes_needed = 0;
+        return decoderError(fatal);
+      }
+
+      // 2. If byte is end-of-stream, return finished.
+      if (bite === end_of_stream)
+        return finished;
+
+      // 3. If utf-8 bytes needed is 0, based on byte:
+      if (utf8_bytes_needed === 0) {
+
+        // 0x00 to 0x7F
+        if (inRange(bite, 0x00, 0x7F)) {
+          // Return a code point whose value is byte.
+          return bite;
+        }
+
+        // 0xC2 to 0xDF
+        else if (inRange(bite, 0xC2, 0xDF)) {
+          // 1. Set utf-8 bytes needed to 1.
+          utf8_bytes_needed = 1;
+
+          // 2. Set UTF-8 code point to byte & 0x1F.
+          utf8_code_point = bite & 0x1F;
+        }
+
+        // 0xE0 to 0xEF
+        else if (inRange(bite, 0xE0, 0xEF)) {
+          // 1. If byte is 0xE0, set utf-8 lower boundary to 0xA0.
+          if (bite === 0xE0)
+            utf8_lower_boundary = 0xA0;
+          // 2. If byte is 0xED, set utf-8 upper boundary to 0x9F.
+          if (bite === 0xED)
+            utf8_upper_boundary = 0x9F;
+          // 3. Set utf-8 bytes needed to 2.
+          utf8_bytes_needed = 2;
+          // 4. Set UTF-8 code point to byte & 0xF.
+          utf8_code_point = bite & 0xF;
+        }
+
+        // 0xF0 to 0xF4
+        else if (inRange(bite, 0xF0, 0xF4)) {
+          // 1. If byte is 0xF0, set utf-8 lower boundary to 0x90.
+          if (bite === 0xF0)
+            utf8_lower_boundary = 0x90;
+          // 2. If byte is 0xF4, set utf-8 upper boundary to 0x8F.
+          if (bite === 0xF4)
+            utf8_upper_boundary = 0x8F;
+          // 3. Set utf-8 bytes needed to 3.
+          utf8_bytes_needed = 3;
+          // 4. Set UTF-8 code point to byte & 0x7.
+          utf8_code_point = bite & 0x7;
+        }
+
+        // Otherwise
+        else {
+          // Return error.
+          return decoderError(fatal);
+        }
+
+        // Return continue.
+        return null;
+      }
+
+      // 4. If byte is not in the range utf-8 lower boundary to utf-8
+      // upper boundary, inclusive, run these substeps:
+      if (!inRange(bite, utf8_lower_boundary, utf8_upper_boundary)) {
+
+        // 1. Set utf-8 code point, utf-8 bytes needed, and utf-8
+        // bytes seen to 0, set utf-8 lower boundary to 0x80, and set
+        // utf-8 upper boundary to 0xBF.
+        utf8_code_point = utf8_bytes_needed = utf8_bytes_seen = 0;
+        utf8_lower_boundary = 0x80;
+        utf8_upper_boundary = 0xBF;
+
+        // 2. Prepend byte to stream.
+        stream.prepend(bite);
+
+        // 3. Return error.
+        return decoderError(fatal);
+      }
+
+      // 5. Set utf-8 lower boundary to 0x80 and utf-8 upper boundary
+      // to 0xBF.
+      utf8_lower_boundary = 0x80;
+      utf8_upper_boundary = 0xBF;
+
+      // 6. Set UTF-8 code point to (UTF-8 code point << 6) | (byte &
+      // 0x3F)
+      utf8_code_point = (utf8_code_point << 6) | (bite & 0x3F);
+
+      // 7. Increase utf-8 bytes seen by one.
+      utf8_bytes_seen += 1;
+
+      // 8. If utf-8 bytes seen is not equal to utf-8 bytes needed,
+      // continue.
+      if (utf8_bytes_seen !== utf8_bytes_needed)
+        return null;
+
+      // 9. Let code point be utf-8 code point.
+      var code_point = utf8_code_point;
+
+      // 10. Set utf-8 code point, utf-8 bytes needed, and utf-8 bytes
+      // seen to 0.
+      utf8_code_point = utf8_bytes_needed = utf8_bytes_seen = 0;
+
+      // 11. Return a code point whose value is code point.
+      return code_point;
+    };
+  }
+
+  // 9.1.2 utf-8 encoder
+  /**
+   * @constructor
+   * @implements {Encoder}
+   * @param {{fatal: boolean}} options
+   */
+  function UTF8Encoder(options) {
+    var fatal = options.fatal;
+    /**
+     * @param {Stream} stream Input stream.
+     * @param {number} code_point Next code point read from the stream.
+     * @return {(number|!Array.<number>)} Byte(s) to emit.
+     */
+    this.handler = function(stream, code_point) {
+      // 1. If code point is end-of-stream, return finished.
+      if (code_point === end_of_stream)
+        return finished;
+
+      // 2. If code point is an ASCII code point, return a byte whose
+      // value is code point.
+      if (isASCIICodePoint(code_point))
+        return code_point;
+
+      // 3. Set count and offset based on the range code point is in:
+      var count, offset;
+      // U+0080 to U+07FF, inclusive:
+      if (inRange(code_point, 0x0080, 0x07FF)) {
+        // 1 and 0xC0
+        count = 1;
+        offset = 0xC0;
+      }
+      // U+0800 to U+FFFF, inclusive:
+      else if (inRange(code_point, 0x0800, 0xFFFF)) {
+        // 2 and 0xE0
+        count = 2;
+        offset = 0xE0;
+      }
+      // U+10000 to U+10FFFF, inclusive:
+      else if (inRange(code_point, 0x10000, 0x10FFFF)) {
+        // 3 and 0xF0
+        count = 3;
+        offset = 0xF0;
+      }
+
+      // 4. Let bytes be a byte sequence whose first byte is (code
+      // point >> (6 × count)) + offset.
+      var bytes = [(code_point >> (6 * count)) + offset];
+
+      // 5. Run these substeps while count is greater than 0:
+      while (count > 0) {
+
+        // 1. Set temp to code point >> (6 × (count − 1)).
+        var temp = code_point >> (6 * (count - 1));
+
+        // 2. Append to bytes 0x80 | (temp & 0x3F).
+        bytes.push(0x80 | (temp & 0x3F));
+
+        // 3. Decrease count by one.
+        count -= 1;
+      }
+
+      // 6. Return bytes bytes, in order.
+      return bytes;
+    };
+  }
+
+  /** @param {{fatal: boolean}} options */
+  encoders['UTF-8'] = function(options) {
+    return new UTF8Encoder(options);
+  };
+  /** @param {{fatal: boolean}} options */
+  decoders['UTF-8'] = function(options) {
+    return new UTF8Decoder(options);
+  };
+
+  //
+  // 10. Legacy single-byte encodings
+  //
+
+  // 10.1 single-byte decoder
+  /**
+   * @constructor
+   * @implements {Decoder}
+   * @param {!Array.<number>} index The encoding index.
+   * @param {{fatal: boolean}} options
+   */
+  function SingleByteDecoder(index, options) {
+    var fatal = options.fatal;
+    /**
+     * @param {Stream} stream The stream of bytes being decoded.
+     * @param {number} bite The next byte read from the stream.
+     * @return {?(number|!Array.<number>)} The next code point(s)
+     *     decoded, or null if not enough data exists in the input
+     *     stream to decode a complete code point.
+     */
+    this.handler = function(stream, bite) {
+      // 1. If byte is end-of-stream, return finished.
+      if (bite === end_of_stream)
+        return finished;
+
+      // 2. If byte is an ASCII byte, return a code point whose value
+      // is byte.
+      if (isASCIIByte(bite))
+        return bite;
+
+      // 3. Let code point be the index code point for byte − 0x80 in
+      // index single-byte.
+      var code_point = index[bite - 0x80];
+
+      // 4. If code point is null, return error.
+      if (code_point === null)
+        return decoderError(fatal);
+
+      // 5. Return a code point whose value is code point.
+      return code_point;
+    };
+  }
+
+  // 10.2 single-byte encoder
+  /**
+   * @constructor
+   * @implements {Encoder}
+   * @param {!Array.<?number>} index The encoding index.
+   * @param {{fatal: boolean}} options
+   */
+  function SingleByteEncoder(index, options) {
+    var fatal = options.fatal;
+    /**
+     * @param {Stream} stream Input stream.
+     * @param {number} code_point Next code point read from the stream.
+     * @return {(number|!Array.<number>)} Byte(s) to emit.
+     */
+    this.handler = function(stream, code_point) {
+      // 1. If code point is end-of-stream, return finished.
+      if (code_point === end_of_stream)
+        return finished;
+
+      // 2. If code point is an ASCII code point, return a byte whose
+      // value is code point.
+      if (isASCIICodePoint(code_point))
+        return code_point;
+
+      // 3. Let pointer be the index pointer for code point in index
+      // single-byte.
+      var pointer = indexPointerFor(code_point, index);
+
+      // 4. If pointer is null, return error with code point.
+      if (pointer === null)
+        encoderError(code_point);
+
+      // 5. Return a byte whose value is pointer + 0x80.
+      return pointer + 0x80;
+    };
+  }
+
+  (function() {
+    if (!('encoding-indexes' in global))
+      return;
+    encodings.forEach(function(category) {
+      if (category.heading !== 'Legacy single-byte encodings')
+        return;
+      category.encodings.forEach(function(encoding) {
+        var name = encoding.name;
+        var idx = index(name.toLowerCase());
+        /** @param {{fatal: boolean}} options */
+        decoders[name] = function(options) {
+          return new SingleByteDecoder(idx, options);
+        };
+        /** @param {{fatal: boolean}} options */
+        encoders[name] = function(options) {
+          return new SingleByteEncoder(idx, options);
+        };
+      });
+    });
+  }());
+
+  //
+  // 11. Legacy multi-byte Chinese (simplified) encodings
+  //
+
+  // 11.1 gbk
+
+  // 11.1.1 gbk decoder
+  // gbk's decoder is gb18030's decoder.
+  /** @param {{fatal: boolean}} options */
+  decoders['GBK'] = function(options) {
+    return new GB18030Decoder(options);
+  };
+
+  // 11.1.2 gbk encoder
+  // gbk's encoder is gb18030's encoder with its gbk flag set.
+  /** @param {{fatal: boolean}} options */
+  encoders['GBK'] = function(options) {
+    return new GB18030Encoder(options, true);
+  };
+
+  // 11.2 gb18030
+
+  // 11.2.1 gb18030 decoder
+  /**
+   * @constructor
+   * @implements {Decoder}
+   * @param {{fatal: boolean}} options
+   */
+  function GB18030Decoder(options) {
+    var fatal = options.fatal;
+    // gb18030's decoder has an associated gb18030 first, gb18030
+    // second, and gb18030 third (all initially 0x00).
+    var /** @type {number} */ gb18030_first = 0x00,
+        /** @type {number} */ gb18030_second = 0x00,
+        /** @type {number} */ gb18030_third = 0x00;
+    /**
+     * @param {Stream} stream The stream of bytes being decoded.
+     * @param {number} bite The next byte read from the stream.
+     * @return {?(number|!Array.<number>)} The next code point(s)
+     *     decoded, or null if not enough data exists in the input
+     *     stream to decode a complete code point.
+     */
+    this.handler = function(stream, bite) {
+      // 1. If byte is end-of-stream and gb18030 first, gb18030
+      // second, and gb18030 third are 0x00, return finished.
+      if (bite === end_of_stream && gb18030_first === 0x00 &&
+          gb18030_second === 0x00 && gb18030_third === 0x00) {
+        return finished;
+      }
+      // 2. If byte is end-of-stream, and gb18030 first, gb18030
+      // second, or gb18030 third is not 0x00, set gb18030 first,
+      // gb18030 second, and gb18030 third to 0x00, and return error.
+      if (bite === end_of_stream &&
+          (gb18030_first !== 0x00 || gb18030_second !== 0x00 ||
+           gb18030_third !== 0x00)) {
+        gb18030_first = 0x00;
+        gb18030_second = 0x00;
+        gb18030_third = 0x00;
+        decoderError(fatal);
+      }
+      var code_point;
+      // 3. If gb18030 third is not 0x00, run these substeps:
+      if (gb18030_third !== 0x00) {
+        // 1. Let code point be null.
+        code_point = null;
+        // 2. If byte is in the range 0x30 to 0x39, inclusive, set
+        // code point to the index gb18030 ranges code point for
+        // (((gb18030 first − 0x81) × 10 + gb18030 second − 0x30) ×
+        // 126 + gb18030 third − 0x81) × 10 + byte − 0x30.
+        if (inRange(bite, 0x30, 0x39)) {
+          code_point = indexGB18030RangesCodePointFor(
+              (((gb18030_first - 0x81) * 10 + gb18030_second - 0x30) * 126 +
+               gb18030_third - 0x81) * 10 + bite - 0x30);
+        }
+
+        // 3. Let buffer be a byte sequence consisting of gb18030
+        // second, gb18030 third, and byte, in order.
+        var buffer = [gb18030_second, gb18030_third, bite];
+
+        // 4. Set gb18030 first, gb18030 second, and gb18030 third to
+        // 0x00.
+        gb18030_first = 0x00;
+        gb18030_second = 0x00;
+        gb18030_third = 0x00;
+
+        // 5. If code point is null, prepend buffer to stream and
+        // return error.
+        if (code_point === null) {
+          stream.prepend(buffer);
+          return decoderError(fatal);
+        }
+
+        // 6. Return a code point whose value is code point.
+        return code_point;
+      }
+
+      // 4. If gb18030 second is not 0x00, run these substeps:
+      if (gb18030_second !== 0x00) {
+
+        // 1. If byte is in the range 0x81 to 0xFE, inclusive, set
+        // gb18030 third to byte and return continue.
+        if (inRange(bite, 0x81, 0xFE)) {
+          gb18030_third = bite;
+          return null;
+        }
+
+        // 2. Prepend gb18030 second followed by byte to stream, set
+        // gb18030 first and gb18030 second to 0x00, and return error.
+        stream.prepend([gb18030_second, bite]);
+        gb18030_first = 0x00;
+        gb18030_second = 0x00;
+        return decoderError(fatal);
+      }
+
+      // 5. If gb18030 first is not 0x00, run these substeps:
+      if (gb18030_first !== 0x00) {
+
+        // 1. If byte is in the range 0x30 to 0x39, inclusive, set
+        // gb18030 second to byte and return continue.
+        if (inRange(bite, 0x30, 0x39)) {
+          gb18030_second = bite;
+          return null;
+        }
+
+        // 2. Let lead be gb18030 first, let pointer be null, and set
+        // gb18030 first to 0x00.
+        var lead = gb18030_first;
+        var pointer = null;
+        gb18030_first = 0x00;
+
+        // 3. Let offset be 0x40 if byte is less than 0x7F and 0x41
+        // otherwise.
+        var offset = bite < 0x7F ? 0x40 : 0x41;
+
+        // 4. If byte is in the range 0x40 to 0x7E, inclusive, or 0x80
+        // to 0xFE, inclusive, set pointer to (lead − 0x81) × 190 +
+        // (byte − offset).
+        if (inRange(bite, 0x40, 0x7E) || inRange(bite, 0x80, 0xFE))
+          pointer = (lead - 0x81) * 190 + (bite - offset);
+
+        // 5. Let code point be null if pointer is null and the index
+        // code point for pointer in index gb18030 otherwise.
+        code_point = pointer === null ? null :
+            indexCodePointFor(pointer, index('gb18030'));
+
+        // 6. If code point is null and byte is an ASCII byte, prepend
+        // byte to stream.
+        if (code_point === null && isASCIIByte(bite))
+          stream.prepend(bite);
+
+        // 7. If code point is null, return error.
+        if (code_point === null)
+          return decoderError(fatal);
+
+        // 8. Return a code point whose value is code point.
+        return code_point;
+      }
+
+      // 6. If byte is an ASCII byte, return a code point whose value
+      // is byte.
+      if (isASCIIByte(bite))
+        return bite;
+
+      // 7. If byte is 0x80, return code point U+20AC.
+      if (bite === 0x80)
+        return 0x20AC;
+
+      // 8. If byte is in the range 0x81 to 0xFE, inclusive, set
+      // gb18030 first to byte and return continue.
+      if (inRange(bite, 0x81, 0xFE)) {
+        gb18030_first = bite;
+        return null;
+      }
+
+      // 9. Return error.
+      return decoderError(fatal);
+    };
+  }
+
+  // 11.2.2 gb18030 encoder
+  /**
+   * @constructor
+   * @implements {Encoder}
+   * @param {{fatal: boolean}} options
+   * @param {boolean=} gbk_flag
+   */
+  function GB18030Encoder(options, gbk_flag) {
+    var fatal = options.fatal;
+    // gb18030's decoder has an associated gbk flag (initially unset).
+    /**
+     * @param {Stream} stream Input stream.
+     * @param {number} code_point Next code point read from the stream.
+     * @return {(number|!Array.<number>)} Byte(s) to emit.
+     */
+    this.handler = function(stream, code_point) {
+      // 1. If code point is end-of-stream, return finished.
+      if (code_point === end_of_stream)
+        return finished;
+
+      // 2. If code point is an ASCII code point, return a byte whose
+      // value is code point.
+      if (isASCIICodePoint(code_point))
+        return code_point;
+
+      // 3. If code point is U+E5E5, return error with code point.
+      if (code_point === 0xE5E5)
+        return encoderError(code_point);
+
+      // 4. If the gbk flag is set and code point is U+20AC, return
+      // byte 0x80.
+      if (gbk_flag && code_point === 0x20AC)
+        return 0x80;
+
+      // 5. Let pointer be the index pointer for code point in index
+      // gb18030.
+      var pointer = indexPointerFor(code_point, index('gb18030'));
+
+      // 6. If pointer is not null, run these substeps:
+      if (pointer !== null) {
+
+        // 1. Let lead be floor(pointer / 190) + 0x81.
+        var lead = floor(pointer / 190) + 0x81;
+
+        // 2. Let trail be pointer % 190.
+        var trail = pointer % 190;
+
+        // 3. Let offset be 0x40 if trail is less than 0x3F and 0x41 otherwise.
+        var offset = trail < 0x3F ? 0x40 : 0x41;
+
+        // 4. Return two bytes whose values are lead and trail + offset.
+        return [lead, trail + offset];
+      }
+
+      // 7. If gbk flag is set, return error with code point.
+      if (gbk_flag)
+        return encoderError(code_point);
+
+      // 8. Set pointer to the index gb18030 ranges pointer for code
+      // point.
+      pointer = indexGB18030RangesPointerFor(code_point);
+
+      // 9. Let byte1 be floor(pointer / 10 / 126 / 10).
+      var byte1 = floor(pointer / 10 / 126 / 10);
+
+      // 10. Set pointer to pointer − byte1 × 10 × 126 × 10.
+      pointer = pointer - byte1 * 10 * 126 * 10;
+
+      // 11. Let byte2 be floor(pointer / 10 / 126).
+      var byte2 = floor(pointer / 10 / 126);
+
+      // 12. Set pointer to pointer − byte2 × 10 × 126.
+      pointer = pointer - byte2 * 10 * 126;
+
+      // 13. Let byte3 be floor(pointer / 10).
+      var byte3 = floor(pointer / 10);
+
+      // 14. Let byte4 be pointer − byte3 × 10.
+      var byte4 = pointer - byte3 * 10;
+
+      // 15. Return four bytes whose values are byte1 + 0x81, byte2 +
+      // 0x30, byte3 + 0x81, byte4 + 0x30.
+      return [byte1 + 0x81,
+              byte2 + 0x30,
+              byte3 + 0x81,
+              byte4 + 0x30];
+    };
+  }
+
+  /** @param {{fatal: boolean}} options */
+  encoders['gb18030'] = function(options) {
+    return new GB18030Encoder(options);
+  };
+  /** @param {{fatal: boolean}} options */
+  decoders['gb18030'] = function(options) {
+    return new GB18030Decoder(options);
+  };
+
+
+  //
+  // 12. Legacy multi-byte Chinese (traditional) encodings
+  //
+
+  // 12.1 Big5
+
+  // 12.1.1 Big5 decoder
+  /**
+   * @constructor
+   * @implements {Decoder}
+   * @param {{fatal: boolean}} options
+   */
+  function Big5Decoder(options) {
+    var fatal = options.fatal;
+    // Big5's decoder has an associated Big5 lead (initially 0x00).
+    var /** @type {number} */ Big5_lead = 0x00;
+
+    /**
+     * @param {Stream} stream The stream of bytes being decoded.
+     * @param {number} bite The next byte read from the stream.
+     * @return {?(number|!Array.<number>)} The next code point(s)
+     *     decoded, or null if not enough data exists in the input
+     *     stream to decode a complete code point.
+     */
+    this.handler = function(stream, bite) {
+      // 1. If byte is end-of-stream and Big5 lead is not 0x00, set
+      // Big5 lead to 0x00 and return error.
+      if (bite === end_of_stream && Big5_lead !== 0x00) {
+        Big5_lead = 0x00;
+        return decoderError(fatal);
+      }
+
+      // 2. If byte is end-of-stream and Big5 lead is 0x00, return
+      // finished.
+      if (bite === end_of_stream && Big5_lead === 0x00)
+        return finished;
+
+      // 3. If Big5 lead is not 0x00, let lead be Big5 lead, let
+      // pointer be null, set Big5 lead to 0x00, and then run these
+      // substeps:
+      if (Big5_lead !== 0x00) {
+        var lead = Big5_lead;
+        var pointer = null;
+        Big5_lead = 0x00;
+
+        // 1. Let offset be 0x40 if byte is less than 0x7F and 0x62
+        // otherwise.
+        var offset = bite < 0x7F ? 0x40 : 0x62;
+
+        // 2. If byte is in the range 0x40 to 0x7E, inclusive, or 0xA1
+        // to 0xFE, inclusive, set pointer to (lead − 0x81) × 157 +
+        // (byte − offset).
+        if (inRange(bite, 0x40, 0x7E) || inRange(bite, 0xA1, 0xFE))
+          pointer = (lead - 0x81) * 157 + (bite - offset);
+
+        // 3. If there is a row in the table below whose first column
+        // is pointer, return the two code points listed in its second
+        // column
+        // Pointer | Code points
+        // --------+--------------
+        // 1133    | U+00CA U+0304
+        // 1135    | U+00CA U+030C
+        // 1164    | U+00EA U+0304
+        // 1166    | U+00EA U+030C
+        switch (pointer) {
+          case 1133: return [0x00CA, 0x0304];
+          case 1135: return [0x00CA, 0x030C];
+          case 1164: return [0x00EA, 0x0304];
+          case 1166: return [0x00EA, 0x030C];
+        }
+
+        // 4. Let code point be null if pointer is null and the index
+        // code point for pointer in index Big5 otherwise.
+        var code_point = (pointer === null) ? null :
+            indexCodePointFor(pointer, index('big5'));
+
+        // 5. If code point is null and byte is an ASCII byte, prepend
+        // byte to stream.
+        if (code_point === null && isASCIIByte(bite))
+          stream.prepend(bite);
+
+        // 6. If code point is null, return error.
+        if (code_point === null)
+          return decoderError(fatal);
+
+        // 7. Return a code point whose value is code point.
+        return code_point;
+      }
+
+      // 4. If byte is an ASCII byte, return a code point whose value
+      // is byte.
+      if (isASCIIByte(bite))
+        return bite;
+
+      // 5. If byte is in the range 0x81 to 0xFE, inclusive, set Big5
+      // lead to byte and return continue.
+      if (inRange(bite, 0x81, 0xFE)) {
+        Big5_lead = bite;
+        return null;
+      }
+
+      // 6. Return error.
+      return decoderError(fatal);
+    };
+  }
+
+  // 12.1.2 Big5 encoder
+  /**
+   * @constructor
+   * @implements {Encoder}
+   * @param {{fatal: boolean}} options
+   */
+  function Big5Encoder(options) {
+    var fatal = options.fatal;
+    /**
+     * @param {Stream} stream Input stream.
+     * @param {number} code_point Next code point read from the stream.
+     * @return {(number|!Array.<number>)} Byte(s) to emit.
+     */
+    this.handler = function(stream, code_point) {
+      // 1. If code point is end-of-stream, return finished.
+      if (code_point === end_of_stream)
+        return finished;
+
+      // 2. If code point is an ASCII code point, return a byte whose
+      // value is code point.
+      if (isASCIICodePoint(code_point))
+        return code_point;
+
+      // 3. Let pointer be the index Big5 pointer for code point.
+      var pointer = indexBig5PointerFor(code_point);
+
+      // 4. If pointer is null, return error with code point.
+      if (pointer === null)
+        return encoderError(code_point);
+
+      // 5. Let lead be floor(pointer / 157) + 0x81.
+      var lead = floor(pointer / 157) + 0x81;
+
+      // 6. If lead is less than 0xA1, return error with code point.
+      if (lead < 0xA1)
+        return encoderError(code_point);
+
+      // 7. Let trail be pointer % 157.
+      var trail = pointer % 157;
+
+      // 8. Let offset be 0x40 if trail is less than 0x3F and 0x62
+      // otherwise.
+      var offset = trail < 0x3F ? 0x40 : 0x62;
+
+      // Return two bytes whose values are lead and trail + offset.
+      return [lead, trail + offset];
+    };
+  }
+
+  /** @param {{fatal: boolean}} options */
+  encoders['Big5'] = function(options) {
+    return new Big5Encoder(options);
+  };
+  /** @param {{fatal: boolean}} options */
+  decoders['Big5'] = function(options) {
+    return new Big5Decoder(options);
+  };
+
+
+  //
+  // 13. Legacy multi-byte Japanese encodings
+  //
+
+  // 13.1 euc-jp
+
+  // 13.1.1 euc-jp decoder
+  /**
+   * @constructor
+   * @implements {Decoder}
+   * @param {{fatal: boolean}} options
+   */
+  function EUCJPDecoder(options) {
+    var fatal = options.fatal;
+
+    // euc-jp's decoder has an associated euc-jp jis0212 flag
+    // (initially unset) and euc-jp lead (initially 0x00).
+    var /** @type {boolean} */ eucjp_jis0212_flag = false,
+        /** @type {number} */ eucjp_lead = 0x00;
+
+    /**
+     * @param {Stream} stream The stream of bytes being decoded.
+     * @param {number} bite The next byte read from the stream.
+     * @return {?(number|!Array.<number>)} The next code point(s)
+     *     decoded, or null if not enough data exists in the input
+     *     stream to decode a complete code point.
+     */
+    this.handler = function(stream, bite) {
+      // 1. If byte is end-of-stream and euc-jp lead is not 0x00, set
+      // euc-jp lead to 0x00, and return error.
+      if (bite === end_of_stream && eucjp_lead !== 0x00) {
+        eucjp_lead = 0x00;
+        return decoderError(fatal);
+      }
+
+      // 2. If byte is end-of-stream and euc-jp lead is 0x00, return
+      // finished.
+      if (bite === end_of_stream && eucjp_lead === 0x00)
+        return finished;
+
+      // 3. If euc-jp lead is 0x8E and byte is in the range 0xA1 to
+      // 0xDF, inclusive, set euc-jp lead to 0x00 and return a code
+      // point whose value is 0xFF61 − 0xA1 + byte.
+      if (eucjp_lead === 0x8E && inRange(bite, 0xA1, 0xDF)) {
+        eucjp_lead = 0x00;
+        return 0xFF61 - 0xA1 + bite;
+      }
+
+      // 4. If euc-jp lead is 0x8F and byte is in the range 0xA1 to
+      // 0xFE, inclusive, set the euc-jp jis0212 flag, set euc-jp lead
+      // to byte, and return continue.
+      if (eucjp_lead === 0x8F && inRange(bite, 0xA1, 0xFE)) {
+        eucjp_jis0212_flag = true;
+        eucjp_lead = bite;
+        return null;
+      }
+
+      // 5. If euc-jp lead is not 0x00, let lead be euc-jp lead, set
+      // euc-jp lead to 0x00, and run these substeps:
+      if (eucjp_lead !== 0x00) {
+        var lead = eucjp_lead;
+        eucjp_lead = 0x00;
+
+        // 1. Let code point be null.
+        var code_point = null;
+
+        // 2. If lead and byte are both in the range 0xA1 to 0xFE,
+        // inclusive, set code point to the index code point for (lead
+        // − 0xA1) × 94 + byte − 0xA1 in index jis0208 if the euc-jp
+        // jis0212 flag is unset and in index jis0212 otherwise.
+        if (inRange(lead, 0xA1, 0xFE) && inRange(bite, 0xA1, 0xFE)) {
+          code_point = indexCodePointFor(
+            (lead - 0xA1) * 94 + (bite - 0xA1),
+            index(!eucjp_jis0212_flag ? 'jis0208' : 'jis0212'));
+        }
+
+        // 3. Unset the euc-jp jis0212 flag.
+        eucjp_jis0212_flag = false;
+
+        // 4. If byte is not in the range 0xA1 to 0xFE, inclusive,
+        // prepend byte to stream.
+        if (!inRange(bite, 0xA1, 0xFE))
+          stream.prepend(bite);
+
+        // 5. If code point is null, return error.
+        if (code_point === null)
+          return decoderError(fatal);
+
+        // 6. Return a code point whose value is code point.
+        return code_point;
+      }
+
+      // 6. If byte is an ASCII byte, return a code point whose value
+      // is byte.
+      if (isASCIIByte(bite))
+        return bite;
+
+      // 7. If byte is 0x8E, 0x8F, or in the range 0xA1 to 0xFE,
+      // inclusive, set euc-jp lead to byte and return continue.
+      if (bite === 0x8E || bite === 0x8F || inRange(bite, 0xA1, 0xFE)) {
+        eucjp_lead = bite;
+        return null;
+      }
+
+      // 8. Return error.
+      return decoderError(fatal);
+    };
+  }
+
+  // 13.1.2 euc-jp encoder
+  /**
+   * @constructor
+   * @implements {Encoder}
+   * @param {{fatal: boolean}} options
+   */
+  function EUCJPEncoder(options) {
+    var fatal = options.fatal;
+    /**
+     * @param {Stream} stream Input stream.
+     * @param {number} code_point Next code point read from the stream.
+     * @return {(number|!Array.<number>)} Byte(s) to emit.
+     */
+    this.handler = function(stream, code_point) {
+      // 1. If code point is end-of-stream, return finished.
+      if (code_point === end_of_stream)
+        return finished;
+
+      // 2. If code point is an ASCII code point, return a byte whose
+      // value is code point.
+      if (isASCIICodePoint(code_point))
+        return code_point;
+
+      // 3. If code point is U+00A5, return byte 0x5C.
+      if (code_point === 0x00A5)
+        return 0x5C;
+
+      // 4. If code point is U+203E, return byte 0x7E.
+      if (code_point === 0x203E)
+        return 0x7E;
+
+      // 5. If code point is in the range U+FF61 to U+FF9F, inclusive,
+      // return two bytes whose values are 0x8E and code point −
+      // 0xFF61 + 0xA1.
+      if (inRange(code_point, 0xFF61, 0xFF9F))
+        return [0x8E, code_point - 0xFF61 + 0xA1];
+
+      // 6. If code point is U+2212, set it to U+FF0D.
+      if (code_point === 0x2212)
+        code_point = 0xFF0D;
+
+      // 7. Let pointer be the index pointer for code point in index
+      // jis0208.
+      var pointer = indexPointerFor(code_point, index('jis0208'));
+
+      // 8. If pointer is null, return error with code point.
+      if (pointer === null)
+        return encoderError(code_point);
+
+      // 9. Let lead be floor(pointer / 94) + 0xA1.
+      var lead = floor(pointer / 94) + 0xA1;
+
+      // 10. Let trail be pointer % 94 + 0xA1.
+      var trail = pointer % 94 + 0xA1;
+
+      // 11. Return two bytes whose values are lead and trail.
+      return [lead, trail];
+    };
+  }
+
+  /** @param {{fatal: boolean}} options */
+  encoders['EUC-JP'] = function(options) {
+    return new EUCJPEncoder(options);
+  };
+  /** @param {{fatal: boolean}} options */
+  decoders['EUC-JP'] = function(options) {
+    return new EUCJPDecoder(options);
+  };
+
+  // 13.2 iso-2022-jp
+
+  // 13.2.1 iso-2022-jp decoder
+  /**
+   * @constructor
+   * @implements {Decoder}
+   * @param {{fatal: boolean}} options
+   */
+  function ISO2022JPDecoder(options) {
+    var fatal = options.fatal;
+    /** @enum */
+    var states = {
+      ASCII: 0,
+      Roman: 1,
+      Katakana: 2,
+      LeadByte: 3,
+      TrailByte: 4,
+      EscapeStart: 5,
+      Escape: 6
+    };
+    // iso-2022-jp's decoder has an associated iso-2022-jp decoder
+    // state (initially ASCII), iso-2022-jp decoder output state
+    // (initially ASCII), iso-2022-jp lead (initially 0x00), and
+    // iso-2022-jp output flag (initially unset).
+    var /** @type {number} */ iso2022jp_decoder_state = states.ASCII,
+        /** @type {number} */ iso2022jp_decoder_output_state = states.ASCII,
+        /** @type {number} */ iso2022jp_lead = 0x00,
+        /** @type {boolean} */ iso2022jp_output_flag = false;
+    /**
+     * @param {Stream} stream The stream of bytes being decoded.
+     * @param {number} bite The next byte read from the stream.
+     * @return {?(number|!Array.<number>)} The next code point(s)
+     *     decoded, or null if not enough data exists in the input
+     *     stream to decode a complete code point.
+     */
+    this.handler = function(stream, bite) {
+      // switching on iso-2022-jp decoder state:
+      switch (iso2022jp_decoder_state) {
+      default:
+      case states.ASCII:
+        // ASCII
+        // Based on byte:
+
+        // 0x1B
+        if (bite === 0x1B) {
+          // Set iso-2022-jp decoder state to escape start and return
+          // continue.
+          iso2022jp_decoder_state = states.EscapeStart;
+          return null;
+        }
+
+        // 0x00 to 0x7F, excluding 0x0E, 0x0F, and 0x1B
+        if (inRange(bite, 0x00, 0x7F) && bite !== 0x0E
+            && bite !== 0x0F && bite !== 0x1B) {
+          // Unset the iso-2022-jp output flag and return a code point
+          // whose value is byte.
+          iso2022jp_output_flag = false;
+          return bite;
+        }
+
+        // end-of-stream
+        if (bite === end_of_stream) {
+          // Return finished.
+          return finished;
+        }
+
+        // Otherwise
+        // Unset the iso-2022-jp output flag and return error.
+        iso2022jp_output_flag = false;
+        return decoderError(fatal);
+
+      case states.Roman:
+        // Roman
+        // Based on byte:
+
+        // 0x1B
+        if (bite === 0x1B) {
+          // Set iso-2022-jp decoder state to escape start and return
+          // continue.
+          iso2022jp_decoder_state = states.EscapeStart;
+          return null;
+        }
+
+        // 0x5C
+        if (bite === 0x5C) {
+          // Unset the iso-2022-jp output flag and return code point
+          // U+00A5.
+          iso2022jp_output_flag = false;
+          return 0x00A5;
+        }
+
+        // 0x7E
+        if (bite === 0x7E) {
+          // Unset the iso-2022-jp output flag and return code point
+          // U+203E.
+          iso2022jp_output_flag = false;
+          return 0x203E;
+        }
+
+        // 0x00 to 0x7F, excluding 0x0E, 0x0F, 0x1B, 0x5C, and 0x7E
+        if (inRange(bite, 0x00, 0x7F) && bite !== 0x0E && bite !== 0x0F
+            && bite !== 0x1B && bite !== 0x5C && bite !== 0x7E) {
+          // Unset the iso-2022-jp output flag and return a code point
+          // whose value is byte.
+          iso2022jp_output_flag = false;
+          return bite;
+        }
+
+        // end-of-stream
+        if (bite === end_of_stream) {
+          // Return finished.
+          return finished;
+        }
+
+        // Otherwise
+        // Unset the iso-2022-jp output flag and return error.
+        iso2022jp_output_flag = false;
+        return decoderError(fatal);
+
+      case states.Katakana:
+        // Katakana
+        // Based on byte:
+
+        // 0x1B
+        if (bite === 0x1B) {
+          // Set iso-2022-jp decoder state to escape start and return
+          // continue.
+          iso2022jp_decoder_state = states.EscapeStart;
+          return null;
+        }
+
+        // 0x21 to 0x5F
+        if (inRange(bite, 0x21, 0x5F)) {
+          // Unset the iso-2022-jp output flag and return a code point
+          // whose value is 0xFF61 − 0x21 + byte.
+          iso2022jp_output_flag = false;
+          return 0xFF61 - 0x21 + bite;
+        }
+
+        // end-of-stream
+        if (bite === end_of_stream) {
+          // Return finished.
+          return finished;
+        }
+
+        // Otherwise
+        // Unset the iso-2022-jp output flag and return error.
+        iso2022jp_output_flag = false;
+        return decoderError(fatal);
+
+      case states.LeadByte:
+        // Lead byte
+        // Based on byte:
+
+        // 0x1B
+        if (bite === 0x1B) {
+          // Set iso-2022-jp decoder state to escape start and return
+          // continue.
+          iso2022jp_decoder_state = states.EscapeStart;
+          return null;
+        }
+
+        // 0x21 to 0x7E
+        if (inRange(bite, 0x21, 0x7E)) {
+          // Unset the iso-2022-jp output flag, set iso-2022-jp lead
+          // to byte, iso-2022-jp decoder state to trail byte, and
+          // return continue.
+          iso2022jp_output_flag = false;
+          iso2022jp_lead = bite;
+          iso2022jp_decoder_state = states.TrailByte;
+          return null;
+        }
+
+        // end-of-stream
+        if (bite === end_of_stream) {
+          // Return finished.
+          return finished;
+        }
+
+        // Otherwise
+        // Unset the iso-2022-jp output flag and return error.
+        iso2022jp_output_flag = false;
+        return decoderError(fatal);
+
+      case states.TrailByte:
+        // Trail byte
+        // Based on byte:
+
+        // 0x1B
+        if (bite === 0x1B) {
+          // Set iso-2022-jp decoder state to escape start and return
+          // continue.
+          iso2022jp_decoder_state = states.EscapeStart;
+          return decoderError(fatal);
+        }
+
+        // 0x21 to 0x7E
+        if (inRange(bite, 0x21, 0x7E)) {
+          // 1. Set the iso-2022-jp decoder state to lead byte.
+          iso2022jp_decoder_state = states.LeadByte;
+
+          // 2. Let pointer be (iso-2022-jp lead − 0x21) × 94 + byte − 0x21.
+          var pointer = (iso2022jp_lead - 0x21) * 94 + bite - 0x21;
+
+          // 3. Let code point be the index code point for pointer in
+          // index jis0208.
+          var code_point = indexCodePointFor(pointer, index('jis0208'));
+
+          // 4. If code point is null, return error.
+          if (code_point === null)
+            return decoderError(fatal);
+
+          // 5. Return a code point whose value is code point.
+          return code_point;
+        }
+
+        // end-of-stream
+        if (bite === end_of_stream) {
+          // Set the iso-2022-jp decoder state to lead byte, prepend
+          // byte to stream, and return error.
+          iso2022jp_decoder_state = states.LeadByte;
+          stream.prepend(bite);
+          return decoderError(fatal);
+        }
+
+        // Otherwise
+        // Set iso-2022-jp decoder state to lead byte and return
+        // error.
+        iso2022jp_decoder_state = states.LeadByte;
+        return decoderError(fatal);
+
+      case states.EscapeStart:
+        // Escape start
+
+        // 1. If byte is either 0x24 or 0x28, set iso-2022-jp lead to
+        // byte, iso-2022-jp decoder state to escape, and return
+        // continue.
+        if (bite === 0x24 || bite === 0x28) {
+          iso2022jp_lead = bite;
+          iso2022jp_decoder_state = states.Escape;
+          return null;
+        }
+
+        // 2. Prepend byte to stream.
+        stream.prepend(bite);
+
+        // 3. Unset the iso-2022-jp output flag, set iso-2022-jp
+        // decoder state to iso-2022-jp decoder output state, and
+        // return error.
+        iso2022jp_output_flag = false;
+        iso2022jp_decoder_state = iso2022jp_decoder_output_state;
+        return decoderError(fatal);
+
+      case states.Escape:
+        // Escape
+
+        // 1. Let lead be iso-2022-jp lead and set iso-2022-jp lead to
+        // 0x00.
+        var lead = iso2022jp_lead;
+        iso2022jp_lead = 0x00;
+
+        // 2. Let state be null.
+        var state = null;
+
+        // 3. If lead is 0x28 and byte is 0x42, set state to ASCII.
+        if (lead === 0x28 && bite === 0x42)
+          state = states.ASCII;
+
+        // 4. If lead is 0x28 and byte is 0x4A, set state to Roman.
+        if (lead === 0x28 && bite === 0x4A)
+          state = states.Roman;
+
+        // 5. If lead is 0x28 and byte is 0x49, set state to Katakana.
+        if (lead === 0x28 && bite === 0x49)
+          state = states.Katakana;
+
+        // 6. If lead is 0x24 and byte is either 0x40 or 0x42, set
+        // state to lead byte.
+        if (lead === 0x24 && (bite === 0x40 || bite === 0x42))
+          state = states.LeadByte;
+
+        // 7. If state is non-null, run these substeps:
+        if (state !== null) {
+          // 1. Set iso-2022-jp decoder state and iso-2022-jp decoder
+          // output state to states.
+          iso2022jp_decoder_state = iso2022jp_decoder_state = state;
+
+          // 2. Let output flag be the iso-2022-jp output flag.
+          var output_flag = iso2022jp_output_flag;
+
+          // 3. Set the iso-2022-jp output flag.
+          iso2022jp_output_flag = true;
+
+          // 4. Return continue, if output flag is unset, and error
+          // otherwise.
+          return !output_flag ? null : decoderError(fatal);
+        }
+
+        // 8. Prepend lead and byte to stream.
+        stream.prepend([lead, bite]);
+
+        // 9. Unset the iso-2022-jp output flag, set iso-2022-jp
+        // decoder state to iso-2022-jp decoder output state and
+        // return error.
+        iso2022jp_output_flag = false;
+        iso2022jp_decoder_state = iso2022jp_decoder_output_state;
+        return decoderError(fatal);
+      }
+    };
+  }
+
+  // 13.2.2 iso-2022-jp encoder
+  /**
+   * @constructor
+   * @implements {Encoder}
+   * @param {{fatal: boolean}} options
+   */
+  function ISO2022JPEncoder(options) {
+    var fatal = options.fatal;
+    // iso-2022-jp's encoder has an associated iso-2022-jp encoder
+    // state which is one of ASCII, Roman, and jis0208 (initially
+    // ASCII).
+    /** @enum */
+    var states = {
+      ASCII: 0,
+      Roman: 1,
+      jis0208: 2
+    };
+    var /** @type {number} */ iso2022jp_state = states.ASCII;
+    /**
+     * @param {Stream} stream Input stream.
+     * @param {number} code_point Next code point read from the stream.
+     * @return {(number|!Array.<number>)} Byte(s) to emit.
+     */
+    this.handler = function(stream, code_point) {
+      // 1. If code point is end-of-stream and iso-2022-jp encoder
+      // state is not ASCII, prepend code point to stream, set
+      // iso-2022-jp encoder state to ASCII, and return three bytes
+      // 0x1B 0x28 0x42.
+      if (code_point === end_of_stream &&
+          iso2022jp_state !== states.ASCII) {
+        stream.prepend(code_point);
+        iso2022jp_state = states.ASCII;
+        return [0x1B, 0x28, 0x42];
+      }
+
+      // 2. If code point is end-of-stream and iso-2022-jp encoder
+      // state is ASCII, return finished.
+      if (code_point === end_of_stream && iso2022jp_state === states.ASCII)
+        return finished;
+
+      // 3. If ISO-2022-JP encoder state is ASCII or Roman, and code
+      // point is U+000E, U+000F, or U+001B, return error with U+FFFD.
+      if ((iso2022jp_state === states.ASCII ||
+           iso2022jp_state === states.Roman) &&
+          (code_point === 0x000E || code_point === 0x000F ||
+           code_point === 0x001B)) {
+        return encoderError(0xFFFD);
+      }
+
+      // 4. If iso-2022-jp encoder state is ASCII and code point is an
+      // ASCII code point, return a byte whose value is code point.
+      if (iso2022jp_state === states.ASCII &&
+          isASCIICodePoint(code_point))
+        return code_point;
+
+      // 5. If iso-2022-jp encoder state is Roman and code point is an
+      // ASCII code point, excluding U+005C and U+007E, or is U+00A5
+      // or U+203E, run these substeps:
+      if (iso2022jp_state === states.Roman &&
+          ((isASCIICodePoint(code_point) &&
+           code_point !== 0x005C && code_point !== 0x007E) ||
+          (code_point == 0x00A5 || code_point == 0x203E))) {
+
+        // 1. If code point is an ASCII code point, return a byte
+        // whose value is code point.
+        if (isASCIICodePoint(code_point))
+          return code_point;
+
+        // 2. If code point is U+00A5, return byte 0x5C.
+        if (code_point === 0x00A5)
+          return 0x5C;
+
+        // 3. If code point is U+203E, return byte 0x7E.
+        if (code_point === 0x203E)
+          return 0x7E;
+      }
+
+      // 6. If code point is an ASCII code point, and iso-2022-jp
+      // encoder state is not ASCII, prepend code point to stream, set
+      // iso-2022-jp encoder state to ASCII, and return three bytes
+      // 0x1B 0x28 0x42.
+      if (isASCIICodePoint(code_point) &&
+          iso2022jp_state !== states.ASCII) {
+        stream.prepend(code_point);
+        iso2022jp_state = states.ASCII;
+        return [0x1B, 0x28, 0x42];
+      }
+
+      // 7. If code point is either U+00A5 or U+203E, and iso-2022-jp
+      // encoder state is not Roman, prepend code point to stream, set
+      // iso-2022-jp encoder state to Roman, and return three bytes
+      // 0x1B 0x28 0x4A.
+      if ((code_point === 0x00A5 || code_point === 0x203E) &&
+          iso2022jp_state !== states.Roman) {
+        stream.prepend(code_point);
+        iso2022jp_state = states.Roman;
+        return [0x1B, 0x28, 0x4A];
+      }
+
+      // 8. If code point is U+2212, set it to U+FF0D.
+      if (code_point === 0x2212)
+        code_point = 0xFF0D;
+
+      // 9. Let pointer be the index pointer for code point in index
+      // jis0208.
+      var pointer = indexPointerFor(code_point, index('jis0208'));
+
+      // 10. If pointer is null, return error with code point.
+      if (pointer === null)
+        return encoderError(code_point);
+
+      // 11. If iso-2022-jp encoder state is not jis0208, prepend code
+      // point to stream, set iso-2022-jp encoder state to jis0208,
+      // and return three bytes 0x1B 0x24 0x42.
+      if (iso2022jp_state !== states.jis0208) {
+        stream.prepend(code_point);
+        iso2022jp_state = states.jis0208;
+        return [0x1B, 0x24, 0x42];
+      }
+
+      // 12. Let lead be floor(pointer / 94) + 0x21.
+      var lead = floor(pointer / 94) + 0x21;
+
+      // 13. Let trail be pointer % 94 + 0x21.
+      var trail = pointer % 94 + 0x21;
+
+      // 14. Return two bytes whose values are lead and trail.
+      return [lead, trail];
+    };
+  }
+
+  /** @param {{fatal: boolean}} options */
+  encoders['ISO-2022-JP'] = function(options) {
+    return new ISO2022JPEncoder(options);
+  };
+  /** @param {{fatal: boolean}} options */
+  decoders['ISO-2022-JP'] = function(options) {
+    return new ISO2022JPDecoder(options);
+  };
+
+  // 13.3 Shift_JIS
+
+  // 13.3.1 Shift_JIS decoder
+  /**
+   * @constructor
+   * @implements {Decoder}
+   * @param {{fatal: boolean}} options
+   */
+  function ShiftJISDecoder(options) {
+    var fatal = options.fatal;
+    // Shift_JIS's decoder has an associated Shift_JIS lead (initially
+    // 0x00).
+    var /** @type {number} */ Shift_JIS_lead = 0x00;
+    /**
+     * @param {Stream} stream The stream of bytes being decoded.
+     * @param {number} bite The next byte read from the stream.
+     * @return {?(number|!Array.<number>)} The next code point(s)
+     *     decoded, or null if not enough data exists in the input
+     *     stream to decode a complete code point.
+     */
+    this.handler = function(stream, bite) {
+      // 1. If byte is end-of-stream and Shift_JIS lead is not 0x00,
+      // set Shift_JIS lead to 0x00 and return error.
+      if (bite === end_of_stream && Shift_JIS_lead !== 0x00) {
+        Shift_JIS_lead = 0x00;
+        return decoderError(fatal);
+      }
+
+      // 2. If byte is end-of-stream and Shift_JIS lead is 0x00,
+      // return finished.
+      if (bite === end_of_stream && Shift_JIS_lead === 0x00)
+        return finished;
+
+      // 3. If Shift_JIS lead is not 0x00, let lead be Shift_JIS lead,
+      // let pointer be null, set Shift_JIS lead to 0x00, and then run
+      // these substeps:
+      if (Shift_JIS_lead !== 0x00) {
+        var lead = Shift_JIS_lead;
+        var pointer = null;
+        Shift_JIS_lead = 0x00;
+
+        // 1. Let offset be 0x40, if byte is less than 0x7F, and 0x41
+        // otherwise.
+        var offset = (bite < 0x7F) ? 0x40 : 0x41;
+
+        // 2. Let lead offset be 0x81, if lead is less than 0xA0, and
+        // 0xC1 otherwise.
+        var lead_offset = (lead < 0xA0) ? 0x81 : 0xC1;
+
+        // 3. If byte is in the range 0x40 to 0x7E, inclusive, or 0x80
+        // to 0xFC, inclusive, set pointer to (lead − lead offset) ×
+        // 188 + byte − offset.
+        if (inRange(bite, 0x40, 0x7E) || inRange(bite, 0x80, 0xFC))
+          pointer = (lead - lead_offset) * 188 + bite - offset;
+
+        // 4. If pointer is in the range 8836 to 10715, inclusive,
+        // return a code point whose value is 0xE000 − 8836 + pointer.
+        if (inRange(pointer, 8836, 10715))
+          return 0xE000 - 8836 + pointer;
+
+        // 5. Let code point be null, if pointer is null, and the
+        // index code point for pointer in index jis0208 otherwise.
+        var code_point = (pointer === null) ? null :
+              indexCodePointFor(pointer, index('jis0208'));
+
+        // 6. If code point is null and byte is an ASCII byte, prepend
+        // byte to stream.
+        if (code_point === null && isASCIIByte(bite))
+          stream.prepend(bite);
+
+        // 7. If code point is null, return error.
+        if (code_point === null)
+          return decoderError(fatal);
+
+        // 8. Return a code point whose value is code point.
+        return code_point;
+      }
+
+      // 4. If byte is an ASCII byte or 0x80, return a code point
+      // whose value is byte.
+      if (isASCIIByte(bite) || bite === 0x80)
+        return bite;
+
+      // 5. If byte is in the range 0xA1 to 0xDF, inclusive, return a
+      // code point whose value is 0xFF61 − 0xA1 + byte.
+      if (inRange(bite, 0xA1, 0xDF))
+        return 0xFF61 - 0xA1 + bite;
+
+      // 6. If byte is in the range 0x81 to 0x9F, inclusive, or 0xE0
+      // to 0xFC, inclusive, set Shift_JIS lead to byte and return
+      // continue.
+      if (inRange(bite, 0x81, 0x9F) || inRange(bite, 0xE0, 0xFC)) {
+        Shift_JIS_lead = bite;
+        return null;
+      }
+
+      // 7. Return error.
+      return decoderError(fatal);
+    };
+  }
+
+  // 13.3.2 Shift_JIS encoder
+  /**
+   * @constructor
+   * @implements {Encoder}
+   * @param {{fatal: boolean}} options
+   */
+  function ShiftJISEncoder(options) {
+    var fatal = options.fatal;
+    /**
+     * @param {Stream} stream Input stream.
+     * @param {number} code_point Next code point read from the stream.
+     * @return {(number|!Array.<number>)} Byte(s) to emit.
+     */
+    this.handler = function(stream, code_point) {
+      // 1. If code point is end-of-stream, return finished.
+      if (code_point === end_of_stream)
+        return finished;
+
+      // 2. If code point is an ASCII code point or U+0080, return a
+      // byte whose value is code point.
+      if (isASCIICodePoint(code_point) || code_point === 0x0080)
+        return code_point;
+
+      // 3. If code point is U+00A5, return byte 0x5C.
+      if (code_point === 0x00A5)
+        return 0x5C;
+
+      // 4. If code point is U+203E, return byte 0x7E.
+      if (code_point === 0x203E)
+        return 0x7E;
+
+      // 5. If code point is in the range U+FF61 to U+FF9F, inclusive,
+      // return a byte whose value is code point − 0xFF61 + 0xA1.
+      if (inRange(code_point, 0xFF61, 0xFF9F))
+        return code_point - 0xFF61 + 0xA1;
+
+      // 6. If code point is U+2212, set it to U+FF0D.
+      if (code_point === 0x2212)
+        code_point = 0xFF0D;
+
+      // 7. Let pointer be the index Shift_JIS pointer for code point.
+      var pointer = indexShiftJISPointerFor(code_point);
+
+      // 8. If pointer is null, return error with code point.
+      if (pointer === null)
+        return encoderError(code_point);
+
+      // 9. Let lead be floor(pointer / 188).
+      var lead = floor(pointer / 188);
+
+      // 10. Let lead offset be 0x81, if lead is less than 0x1F, and
+      // 0xC1 otherwise.
+      var lead_offset = (lead < 0x1F) ? 0x81 : 0xC1;
+
+      // 11. Let trail be pointer % 188.
+      var trail = pointer % 188;
+
+      // 12. Let offset be 0x40, if trail is less than 0x3F, and 0x41
+      // otherwise.
+      var offset = (trail < 0x3F) ? 0x40 : 0x41;
+
+      // 13. Return two bytes whose values are lead + lead offset and
+      // trail + offset.
+      return [lead + lead_offset, trail + offset];
+    };
+  }
+
+  /** @param {{fatal: boolean}} options */
+  encoders['Shift_JIS'] = function(options) {
+    return new ShiftJISEncoder(options);
+  };
+  /** @param {{fatal: boolean}} options */
+  decoders['Shift_JIS'] = function(options) {
+    return new ShiftJISDecoder(options);
+  };
+
+  //
+  // 14. Legacy multi-byte Korean encodings
+  //
+
+  // 14.1 euc-kr
+
+  // 14.1.1 euc-kr decoder
+  /**
+   * @constructor
+   * @implements {Decoder}
+   * @param {{fatal: boolean}} options
+   */
+  function EUCKRDecoder(options) {
+    var fatal = options.fatal;
+
+    // euc-kr's decoder has an associated euc-kr lead (initially 0x00).
+    var /** @type {number} */ euckr_lead = 0x00;
+    /**
+     * @param {Stream} stream The stream of bytes being decoded.
+     * @param {number} bite The next byte read from the stream.
+     * @return {?(number|!Array.<number>)} The next code point(s)
+     *     decoded, or null if not enough data exists in the input
+     *     stream to decode a complete code point.
+     */
+    this.handler = function(stream, bite) {
+      // 1. If byte is end-of-stream and euc-kr lead is not 0x00, set
+      // euc-kr lead to 0x00 and return error.
+      if (bite === end_of_stream && euckr_lead !== 0) {
+        euckr_lead = 0x00;
+        return decoderError(fatal);
+      }
+
+      // 2. If byte is end-of-stream and euc-kr lead is 0x00, return
+      // finished.
+      if (bite === end_of_stream && euckr_lead === 0)
+        return finished;
+
+      // 3. If euc-kr lead is not 0x00, let lead be euc-kr lead, let
+      // pointer be null, set euc-kr lead to 0x00, and then run these
+      // substeps:
+      if (euckr_lead !== 0x00) {
+        var lead = euckr_lead;
+        var pointer = null;
+        euckr_lead = 0x00;
+
+        // 1. If byte is in the range 0x41 to 0xFE, inclusive, set
+        // pointer to (lead − 0x81) × 190 + (byte − 0x41).
+        if (inRange(bite, 0x41, 0xFE))
+          pointer = (lead - 0x81) * 190 + (bite - 0x41);
+
+        // 2. Let code point be null, if pointer is null, and the
+        // index code point for pointer in index euc-kr otherwise.
+        var code_point = (pointer === null)
+              ? null : indexCodePointFor(pointer, index('euc-kr'));
+
+        // 3. If code point is null and byte is an ASCII byte, prepend
+        // byte to stream.
+        if (pointer === null && isASCIIByte(bite))
+          stream.prepend(bite);
+
+        // 4. If code point is null, return error.
+        if (code_point === null)
+          return decoderError(fatal);
+
+        // 5. Return a code point whose value is code point.
+        return code_point;
+      }
+
+      // 4. If byte is an ASCII byte, return a code point whose value
+      // is byte.
+      if (isASCIIByte(bite))
+        return bite;
+
+      // 5. If byte is in the range 0x81 to 0xFE, inclusive, set
+      // euc-kr lead to byte and return continue.
+      if (inRange(bite, 0x81, 0xFE)) {
+        euckr_lead = bite;
+        return null;
+      }
+
+      // 6. Return error.
+      return decoderError(fatal);
+    };
+  }
+
+  // 14.1.2 euc-kr encoder
+  /**
+   * @constructor
+   * @implements {Encoder}
+   * @param {{fatal: boolean}} options
+   */
+  function EUCKREncoder(options) {
+    var fatal = options.fatal;
+    /**
+     * @param {Stream} stream Input stream.
+     * @param {number} code_point Next code point read from the stream.
+     * @return {(number|!Array.<number>)} Byte(s) to emit.
+     */
+    this.handler = function(stream, code_point) {
+      // 1. If code point is end-of-stream, return finished.
+      if (code_point === end_of_stream)
+        return finished;
+
+      // 2. If code point is an ASCII code point, return a byte whose
+      // value is code point.
+      if (isASCIICodePoint(code_point))
+        return code_point;
+
+      // 3. Let pointer be the index pointer for code point in index
+      // euc-kr.
+      var pointer = indexPointerFor(code_point, index('euc-kr'));
+
+      // 4. If pointer is null, return error with code point.
+      if (pointer === null)
+        return encoderError(code_point);
+
+      // 5. Let lead be floor(pointer / 190) + 0x81.
+      var lead = floor(pointer / 190) + 0x81;
+
+      // 6. Let trail be pointer % 190 + 0x41.
+      var trail = (pointer % 190) + 0x41;
+
+      // 7. Return two bytes whose values are lead and trail.
+      return [lead, trail];
+    };
+  }
+
+  /** @param {{fatal: boolean}} options */
+  encoders['EUC-KR'] = function(options) {
+    return new EUCKREncoder(options);
+  };
+  /** @param {{fatal: boolean}} options */
+  decoders['EUC-KR'] = function(options) {
+    return new EUCKRDecoder(options);
+  };
+
+
+  //
+  // 15. Legacy miscellaneous encodings
+  //
+
+  // 15.1 replacement
+
+  // Not needed - API throws RangeError
+
+  // 15.2 Common infrastructure for utf-16be and utf-16le
+
+  /**
+   * @param {number} code_unit
+   * @param {boolean} utf16be
+   * @return {!Array.<number>} bytes
+   */
+  function convertCodeUnitToBytes(code_unit, utf16be) {
+    // 1. Let byte1 be code unit >> 8.
+    var byte1 = code_unit >> 8;
+
+    // 2. Let byte2 be code unit & 0x00FF.
+    var byte2 = code_unit & 0x00FF;
+
+    // 3. Then return the bytes in order:
+        // utf-16be flag is set: byte1, then byte2.
+    if (utf16be)
+      return [byte1, byte2];
+    // utf-16be flag is unset: byte2, then byte1.
+    return [byte2, byte1];
+  }
+
+  // 15.2.1 shared utf-16 decoder
+  /**
+   * @constructor
+   * @implements {Decoder}
+   * @param {boolean} utf16_be True if big-endian, false if little-endian.
+   * @param {{fatal: boolean}} options
+   */
+  function UTF16Decoder(utf16_be, options) {
+    var fatal = options.fatal;
+    var /** @type {?number} */ utf16_lead_byte = null,
+        /** @type {?number} */ utf16_lead_surrogate = null;
+    /**
+     * @param {Stream} stream The stream of bytes being decoded.
+     * @param {number} bite The next byte read from the stream.
+     * @return {?(number|!Array.<number>)} The next code point(s)
+     *     decoded, or null if not enough data exists in the input
+     *     stream to decode a complete code point.
+     */
+    this.handler = function(stream, bite) {
+      // 1. If byte is end-of-stream and either utf-16 lead byte or
+      // utf-16 lead surrogate is not null, set utf-16 lead byte and
+      // utf-16 lead surrogate to null, and return error.
+      if (bite === end_of_stream && (utf16_lead_byte !== null ||
+                                utf16_lead_surrogate !== null)) {
+        return decoderError(fatal);
+      }
+
+      // 2. If byte is end-of-stream and utf-16 lead byte and utf-16
+      // lead surrogate are null, return finished.
+      if (bite === end_of_stream && utf16_lead_byte === null &&
+          utf16_lead_surrogate === null) {
+        return finished;
+      }
+
+      // 3. If utf-16 lead byte is null, set utf-16 lead byte to byte
+      // and return continue.
+      if (utf16_lead_byte === null) {
+        utf16_lead_byte = bite;
+        return null;
+      }
+
+      // 4. Let code unit be the result of:
+      var code_unit;
+      if (utf16_be) {
+        // utf-16be decoder flag is set
+        //   (utf-16 lead byte << 8) + byte.
+        code_unit = (utf16_lead_byte << 8) + bite;
+      } else {
+        // utf-16be decoder flag is unset
+        //   (byte << 8) + utf-16 lead byte.
+        code_unit = (bite << 8) + utf16_lead_byte;
+      }
+      // Then set utf-16 lead byte to null.
+      utf16_lead_byte = null;
+
+      // 5. If utf-16 lead surrogate is not null, let lead surrogate
+      // be utf-16 lead surrogate, set utf-16 lead surrogate to null,
+      // and then run these substeps:
+      if (utf16_lead_surrogate !== null) {
+        var lead_surrogate = utf16_lead_surrogate;
+        utf16_lead_surrogate = null;
+
+        // 1. If code unit is in the range U+DC00 to U+DFFF,
+        // inclusive, return a code point whose value is 0x10000 +
+        // ((lead surrogate − 0xD800) << 10) + (code unit − 0xDC00).
+        if (inRange(code_unit, 0xDC00, 0xDFFF)) {
+          return 0x10000 + (lead_surrogate - 0xD800) * 0x400 +
+              (code_unit - 0xDC00);
+        }
+
+        // 2. Prepend the sequence resulting of converting code unit
+        // to bytes using utf-16be decoder flag to stream and return
+        // error.
+        stream.prepend(convertCodeUnitToBytes(code_unit, utf16_be));
+        return decoderError(fatal);
+      }
+
+      // 6. If code unit is in the range U+D800 to U+DBFF, inclusive,
+      // set utf-16 lead surrogate to code unit and return continue.
+      if (inRange(code_unit, 0xD800, 0xDBFF)) {
+        utf16_lead_surrogate = code_unit;
+        return null;
+      }
+
+      // 7. If code unit is in the range U+DC00 to U+DFFF, inclusive,
+      // return error.
+      if (inRange(code_unit, 0xDC00, 0xDFFF))
+        return decoderError(fatal);
+
+      // 8. Return code point code unit.
+      return code_unit;
+    };
+  }
+
+  // 15.2.2 shared utf-16 encoder
+  /**
+   * @constructor
+   * @implements {Encoder}
+   * @param {boolean} utf16_be True if big-endian, false if little-endian.
+   * @param {{fatal: boolean}} options
+   */
+  function UTF16Encoder(utf16_be, options) {
+    var fatal = options.fatal;
+    /**
+     * @param {Stream} stream Input stream.
+     * @param {number} code_point Next code point read from the stream.
+     * @return {(number|!Array.<number>)} Byte(s) to emit.
+     */
+    this.handler = function(stream, code_point) {
+      // 1. If code point is end-of-stream, return finished.
+      if (code_point === end_of_stream)
+        return finished;
+
+      // 2. If code point is in the range U+0000 to U+FFFF, inclusive,
+      // return the sequence resulting of converting code point to
+      // bytes using utf-16be encoder flag.
+      if (inRange(code_point, 0x0000, 0xFFFF))
+        return convertCodeUnitToBytes(code_point, utf16_be);
+
+      // 3. Let lead be ((code point − 0x10000) >> 10) + 0xD800,
+      // converted to bytes using utf-16be encoder flag.
+      var lead = convertCodeUnitToBytes(
+        ((code_point - 0x10000) >> 10) + 0xD800, utf16_be);
+
+      // 4. Let trail be ((code point − 0x10000) & 0x3FF) + 0xDC00,
+      // converted to bytes using utf-16be encoder flag.
+      var trail = convertCodeUnitToBytes(
+        ((code_point - 0x10000) & 0x3FF) + 0xDC00, utf16_be);
+
+      // 5. Return a byte sequence of lead followed by trail.
+      return lead.concat(trail);
+    };
+  }
+
+  // 15.3 utf-16be
+  // 15.3.1 utf-16be decoder
+  /** @param {{fatal: boolean}} options */
+  encoders['UTF-16BE'] = function(options) {
+    return new UTF16Encoder(true, options);
+  };
+  // 15.3.2 utf-16be encoder
+  /** @param {{fatal: boolean}} options */
+  decoders['UTF-16BE'] = function(options) {
+    return new UTF16Decoder(true, options);
+  };
+
+  // 15.4 utf-16le
+  // 15.4.1 utf-16le decoder
+  /** @param {{fatal: boolean}} options */
+  encoders['UTF-16LE'] = function(options) {
+    return new UTF16Encoder(false, options);
+  };
+  // 15.4.2 utf-16le encoder
+  /** @param {{fatal: boolean}} options */
+  decoders['UTF-16LE'] = function(options) {
+    return new UTF16Decoder(false, options);
+  };
+
+  // 15.5 x-user-defined
+
+  // 15.5.1 x-user-defined decoder
+  /**
+   * @constructor
+   * @implements {Decoder}
+   * @param {{fatal: boolean}} options
+   */
+  function XUserDefinedDecoder(options) {
+    var fatal = options.fatal;
+    /**
+     * @param {Stream} stream The stream of bytes being decoded.
+     * @param {number} bite The next byte read from the stream.
+     * @return {?(number|!Array.<number>)} The next code point(s)
+     *     decoded, or null if not enough data exists in the input
+     *     stream to decode a complete code point.
+     */
+    this.handler = function(stream, bite) {
+      // 1. If byte is end-of-stream, return finished.
+      if (bite === end_of_stream)
+        return finished;
+
+      // 2. If byte is an ASCII byte, return a code point whose value
+      // is byte.
+      if (isASCIIByte(bite))
+        return bite;
+
+      // 3. Return a code point whose value is 0xF780 + byte − 0x80.
+      return 0xF780 + bite - 0x80;
+    };
+  }
+
+  // 15.5.2 x-user-defined encoder
+  /**
+   * @constructor
+   * @implements {Encoder}
+   * @param {{fatal: boolean}} options
+   */
+  function XUserDefinedEncoder(options) {
+    var fatal = options.fatal;
+    /**
+     * @param {Stream} stream Input stream.
+     * @param {number} code_point Next code point read from the stream.
+     * @return {(number|!Array.<number>)} Byte(s) to emit.
+     */
+    this.handler = function(stream, code_point) {
+      // 1.If code point is end-of-stream, return finished.
+      if (code_point === end_of_stream)
+        return finished;
+
+      // 2. If code point is an ASCII code point, return a byte whose
+      // value is code point.
+      if (isASCIICodePoint(code_point))
+        return code_point;
+
+      // 3. If code point is in the range U+F780 to U+F7FF, inclusive,
+      // return a byte whose value is code point − 0xF780 + 0x80.
+      if (inRange(code_point, 0xF780, 0xF7FF))
+        return code_point - 0xF780 + 0x80;
+
+      // 4. Return error with code point.
+      return encoderError(code_point);
+    };
+  }
+
+  /** @param {{fatal: boolean}} options */
+  encoders['x-user-defined'] = function(options) {
+    return new XUserDefinedEncoder(options);
+  };
+  /** @param {{fatal: boolean}} options */
+  decoders['x-user-defined'] = function(options) {
+    return new XUserDefinedDecoder(options);
+  };
+
+  if (!global['TextEncoder'])
+    global['TextEncoder'] = TextEncoder;
+  if (!global['TextDecoder'])
+    global['TextDecoder'] = TextDecoder;
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+      TextEncoder: global['TextEncoder'],
+      TextDecoder: global['TextDecoder'],
+      EncodingIndexes: global["encoding-indexes"]
+    };
+  }
+
+// For strict environments where `this` inside the global scope
+// is `undefined`, take a pure object instead
+}(this || {}));
+
+},{"./encoding-indexes.js":7}],94:[function(require,module,exports){
+arguments[4][41][0].apply(exports,arguments)
+},{"./lib/type":95,"dup":41}],95:[function(require,module,exports){
+/*!
+ * type-detect
+ * Copyright(c) 2013 jake luer <jake@alogicalparadox.com>
+ * MIT Licensed
+ */
+
+/*!
+ * Primary Exports
+ */
+
+var exports = module.exports = getType;
+
+/**
+ * ### typeOf (obj)
+ *
+ * Use several different techniques to determine
+ * the type of object being tested.
+ *
+ *
+ * @param {Mixed} object
+ * @return {String} object type
+ * @api public
+ */
+var objectTypeRegexp = /^\[object (.*)\]$/;
+
+function getType(obj) {
+  var type = Object.prototype.toString.call(obj).match(objectTypeRegexp)[1].toLowerCase();
+  // Let "new String('')" return 'object'
+  if (typeof Promise === 'function' && obj instanceof Promise) return 'promise';
+  // PhantomJS has type "DOMWindow" for null
+  if (obj === null) return 'null';
+  // PhantomJS has type "DOMWindow" for undefined
+  if (obj === undefined) return 'undefined';
+  return type;
+}
+
+exports.Library = Library;
+
+/**
+ * ### Library
+ *
+ * Create a repository for custom type detection.
+ *
+ * ```js
+ * var lib = new type.Library;
+ * ```
+ *
+ */
+
+function Library() {
+  if (!(this instanceof Library)) return new Library();
+  this.tests = {};
 }
 
 /**
- * The function getMinNorthing returns the minimum northing value of a MGRS
- * zone.
+ * #### .of (obj)
  *
- * Ported from Geotrans' c Lattitude_Band_Value structure table.
+ * Expose replacement `typeof` detection to the library.
  *
- * @private
- * @param {char} zoneLetter The MGRS zone to get the min northing for.
- * @return {number}
+ * ```js
+ * if ('string' === lib.of('hello world')) {
+ *   // ...
+ * }
+ * ```
+ *
+ * @param {Mixed} object to test
+ * @return {String} type
  */
-function getMinNorthing(zoneLetter) {
-  var northing;
-  switch (zoneLetter) {
-  case 'C':
-    northing = 1100000.0;
-    break;
-  case 'D':
-    northing = 2000000.0;
-    break;
-  case 'E':
-    northing = 2800000.0;
-    break;
-  case 'F':
-    northing = 3700000.0;
-    break;
-  case 'G':
-    northing = 4600000.0;
-    break;
-  case 'H':
-    northing = 5500000.0;
-    break;
-  case 'J':
-    northing = 6400000.0;
-    break;
-  case 'K':
-    northing = 7300000.0;
-    break;
-  case 'L':
-    northing = 8200000.0;
-    break;
-  case 'M':
-    northing = 9100000.0;
-    break;
-  case 'N':
-    northing = 0.0;
-    break;
-  case 'P':
-    northing = 800000.0;
-    break;
-  case 'Q':
-    northing = 1700000.0;
-    break;
-  case 'R':
-    northing = 2600000.0;
-    break;
-  case 'S':
-    northing = 3500000.0;
-    break;
-  case 'T':
-    northing = 4400000.0;
-    break;
-  case 'U':
-    northing = 5300000.0;
-    break;
-  case 'V':
-    northing = 6200000.0;
-    break;
-  case 'W':
-    northing = 7000000.0;
-    break;
-  case 'X':
-    northing = 7900000.0;
-    break;
-  default:
-    northing = -1.0;
-  }
-  if (northing >= 0.0) {
-    return northing;
-  }
-  else {
-    throw ("Invalid zone letter: " + zoneLetter);
-  }
 
-}
+Library.prototype.of = getType;
 
-},{}],170:[function(require,module,exports){
-module.exports={
-  "name": "proj4",
-  "version": "2.1.4",
-  "description": "Proj4js is a JavaScript library to transform point coordinates from one coordinate system to another, including datum transformations.",
-  "main": "lib/index.js",
-  "directories": {
-    "test": "test",
-    "doc": "docs"
-  },
-  "scripts": {
-    "test": "./node_modules/istanbul/lib/cli.js test ./node_modules/mocha/bin/_mocha test/test.js"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/proj4js/proj4js.git"
-  },
-  "author": "",
-  "license": "MIT",
-  "jam": {
-    "main": "dist/proj4.js",
-    "include": [
-      "dist/proj4.js",
-      "README.md",
-      "AUTHORS",
-      "LICENSE.md"
-    ]
-  },
-  "devDependencies": {
-    "grunt-cli": "~0.1.13",
-    "grunt": "~0.4.2",
-    "grunt-contrib-connect": "~0.6.0",
-    "grunt-contrib-jshint": "~0.8.0",
-    "chai": "~1.8.1",
-    "mocha": "~1.17.1",
-    "grunt-mocha-phantomjs": "~0.4.0",
-    "browserify": "~3.24.5",
-    "grunt-browserify": "~1.3.0",
-    "grunt-contrib-uglify": "~0.3.2",
-    "curl": "git://github.com/cujojs/curl.git",
-    "istanbul": "~0.2.4",
-    "tin": "~0.4.0"
-  },
-  "dependencies": {
-    "mgrs": "0.0.0"
-  },
-  "contributors": [
-    {
-      "name": "Mike Adair",
-      "email": "madair@dmsolutions.ca"
-    },
-    {
-      "name": "Richard Greenwood",
-      "email": "rich@greenwoodmap.com"
-    },
-    {
-      "name": "Calvin Metcalf",
-      "email": "calvin.metcalf@gmail.com"
-    },
-    {
-      "name": "Richard Marsden",
-      "url": "http://www.winwaed.com"
-    },
-    {
-      "name": "T. Mittan"
-    },
-    {
-      "name": "D. Steinwand"
-    },
-    {
-      "name": "S. Nelson"
-    }
-  ],
-  "bugs": {
-    "url": "https://github.com/proj4js/proj4js/issues"
-  },
-  "homepage": "https://github.com/proj4js/proj4js",
-  "_id": "proj4@2.1.4",
-  "dist": {
-    "shasum": "d57b39ae1ed47b207d0fc7b0010498dc35fd6d09",
-    "tarball": "http://registry.npmjs.org/proj4/-/proj4-2.1.4.tgz"
-  },
-  "_from": "proj4@>=2.1.0 <2.2.0",
-  "_npmVersion": "1.4.3",
-  "_npmUser": {
-    "name": "cwmma",
-    "email": "calvin.metcalf@gmail.com"
-  },
-  "maintainers": [
-    {
-      "name": "cwmma",
-      "email": "calvin.metcalf@gmail.com"
-    },
-    {
-      "name": "ahocevar",
-      "email": "andreas.hocevar@gmail.com"
-    }
-  ],
-  "_shasum": "d57b39ae1ed47b207d0fc7b0010498dc35fd6d09",
-  "_resolved": "https://registry.npmjs.org/proj4/-/proj4-2.1.4.tgz",
-  "readme": "ERROR: No README data found!"
-}
+/**
+ * #### .define (type, test)
+ *
+ * Add a test to for the `.test()` assertion.
+ *
+ * Can be defined as a regular expression:
+ *
+ * ```js
+ * lib.define('int', /^[0-9]+$/);
+ * ```
+ *
+ * ... or as a function:
+ *
+ * ```js
+ * lib.define('bln', function (obj) {
+ *   if ('boolean' === lib.of(obj)) return true;
+ *   var blns = [ 'yes', 'no', 'true', 'false', 1, 0 ];
+ *   if ('string' === lib.of(obj)) obj = obj.toLowerCase();
+ *   return !! ~blns.indexOf(obj);
+ * });
+ * ```
+ *
+ * @param {String} type
+ * @param {RegExp|Function} test
+ * @api public
+ */
 
-},{}],171:[function(require,module,exports){
+Library.prototype.define = function(type, test) {
+  if (arguments.length === 1) return this.tests[type];
+  this.tests[type] = test;
+  return this;
+};
+
+/**
+ * #### .test (obj, test)
+ *
+ * Assert that an object is of type. Will first
+ * check natives, and if that does not pass it will
+ * use the user defined custom tests.
+ *
+ * ```js
+ * assert(lib.test('1', 'int'));
+ * assert(lib.test('yes', 'bln'));
+ * ```
+ *
+ * @param {Mixed} object
+ * @param {String} type
+ * @return {Boolean} result
+ * @api public
+ */
+
+Library.prototype.test = function(obj, type) {
+  if (type === getType(obj)) return true;
+  var test = this.tests[type];
+
+  if (test && 'regexp' === getType(test)) {
+    return test.test(obj);
+  } else if (test && 'function' === getType(test)) {
+    return test(obj);
+  } else {
+    throw new ReferenceError('Type test "' + type + '" not defined or invalid.');
+  }
+};
+
+},{}],96:[function(require,module,exports){
 var shp = require('../');
 var chai = require('chai');
 chai.should();
@@ -22728,6 +29046,18 @@ describe('Shp', function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(361);
     });
   });
+  describe('empty attributes table', function(){
+      var pandr =  shp('http://localhost:3000/files/empty-shp.zip');
+    it('should have the right keys', function(){
+      return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type',function(){
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features',function(){
+      return pandr.then(function(a){return a.features}).should.eventually.have.length(2);
+    });
+  });
   describe('errors', function(){
     it('bad file should be rejected', function(){
       return shp('http://localhost:3000/test/data/bad').should.be.rejected;
@@ -22746,6 +29076,52 @@ describe('Shp', function(){
       return shp('http://localhost:3000/test/data/noshp.zip').should.be.rejected;
     });
   });
-
+  describe('encoding', function () {
+    it('should work for utf.zip', function(){
+      return shp('http://localhost:3000/test/data/utf.zip').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.map(function (feature) {
+          return feature.properties.field;
+        });
+      }).should.eventually.deep.equal([
+        '💩',
+        'Hněvošický háj'
+      ]);
+    });
+    it('should work for utf', function(){
+      return shp('http://localhost:3000/test/data/utf').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.map(function (feature) {
+          return feature.properties.field;
+        });
+      }).should.eventually.deep.equal([
+        '💩',
+        'Hněvošický háj'
+      ]);
+    });
+    it('should work for codepage.zip', function(){
+      return shp('http://localhost:3000/test/data/codepage.zip').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.map(function (feature) {
+          return feature.properties.field;
+        });
+      }).should.eventually.deep.equal([
+        '??',
+        'Hněvošický háj'
+      ]);
+    });
+    it('should work for codepage', function(){
+      return shp('http://localhost:3000/test/data/codepage').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.map(function (feature) {
+          return feature.properties.field;
+        });
+      }).should.eventually.deep.equal([
+        '??',
+        'Hněvošický háj'
+      ]);
+    });
+  });
 });
-},{"../":2,"chai":12,"chai-as-promised":11}]},{},[171]);
+
+},{"../":2,"chai":10,"chai-as-promised":9}]},{},[96]);
