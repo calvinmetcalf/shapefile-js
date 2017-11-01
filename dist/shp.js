@@ -147,7 +147,7 @@ ParseShp.prototype.parseZMultiPoint = function(data) {
   } else {
     num = geoJson.coordinates.length;
   }
-  var zOffset = 56 + (num << 4);
+  var zOffset = 52 + (num << 4);
   geoJson.coordinates = this.parseZPointArray(data, zOffset, num, geoJson.coordinates);
   return geoJson;
 };
@@ -179,11 +179,16 @@ ParseShp.prototype.parsePolyline = function(data) {
 ParseShp.prototype.parseZPolyline = function(data) {
   var geoJson = this.parsePolyline(data);
   var num = geoJson.coordinates.length;
-  var zOffset = 60 + (num << 4);
+  var zOffset;
   if (geoJson.type === 'LineString') {
+    zOffset = 60 + (num << 4);
     geoJson.coordinates = this.parseZPointArray(data, zOffset, num, geoJson.coordinates);
     return geoJson;
   } else {
+    var totalPoints = geoJson.coordinates.reduce(function(a, v) {
+      return a + v.length;
+    }, 0);
+    zOffset = 56 + (totalPoints << 4) + (num << 2);
     geoJson.coordinates = this.parseZArrayGroup(data, zOffset, num, geoJson.coordinates);
     return geoJson;
   }
@@ -22807,7 +22812,7 @@ shp.getShapefile = function(base, whiteList) {
           binaryAjax(base + '.dbf'),
           binaryAjax(base + '.cpg')
         ]).then(function(args) {
-          return parseDbf(args[0], args[1])
+          return parseDbf(args[0], args[1]);
         })
       ]).then(shp.combine);
     }
