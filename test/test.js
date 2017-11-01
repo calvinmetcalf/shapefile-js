@@ -102,6 +102,69 @@ describe('Shp', function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(361);
     });
   });
+  describe('z', function(){
+    it('should work with multipoint z', function () {
+      return shp('http://localhost:3000/test/data/export_multipointz').then(function (resp) {
+        return resp.features[0].geometry.coordinates;
+      }).should.eventually.deep.equal([
+        [
+          -123.00000000000001,
+          48.00000000000001,
+          1200
+        ],
+        [
+          -122,
+          47,
+          2500
+        ],
+        [
+          -121,
+          46,
+          3600
+        ]
+      ]);
+    });
+    it('should work with polyline z', function () {
+      return shp('http://localhost:3000/test/data/export_polylinez').then(function (resp) {
+        return resp.features[0].geometry.coordinates;
+      }).should.eventually.deep.equal([
+        [
+          [
+            -119.99999999999999,
+            45,
+            800
+          ],
+          [
+            -119,
+            44,
+            1100
+          ],
+          [
+            -118.00000000000001,
+            43,
+            2300
+          ]
+        ],
+        [
+          [
+            -115,
+            40,
+            0
+          ],
+          [
+            -114.00000000000001,
+            39,
+            0
+          ],
+          [
+            -113,
+            38,
+            0
+          ]
+        ]
+      ]);
+    });
+  });
   describe('empty attributes table', function(){
       var pandr =  shp('http://localhost:3000/files/empty-shp.zip');
     it('should have the right keys', function(){
