@@ -2,7 +2,7 @@
   "name": "shpjs",
   "version": "3.3.2",
   "description": "A binary shapefile loader, for javascript. Not many caveats",
-  "main": "lib/index.js",
+  "main": "dist/shp.js",
   "repository": {
     "type": "git",
     "url": "git://github.com/calvinmetcalf/shapefile-js.git"
