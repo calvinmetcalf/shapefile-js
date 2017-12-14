@@ -162,7 +162,7 @@ shp.getShapefile = function(base, whiteList) {
           binaryAjax(base + '.dbf'),
           binaryAjax(base + '.cpg')
         ]).then(function(args) {
-          return parseDbf(args[0], args[1])
+          return parseDbf(args[0], args[1]);
         })
       ]).then(shp.combine);
     }
@@ -308,7 +308,7 @@ ParseShp.prototype.parseZMultiPoint = function(data) {
   } else {
     num = geoJson.coordinates.length;
   }
-  var zOffset = 56 + (num << 4);
+  var zOffset = 52 + (num << 4);
   geoJson.coordinates = this.parseZPointArray(data, zOffset, num, geoJson.coordinates);
   return geoJson;
 };
@@ -340,11 +340,16 @@ ParseShp.prototype.parsePolyline = function(data) {
 ParseShp.prototype.parseZPolyline = function(data) {
   var geoJson = this.parsePolyline(data);
   var num = geoJson.coordinates.length;
-  var zOffset = 60 + (num << 4);
+  var zOffset;
   if (geoJson.type === 'LineString') {
+    zOffset = 60 + (num << 4);
     geoJson.coordinates = this.parseZPointArray(data, zOffset, num, geoJson.coordinates);
     return geoJson;
   } else {
+    var totalPoints = geoJson.coordinates.reduce(function(a, v) {
+      return a + v.length;
+    }, 0);
+    zOffset = 56 + (totalPoints << 4) + (num << 2);
     geoJson.coordinates = this.parseZArrayGroup(data, zOffset, num, geoJson.coordinates);
     return geoJson;
   }
@@ -29460,6 +29465,69 @@ describe('Shp', function(){
     });
     it('should have the right number of features',function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(361);
+    });
+  });
+  describe('z', function(){
+    it('should work with multipoint z', function () {
+      return shp('http://localhost:3000/test/data/export_multipointz').then(function (resp) {
+        return resp.features[0].geometry.coordinates;
+      }).should.eventually.deep.equal([
+        [
+          -123.00000000000001,
+          48.00000000000001,
+          1200
+        ],
+        [
+          -122,
+          47,
+          2500
+        ],
+        [
+          -121,
+          46,
+          3600
+        ]
+      ]);
+    });
+    it('should work with polyline z', function () {
+      return shp('http://localhost:3000/test/data/export_polylinez').then(function (resp) {
+        return resp.features[0].geometry.coordinates;
+      }).should.eventually.deep.equal([
+        [
+          [
+            -119.99999999999999,
+            45,
+            800
+          ],
+          [
+            -119,
+            44,
+            1100
+          ],
+          [
+            -118.00000000000001,
+            43,
+            2300
+          ]
+        ],
+        [
+          [
+            -115,
+            40,
+            0
+          ],
+          [
+            -114.00000000000001,
+            39,
+            0
+          ],
+          [
+            -113,
+            38,
+            0
+          ]
+        ]
+      ]);
     });
   });
   describe('empty attributes table', function(){
