@@ -61,6 +61,25 @@ You could also load the arraybuffers seperately:
 shp.combine([shp.parseShp(shpBuffer, /*optional prj str*/),shp.parseDbf(dbfBuffer)]);
 ```
 
+If a row conversion function is specified as the third argument, the specified function is invoked for each row, being passed a geometry object representing the current row and the index starting at zero. If an object is returned, it will be used instead of the current one. This can be used for example to save simplified polygons to be able to load bigger files.
+
+```javascript
+function row(geometry, i) {
+	if (i === 0 && geometry.type == 'Point') {
+		return { type: 'Point', coordinates: [0, 0] };
+	}
+}
+
+// Provide a row conversion function when loading the geojson from a path
+shp("files/pandr", null, row).then(function(geojson){
+	//do something with your manipulated geojson
+});
+
+// Provide a row conversion function when loading the shapes separately
+shp.combine([shp.parseShp(shpBuffer, null, row),shp.parseDbf(dbfBuffer)]);
+```
+
+
 ## Stick it in a worker
 
 I used my library [catiline](http://catilinejs.com/) to parallelize the demos to do so I changed

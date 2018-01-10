@@ -165,6 +165,34 @@ describe('Shp', function(){
       ]);
     });
   });
+  describe('row callback', function(){
+    var newPoint = { type: 'Point', coordinates: [0, 1] };
+    var pandr =  shp('http://localhost:3000/files/pandr', null, function row(geometry, i) {
+      if (i === 0 && geometry.type == 'Point') {
+        return newPoint;
+      }
+    });
+    it('should have the right keys', function(){
+    	return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type',function(){
+    	return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features',function(){
+    	return pandr.then(function(a){return a.features;}).should.eventually.have.length(80);
+    });
+    it('should have the manipulated result from the row callback',function(){
+      return pandr.then(function(a){return a.features[0].geometry;})
+      .should.eventually.deep.equal(newPoint);
+    });
+    it('should have the original result when the row callback did not gave anything new',function(){
+      return pandr.then(function(a){return a.features[1].geometry;})
+      .should.eventually.deep.equal({
+        type: 'Point',
+        coordinates: [-71.0766222509774, 41.80337948642367]
+      });
+    });
+  });
   describe('empty attributes table', function(){
       var pandr =  shp('http://localhost:3000/files/empty-shp.zip');
     it('should have the right keys', function(){
