@@ -241,13 +241,13 @@ function makeParseCoord(trans) {
   }
 }
 
-function ParseShp(buffer, trans) {
+function ParseShp(buffer, trans, row) {
   if (!(this instanceof ParseShp)) {
-    return new ParseShp(buffer, trans);
+    return new ParseShp(buffer, trans, row);
   }
   this.buffer = buffer;
   this.shpFuncs(trans);
-  this.rows = this.getRows();
+  this.rows = this.getRows(row);
 }
 ParseShp.prototype.shpFuncs = function(tran) {
   var num = this.getShpCode();
@@ -277,17 +277,21 @@ ParseShp.prototype.parseHeader = function() {
     ]
   };
 };
-ParseShp.prototype.getRows = function() {
+ParseShp.prototype.getRows = function(row) {
+  var rowFunc = row || function(data) { return data; };
   var offset = 100;
   var len = this.buffer.byteLength;
   var out = [];
   var current;
+  var transformedCurrent;
   while (offset < len) {
     current = this.getRow(offset);
     offset += 8;
     offset += current.len;
     if (current.type) {
-      out.push(this.parseFunc(current.data));
+      current = this.parseFunc(current.data);
+      current = rowFunc(current, out.length) || current;
+      out.push(current);
     }
   }
   return out;
@@ -304,8 +308,8 @@ ParseShp.prototype.getRow = function(offset) {
     type: view.readInt32LE(8)
   };
 };
-module.exports = function(buffer, trans) {
-  return new ParseShp(buffer, trans).rows;
+module.exports = function(buffer, trans, row) {
+  return new ParseShp(buffer, trans, row).rows;
 };
 
 },{}],3:[function(require,module,exports){
@@ -2238,7 +2242,14 @@ function isnan (val) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"base64-js":4,"ieee754":7,"isarray":9}],7:[function(require,module,exports){
+},{"base64-js":4,"ieee754":8,"isarray":7}],7:[function(require,module,exports){
+var toString = {}.toString;
+
+module.exports = Array.isArray || function (arr) {
+  return toString.call(arr) == '[object Array]';
+};
+
+},{}],8:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -2324,7 +2335,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 (function (global){
 'use strict';
 var Mutation = global.MutationObserver || global.WebKitMutationObserver;
@@ -2397,13 +2408,6 @@ function immediate(task) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],9:[function(require,module,exports){
-var toString = {}.toString;
-
-module.exports = Array.isArray || function (arr) {
-  return toString.call(arr) == '[object Array]';
-};
-
 },{}],10:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
@@ -5551,7 +5555,7 @@ function race(iterable) {
   }
 }
 
-},{"immediate":8}],35:[function(require,module,exports){
+},{"immediate":9}],35:[function(require,module,exports){
 ;(function () { // closure for web browsers
 
 if (typeof module === 'object' && module.exports) {
@@ -22715,11 +22719,11 @@ function toBuffer(b) {
   }
 }
 
-function shp(base, whiteList) {
+function shp(base, whiteList, row) {
   if (typeof base === 'string' && cache.has(base)) {
     return Promise.resolve(cache.get(base));
   }
-  return shp.getShapefile(base, whiteList).then(function(resp) {
+  return shp.getShapefile(base, whiteList, row).then(function(resp) {
     if (typeof base === 'string') {
       cache.set(base, resp);
     }
@@ -22742,7 +22746,7 @@ shp.combine = function(arr) {
   }
   return out;
 };
-shp.parseZip = function(buffer, whiteList) {
+shp.parseZip = function(buffer, whiteList, row) {
   var key;
   buffer = toBuffer(buffer);
   var zip = unzip(buffer);
@@ -22779,7 +22783,7 @@ shp.parseZip = function(buffer, whiteList) {
       if (zip[name + '.dbf']) {
         dbf = parseDbf(zip[name + '.dbf'], zip[name + '.cpg']);
       }
-      parsed = shp.combine([parseShp(zip[name + '.shp'], zip[name + '.prj']), dbf]);
+      parsed = shp.combine([parseShp(zip[name + '.shp'], zip[name + '.prj'], row), dbf]);
       parsed.fileName = name;
     }
     return parsed;
@@ -22791,22 +22795,22 @@ shp.parseZip = function(buffer, whiteList) {
   }
 };
 
-function getZip(base, whiteList) {
+function getZip(base, whiteList, row) {
   return binaryAjax(base).then(function(a) {
-    return shp.parseZip(a, whiteList);
+    return shp.parseZip(a, whiteList, row);
   });
 }
-shp.getShapefile = function(base, whiteList) {
+shp.getShapefile = function(base, whiteList, row) {
   if (typeof base === 'string') {
     if (base.slice(-4).toLowerCase() === '.zip') {
-      return getZip(base, whiteList);
+      return getZip(base, whiteList, row);
     } else {
       return Promise.all([
         Promise.all([
           binaryAjax(base + '.shp'),
           binaryAjax(base + '.prj')
         ]).then(function(args) {
-          return parseShp(args[0], args[1] ? proj4(args[1]) : false);
+          return parseShp(args[0], args[1] ? proj4(args[1]) : false, row);
         }),
         Promise.all([
           binaryAjax(base + '.dbf'),
@@ -22822,16 +22826,16 @@ shp.getShapefile = function(base, whiteList) {
     });
   }
 };
-shp.parseShp = function(shp, prj) {
+shp.parseShp = function(shp, prj, row) {
   shp = toBuffer(shp);
   if (Buffer.isBuffer(prj)) {
     prj = prj.toString();
   }
   if (typeof prj === 'string') {
     prj = proj4(prj);
-    return parseShp(shp, prj);
+    return parseShp(shp, prj, row);
   } else {
-    return parseShp(shp);
+    return parseShp(shp, row);
   }
 };
 shp.parseDbf = function(dbf, cpg) {

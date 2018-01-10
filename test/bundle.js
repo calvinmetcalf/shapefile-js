@@ -65,11 +65,11 @@ function toBuffer(b) {
   }
 }
 
-function shp(base, whiteList) {
+function shp(base, whiteList, row) {
   if (typeof base === 'string' && cache.has(base)) {
     return Promise.resolve(cache.get(base));
   }
-  return shp.getShapefile(base, whiteList).then(function(resp) {
+  return shp.getShapefile(base, whiteList, row).then(function(resp) {
     if (typeof base === 'string') {
       cache.set(base, resp);
     }
@@ -92,7 +92,7 @@ shp.combine = function(arr) {
   }
   return out;
 };
-shp.parseZip = function(buffer, whiteList) {
+shp.parseZip = function(buffer, whiteList, row) {
   var key;
   buffer = toBuffer(buffer);
   var zip = unzip(buffer);
@@ -129,7 +129,7 @@ shp.parseZip = function(buffer, whiteList) {
       if (zip[name + '.dbf']) {
         dbf = parseDbf(zip[name + '.dbf'], zip[name + '.cpg']);
       }
-      parsed = shp.combine([parseShp(zip[name + '.shp'], zip[name + '.prj']), dbf]);
+      parsed = shp.combine([parseShp(zip[name + '.shp'], zip[name + '.prj'], row), dbf]);
       parsed.fileName = name;
     }
     return parsed;
@@ -141,28 +141,28 @@ shp.parseZip = function(buffer, whiteList) {
   }
 };
 
-function getZip(base, whiteList) {
+function getZip(base, whiteList, row) {
   return binaryAjax(base).then(function(a) {
-    return shp.parseZip(a, whiteList);
+    return shp.parseZip(a, whiteList, row);
   });
 }
-shp.getShapefile = function(base, whiteList) {
+shp.getShapefile = function(base, whiteList, row) {
   if (typeof base === 'string') {
     if (base.slice(-4).toLowerCase() === '.zip') {
-      return getZip(base, whiteList);
+      return getZip(base, whiteList, row);
     } else {
       return Promise.all([
         Promise.all([
           binaryAjax(base + '.shp'),
           binaryAjax(base + '.prj')
         ]).then(function(args) {
-          return parseShp(args[0], args[1] ? proj4(args[1]) : false);
+          return parseShp(args[0], args[1] ? proj4(args[1]) : false, row);
         }),
         Promise.all([
           binaryAjax(base + '.dbf'),
           binaryAjax(base + '.cpg')
         ]).then(function(args) {
-          return parseDbf(args[0], args[1])
+          return parseDbf(args[0], args[1]);
         })
       ]).then(shp.combine);
     }
@@ -172,16 +172,16 @@ shp.getShapefile = function(base, whiteList) {
     });
   }
 };
-shp.parseShp = function(shp, prj) {
+shp.parseShp = function(shp, prj, row) {
   shp = toBuffer(shp);
   if (Buffer.isBuffer(prj)) {
     prj = prj.toString();
   }
   if (typeof prj === 'string') {
     prj = proj4(prj);
-    return parseShp(shp, prj);
+    return parseShp(shp, prj, row);
   } else {
-    return parseShp(shp);
+    return parseShp(shp, row);
   }
 };
 shp.parseDbf = function(dbf, cpg) {
@@ -308,7 +308,7 @@ ParseShp.prototype.parseZMultiPoint = function(data) {
   } else {
     num = geoJson.coordinates.length;
   }
-  var zOffset = 56 + (num << 4);
+  var zOffset = 52 + (num << 4);
   geoJson.coordinates = this.parseZPointArray(data, zOffset, num, geoJson.coordinates);
   return geoJson;
 };
@@ -340,11 +340,16 @@ ParseShp.prototype.parsePolyline = function(data) {
 ParseShp.prototype.parseZPolyline = function(data) {
   var geoJson = this.parsePolyline(data);
   var num = geoJson.coordinates.length;
-  var zOffset = 60 + (num << 4);
+  var zOffset;
   if (geoJson.type === 'LineString') {
+    zOffset = 60 + (num << 4);
     geoJson.coordinates = this.parseZPointArray(data, zOffset, num, geoJson.coordinates);
     return geoJson;
   } else {
+    var totalPoints = geoJson.coordinates.reduce(function(a, v) {
+      return a + v.length;
+    }, 0);
+    zOffset = 56 + (totalPoints << 4) + (num << 2);
     geoJson.coordinates = this.parseZArrayGroup(data, zOffset, num, geoJson.coordinates);
     return geoJson;
   }
@@ -397,13 +402,13 @@ function makeParseCoord(trans) {
   }
 }
 
-function ParseShp(buffer, trans) {
+function ParseShp(buffer, trans, row) {
   if (!(this instanceof ParseShp)) {
-    return new ParseShp(buffer, trans);
+    return new ParseShp(buffer, trans, row);
   }
   this.buffer = buffer;
   this.shpFuncs(trans);
-  this.rows = this.getRows();
+  this.rows = this.getRows(row);
 }
 ParseShp.prototype.shpFuncs = function(tran) {
   var num = this.getShpCode();
@@ -433,17 +438,21 @@ ParseShp.prototype.parseHeader = function() {
     ]
   };
 };
-ParseShp.prototype.getRows = function() {
+ParseShp.prototype.getRows = function(row) {
+  var rowFunc = row || function(data) { return data; };
   var offset = 100;
   var len = this.buffer.byteLength;
   var out = [];
   var current;
+  var transformedCurrent;
   while (offset < len) {
     current = this.getRow(offset);
     offset += 8;
     offset += current.len;
     if (current.type) {
-      out.push(this.parseFunc(current.data));
+      current = this.parseFunc(current.data);
+      current = rowFunc(current, out.length) || current;
+      out.push(current);
     }
   }
   return out;
@@ -460,8 +469,8 @@ ParseShp.prototype.getRow = function(offset) {
     type: view.readInt32LE(8)
   };
 };
-module.exports = function(buffer, trans) {
-  return new ParseShp(buffer, trans).rows;
+module.exports = function(buffer, trans, row) {
+  return new ParseShp(buffer, trans, row).rows;
 };
 
 },{}],4:[function(require,module,exports){
@@ -552,8 +561,8 @@ function AssertionError (message, _props, ssf) {
   }
 
   // capture stack trace
-  ssf = ssf || arguments.callee;
-  if (ssf && Error.captureStackTrace) {
+  ssf = ssf || AssertionError;
+  if (Error.captureStackTrace) {
     Error.captureStackTrace(this, ssf);
   } else {
     try {
@@ -2512,7 +2521,14 @@ function isnan (val) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"base64-js":6,"ieee754":43,"isarray":45}],9:[function(require,module,exports){
+},{"base64-js":6,"ieee754":44,"isarray":9}],9:[function(require,module,exports){
+var toString = {}.toString;
+
+module.exports = Array.isArray || function (arr) {
+  return toString.call(arr) == '[object Array]';
+};
+
+},{}],10:[function(require,module,exports){
 (function () {
     "use strict";
 
@@ -2889,10 +2905,10 @@ function isnan (val) {
     }
 }());
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 module.exports = require('./lib/chai');
 
-},{"./lib/chai":11}],11:[function(require,module,exports){
+},{"./lib/chai":12}],12:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011-2014 Jake Luer <jake@alogicalparadox.com>
@@ -2987,7 +3003,7 @@ exports.use(should);
 var assert = require('./chai/interface/assert');
 exports.use(assert);
 
-},{"./chai/assertion":12,"./chai/config":13,"./chai/core/assertions":14,"./chai/interface/assert":15,"./chai/interface/expect":16,"./chai/interface/should":17,"./chai/utils":31,"assertion-error":5}],12:[function(require,module,exports){
+},{"./chai/assertion":13,"./chai/config":14,"./chai/core/assertions":15,"./chai/interface/assert":16,"./chai/interface/expect":17,"./chai/interface/should":18,"./chai/utils":32,"assertion-error":5}],13:[function(require,module,exports){
 /*!
  * chai
  * http://chaijs.com
@@ -3120,7 +3136,7 @@ module.exports = function (_chai, util) {
   });
 };
 
-},{"./config":13}],13:[function(require,module,exports){
+},{"./config":14}],14:[function(require,module,exports){
 module.exports = {
 
   /**
@@ -3177,7 +3193,7 @@ module.exports = {
 
 };
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 /*!
  * chai
  * http://chaijs.com
@@ -5039,7 +5055,7 @@ module.exports = function (chai, _) {
   });
 };
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6686,7 +6702,7 @@ module.exports = function (chai, util) {
   ('isNotFrozen', 'notFrozen');
 };
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6722,7 +6738,7 @@ module.exports = function (chai, util) {
   };
 };
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011-2014 Jake Luer <jake@alogicalparadox.com>
@@ -6925,7 +6941,7 @@ module.exports = function (chai, util) {
   chai.Should = loadShould;
 };
 
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 /*!
  * Chai - addChainingMethod utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7039,7 +7055,7 @@ module.exports = function (ctx, name, method, chainingBehavior) {
   });
 };
 
-},{"../config":13,"./flag":22,"./transferFlags":38}],19:[function(require,module,exports){
+},{"../config":14,"./flag":23,"./transferFlags":39}],20:[function(require,module,exports){
 /*!
  * Chai - addMethod utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7085,7 +7101,7 @@ module.exports = function (ctx, name, method) {
   };
 };
 
-},{"../config":13,"./flag":22}],20:[function(require,module,exports){
+},{"../config":14,"./flag":23}],21:[function(require,module,exports){
 /*!
  * Chai - addProperty utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7135,7 +7151,7 @@ module.exports = function (ctx, name, getter) {
   });
 };
 
-},{"../config":13,"./flag":22}],21:[function(require,module,exports){
+},{"../config":14,"./flag":23}],22:[function(require,module,exports){
 /*!
  * Chai - expectTypes utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7179,7 +7195,7 @@ module.exports = function (obj, types) {
   }
 };
 
-},{"./flag":22,"assertion-error":5,"type-detect":94}],22:[function(require,module,exports){
+},{"./flag":23,"assertion-error":5,"type-detect":94}],23:[function(require,module,exports){
 /*!
  * Chai - flag utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7214,7 +7230,7 @@ module.exports = function (obj, key, value) {
   }
 };
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 /*!
  * Chai - getActual utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7236,7 +7252,7 @@ module.exports = function (obj, args) {
   return args.length > 4 ? args[4] : obj._obj;
 };
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 /*!
  * Chai - getEnumerableProperties utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7264,7 +7280,7 @@ module.exports = function getEnumerableProperties(object) {
   return result;
 };
 
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 /*!
  * Chai - message composition utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7317,7 +7333,7 @@ module.exports = function (obj, args) {
   return flagMsg ? flagMsg + ': ' + msg : msg;
 };
 
-},{"./flag":22,"./getActual":23,"./inspect":32,"./objDisplay":33}],26:[function(require,module,exports){
+},{"./flag":23,"./getActual":24,"./inspect":33,"./objDisplay":34}],27:[function(require,module,exports){
 /*!
  * Chai - getName utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7341,7 +7357,7 @@ module.exports = function (func) {
   return match && match[1] ? match[1] : "";
 };
 
-},{}],27:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 /*!
  * Chai - getPathInfo utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7454,7 +7470,7 @@ function _getPathValue (parsed, obj, index) {
   return res;
 }
 
-},{"./hasProperty":30}],28:[function(require,module,exports){
+},{"./hasProperty":31}],29:[function(require,module,exports){
 /*!
  * Chai - getPathValue utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7499,7 +7515,7 @@ module.exports = function(path, obj) {
   return info.value;
 };
 
-},{"./getPathInfo":27}],29:[function(require,module,exports){
+},{"./getPathInfo":28}],30:[function(require,module,exports){
 /*!
  * Chai - getProperties utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7537,7 +7553,7 @@ module.exports = function getProperties(object) {
   return result;
 };
 
-},{}],30:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 /*!
  * Chai - hasProperty utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -7603,7 +7619,7 @@ module.exports = function hasProperty(name, obj) {
   return name in obj;
 };
 
-},{"type-detect":94}],31:[function(require,module,exports){
+},{"type-detect":94}],32:[function(require,module,exports){
 /*!
  * chai
  * Copyright(c) 2011 Jake Luer <jake@alogicalparadox.com>
@@ -7735,7 +7751,7 @@ exports.addChainableMethod = require('./addChainableMethod');
 
 exports.overwriteChainableMethod = require('./overwriteChainableMethod');
 
-},{"./addChainableMethod":18,"./addMethod":19,"./addProperty":20,"./expectTypes":21,"./flag":22,"./getActual":23,"./getMessage":25,"./getName":26,"./getPathInfo":27,"./getPathValue":28,"./hasProperty":30,"./inspect":32,"./objDisplay":33,"./overwriteChainableMethod":34,"./overwriteMethod":35,"./overwriteProperty":36,"./test":37,"./transferFlags":38,"deep-eql":39,"type-detect":94}],32:[function(require,module,exports){
+},{"./addChainableMethod":19,"./addMethod":20,"./addProperty":21,"./expectTypes":22,"./flag":23,"./getActual":24,"./getMessage":26,"./getName":27,"./getPathInfo":28,"./getPathValue":29,"./hasProperty":31,"./inspect":33,"./objDisplay":34,"./overwriteChainableMethod":35,"./overwriteMethod":36,"./overwriteProperty":37,"./test":38,"./transferFlags":39,"deep-eql":40,"type-detect":94}],33:[function(require,module,exports){
 // This is (almost) directly from Node.js utils
 // https://github.com/joyent/node/blob/f8c335d0caf47f16d31413f89aa28eda3878e3aa/lib/util.js
 
@@ -8072,7 +8088,7 @@ function objectToString(o) {
   return Object.prototype.toString.call(o);
 }
 
-},{"./getEnumerableProperties":24,"./getName":26,"./getProperties":29}],33:[function(require,module,exports){
+},{"./getEnumerableProperties":25,"./getName":27,"./getProperties":30}],34:[function(require,module,exports){
 /*!
  * Chai - flag utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -8124,7 +8140,7 @@ module.exports = function (obj) {
   }
 };
 
-},{"../config":13,"./inspect":32}],34:[function(require,module,exports){
+},{"../config":14,"./inspect":33}],35:[function(require,module,exports){
 /*!
  * Chai - overwriteChainableMethod utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -8180,7 +8196,7 @@ module.exports = function (ctx, name, method, chainingBehavior) {
   };
 };
 
-},{}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 /*!
  * Chai - overwriteMethod utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -8234,7 +8250,7 @@ module.exports = function (ctx, name, method) {
   }
 };
 
-},{}],36:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 /*!
  * Chai - overwriteProperty utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -8291,7 +8307,7 @@ module.exports = function (ctx, name, getter) {
   });
 };
 
-},{}],37:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 /*!
  * Chai - test utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -8321,7 +8337,7 @@ module.exports = function (obj, args) {
   return negate ? !expr : expr;
 };
 
-},{"./flag":22}],38:[function(require,module,exports){
+},{"./flag":23}],39:[function(require,module,exports){
 /*!
  * Chai - transferFlags utility
  * Copyright(c) 2012-2014 Jake Luer <jake@alogicalparadox.com>
@@ -8368,10 +8384,10 @@ module.exports = function (assertion, object, includeAll) {
   }
 };
 
-},{}],39:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 module.exports = require('./lib/eql');
 
-},{"./lib/eql":40}],40:[function(require,module,exports){
+},{"./lib/eql":41}],41:[function(require,module,exports){
 /*!
  * deep-eql
  * Copyright(c) 2013 Jake Luer <jake@alogicalparadox.com>
@@ -8630,10 +8646,10 @@ function objectEqual(a, b, m) {
   return true;
 }
 
-},{"buffer":8,"type-detect":41}],41:[function(require,module,exports){
+},{"buffer":8,"type-detect":42}],42:[function(require,module,exports){
 module.exports = require('./lib/type');
 
-},{"./lib/type":42}],42:[function(require,module,exports){
+},{"./lib/type":43}],43:[function(require,module,exports){
 /*!
  * type-detect
  * Copyright(c) 2013 jake luer <jake@alogicalparadox.com>
@@ -8777,7 +8793,7 @@ Library.prototype.test = function (obj, type) {
   }
 };
 
-},{}],43:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -8863,7 +8879,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],44:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 (function (global){
 'use strict';
 var Mutation = global.MutationObserver || global.WebKitMutationObserver;
@@ -8936,13 +8952,6 @@ function immediate(task) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],45:[function(require,module,exports){
-var toString = {}.toString;
-
-module.exports = Array.isArray || function (arr) {
-  return toString.call(arr) == '[object Array]';
-};
-
 },{}],46:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
@@ -12090,7 +12099,7 @@ function race(iterable) {
   }
 }
 
-},{"immediate":44}],71:[function(require,module,exports){
+},{"immediate":45}],71:[function(require,module,exports){
 ;(function () { // closure for web browsers
 
 if (typeof module === 'object' && module.exports) {
@@ -29220,8 +29229,8 @@ module.exports = require("./lib/encoding.js");
 }(this || {}));
 
 },{"./encoding-indexes.js":7}],94:[function(require,module,exports){
-arguments[4][41][0].apply(exports,arguments)
-},{"./lib/type":95,"dup":41}],95:[function(require,module,exports){
+arguments[4][42][0].apply(exports,arguments)
+},{"./lib/type":95,"dup":42}],95:[function(require,module,exports){
 /*!
  * type-detect
  * Copyright(c) 2013 jake luer <jake@alogicalparadox.com>
@@ -29462,6 +29471,97 @@ describe('Shp', function(){
     	return pandr.then(function(a){return a.features}).should.eventually.have.length(361);
     });
   });
+  describe('z', function(){
+    it('should work with multipoint z', function () {
+      return shp('http://localhost:3000/test/data/export_multipointz').then(function (resp) {
+        return resp.features[0].geometry.coordinates;
+      }).should.eventually.deep.equal([
+        [
+          -123.00000000000001,
+          48.00000000000001,
+          1200
+        ],
+        [
+          -122,
+          47,
+          2500
+        ],
+        [
+          -121,
+          46,
+          3600
+        ]
+      ]);
+    });
+    it('should work with polyline z', function () {
+      return shp('http://localhost:3000/test/data/export_polylinez').then(function (resp) {
+        return resp.features[0].geometry.coordinates;
+      }).should.eventually.deep.equal([
+        [
+          [
+            -119.99999999999999,
+            45,
+            800
+          ],
+          [
+            -119,
+            44,
+            1100
+          ],
+          [
+            -118.00000000000001,
+            43,
+            2300
+          ]
+        ],
+        [
+          [
+            -115,
+            40,
+            0
+          ],
+          [
+            -114.00000000000001,
+            39,
+            0
+          ],
+          [
+            -113,
+            38,
+            0
+          ]
+        ]
+      ]);
+    });
+  });
+  describe('row callback', function(){
+    var newPoint = { type: 'Point', coordinates: [0, 1] };
+    var pandr =  shp('http://localhost:3000/files/pandr', null, function row(geometry, i) {
+      if (i === 0 && geometry.type == 'Point') {
+        return newPoint;
+      }
+    });
+    it('should have the right keys', function(){
+    	return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type',function(){
+    	return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features',function(){
+    	return pandr.then(function(a){return a.features;}).should.eventually.have.length(80);
+    });
+    it('should have the manipulated result from the row callback',function(){
+      return pandr.then(function(a){return a.features[0].geometry;})
+      .should.eventually.deep.equal(newPoint);
+    });
+    it('should have the original result when the row callback did not gave anything new',function(){
+      return pandr.then(function(a){return a.features[1].geometry;})
+      .should.eventually.deep.equal({
+        type: 'Point',
+        coordinates: [-71.0766222509774, 41.80337948642367]
+      });
+    });
+  });
   describe('empty attributes table', function(){
       var pandr =  shp('http://localhost:3000/files/empty-shp.zip');
     it('should have the right keys', function(){
@@ -29540,4 +29640,4 @@ describe('Shp', function(){
   });
 });
 
-},{"../":2,"chai":10,"chai-as-promised":9}]},{},[96]);
+},{"../":2,"chai":11,"chai-as-promised":10}]},{},[96]);
