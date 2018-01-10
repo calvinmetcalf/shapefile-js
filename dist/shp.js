@@ -22835,7 +22835,7 @@ shp.parseShp = function(shp, prj, row) {
     prj = proj4(prj);
     return parseShp(shp, prj, row);
   } else {
-    return parseShp(shp, row);
+    return parseShp(shp, null, row);
   }
 };
 shp.parseDbf = function(dbf, cpg) {
