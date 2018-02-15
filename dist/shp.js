@@ -27812,7 +27812,7 @@ shp.combine = function(arr) {
   return out;
 };
 shp.parseZip = function(buffer, whiteList) {
-  var key, i;
+  var key;
   buffer = toBuffer(buffer);
   return unzip(buffer).then(function(zip) {
     var names = [];
