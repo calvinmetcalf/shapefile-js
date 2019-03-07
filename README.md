@@ -1,12 +1,14 @@
 # Shapefile.js
 
+If you are having encoding issues in internet explorer please include [this script](https://cdn.rawgit.com/calvinmetcalf/text-encoding/4aff951959085f74a5872aeed8d79ec95b6c74c3/lib/encoding-indexes.js) as well.
+
 Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, I wouldn't say it's based on [RandomEtc's version](https://github.com/RandomEtc/shapefile-js) as much as inspired by it as there is 0 code shared and I really only read the binary ajax part of his (hence why my function has the same name, they are otherwise not related). My sources were:
 
 - [wikipedia article](https://en.wikipedia.org/wiki/Shapefile)
 - [ESRI white paper](http://www.esri.com/library/whitepapers/pdfs/shapefile.pdf)
 - [This page on Xbase](http://www.clicketyclick.dk/databases/xbase/format/dbf.html)
 
-##Demos
+## Demos
 
 - [Countries/zipfile](http://calvinmetcalf.github.io/shapefile-js)
 - [Google maps](http://calvinmetcalf.github.io/shapefile-js/site/map.html)
@@ -14,7 +16,17 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 - [Projected big with web workers](http://calvinmetcalf.github.io/shapefile-js/site/proj.html)
 - [Projected small](http://calvinmetcalf.github.io/shapefile-js/site/proj-small.html)
 
-##API
+## Usage
+
+For use with [browserify](http://browserify.org/), [webpack](https://webpack.github.io/):
+
+    npm install shpjs --save
+    
+Or include directly in your webpage from:
+
+    https://unpkg.com/shpjs@latest/dist/shp.js
+
+## API
 
 Has a function `shp` which accepts a string which is the path the she shapefile minus the extension and returns a promise which resolves into geojson.
 
@@ -40,7 +52,7 @@ shp(buffer).then(function(geojson){});
 //or
 shp.parseZip(buffer)->returns zip
 ```
-If there is only one shp in the zipefile it returns geojson, if there are multiple then it will be an array.  All of the geojson objects have an extra key `fileName` the value of which is the 
+If there is only one shp in the zipefile it returns geojson, if there are multiple then it will be an array.  All of the geojson objects have an extra key `fileName` the value of which is the
 name of the shapefile minus the extension (I.E. the part of the name that's the same for all of them)
 
 You could also load the arraybuffers seperately:
@@ -49,7 +61,7 @@ You could also load the arraybuffers seperately:
 shp.combine([shp.parseShp(shpBuffer, /*optional prj str*/),shp.parseDbf(dbfBuffer)]);
 ```
 
-##Stick it in a worker
+## Stick it in a worker
 
 I used my library [catiline](http://catilinejs.com/) to parallelize the demos to do so I changed
 
@@ -62,7 +74,7 @@ I used my library [catiline](http://catilinejs.com/) to parallelize the demos to
 </script>
 ```
 
-to 
+to
 
 ```html
 <script src='website/catiline.js'> </script>
@@ -91,7 +103,7 @@ worker.data(reader.result,[reader.result]).then(function(data){
 });
 ```
 
-##Done
+## Done
 
 - Binary Ajax
 - parsing the shp
@@ -102,16 +114,16 @@ worker.data(reader.result,[reader.result]).then(function(data){
 - Some Projections
 - More Projections
 
-##to do
+## to do
 
 - check for geometry validity.
 - Tests
 
 
-##LICENSE
+## LICENSE
 Main library MIT license, original version was less permissive but there is 0 code shared. Included libraries are under their respective lisenses which are:
 - [JSZip](https://github.com/Stuk/jszip/) by @Stuk MIT or GPLv3
-- [lie](https://github.com/calvinmetcalf/lie) by me and @RubenVerborgh MIT 
+- [lie](https://github.com/calvinmetcalf/lie) by me and @RubenVerborgh MIT
 - [setImmediate](https://github.com/NobleJS/setImmediate) by @NobleJS et al MIT
 - [World Borders shapefile](http://thematicmapping.org/downloads/world_borders.php) is CC-BY-SA 3.0.
 - Park and Ride shapefile is from [MassDOT](http://mass.gov/massdot) and is public domain.
