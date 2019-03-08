@@ -288,6 +288,12 @@ ParseShp.prototype.getRows = function() {
     offset += current.len;
     if (current.type) {
       out.push(this.parseFunc(current.data));
+    } else {
+			// Push an empty shape to avoid getting geometries and properties out of sync. Per
+			// spec, the number of geometries and property records must be the same and in the
+			// same order.
+			// source: https://www.esri.com/library/whitepapers/pdfs/shapefile.pdf
+			out.push(null);
     }
   }
   return out;
@@ -23001,11 +23007,14 @@ shp.combine = function(arr) {
   var i = 0;
   var len = arr[0].length;
   while (i < len) {
-    out.features.push({
-      'type': 'Feature',
-      'geometry': arr[0][i],
-      'properties': arr[1][i]
-    });
+    // exclude empty shapes
+		if (arr[0][i] !== null) {
+      out.features.push({
+        'type': 'Feature',
+        'geometry': arr[0][i],
+        'properties': arr[1][i]
+      });
+    }
     i++;
   }
   return out;
@@ -23035,10 +23044,10 @@ shp.parseZip = function(buffer, whiteList, options) {
       names.push(key.slice(0, -4));
       zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = zip[key];
     } else if (key.slice(-3).toLowerCase() === 'prj') {
-      if(options && options.ignoreProj) {
-				zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = zip[key];
-			} else {
+      if(options && options.allowCrsConvert && options.allowCrsConvert(zip[key])) {
 				zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = proj4(zip[key]);
+			} else {
+				zip[key.slice(0, -3) + key.slice(-3).toLowerCase()] = zip[key];
 			}
     } else if (key.slice(-4).toLowerCase() === 'json' || whiteList.indexOf(key.split('.').pop()) > -1) {
       names.push(key.slice(0, -3) + key.slice(-3).toLowerCase());
@@ -23062,14 +23071,16 @@ shp.parseZip = function(buffer, whiteList, options) {
       if (zip[name + '.dbf']) {
         dbf = parseDbf(zip[name + '.dbf'], zip[name + '.cpg']);
       }
-      //if ignoring proj then return it with the geoJson only
-			if(options && options.ignoreProj) {
-				parsed.prjfile = zip[name + '.prj'];
-			} else {
+      //if zip is still the raw prj text/string it means no crs conversion
+			if(typeof zip[name+'.prj'] !== 'string') {
 				prjfile = zip[name + '.prj'];
 			}
       parsed = shp.combine([parseShp(zip[name + '.shp'], prjfile), dbf]);
       parsed.fileName = name;
+      //if ignoring proj then return it with the geoJson only
+			if(!prjfile) {
+				parsed.prjfile = zip[name + '.prj'];
+			}
     }
     return parsed;
   });
