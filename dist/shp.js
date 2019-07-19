@@ -13104,7 +13104,8 @@ module.exports = function(buffer, encoding) {
 	var latin = /[A-Za-z]/;
 	var keyword = /[A-Za-z84]/;
 	var endThings = /[,\]]/;
-	var digets = /[\d\.E\-\+]/;
+	// DIWEB-5131 - Handle lower and upper case 'e' when parsing numbers in scientific notation.
+	var digets = /[\d\.(E|e)\-\+]/;
 	// const ignoredChar = /[\s_\-\/\(\)]/g;
 	function Parser(text) {
 	  if (typeof text !== 'string') {
@@ -14689,8 +14690,9 @@ module.exports = function(buffer, encoding) {
 	};
 
 	var checkSanity = function (point) {
-	  checkCoord(point.x);
-	  checkCoord(point.y);
+	  // DIWEB-5131/ACD-1920 :: Be more permisive of errors in Shapefiles, load what you can.
+	  // checkCoord(point.x);
+	  // checkCoord(point.y);
 	};
 	function checkCoord(num) {
 	  if (typeof Number.isFinite === 'function') {
