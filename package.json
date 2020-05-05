@@ -12,20 +12,18 @@
     "hint": "jshint ./lib/*.js",
     "build-test": "browserify ./test/test.js > ./test/bundle.js",
     "build": "browserify . -s shp > ./dist/shp.js",
-    "min": "browserify . -s shp | uglifyjs -mc > ./dist/shp.min.js"
+    "min": "browserify . -s shp | minify > ./dist/shp.min.js"
   },
   "author": "Calvin Metcalf",
   "license": "MIT",
   "readmeFilename": "README.md",
   "devDependencies": {
+    "babel-minify": "^0.5.1",
     "browserify": "^13.0.0",
     "chai": "^3.3.0",
     "chai-as-promised": "^5.1.0",
-    "jszip": "^2.5.0",
-    "mocha": "^2.3.3",
-    "testling": "^1.6.1",
-    "uglify-js": "^2.4.24",
-    "uglifyjs": "^2.4.10"
+    "mocha": "^7.1.2",
+    "testling": "^1.6.1"
   },
   "dependencies": {
     "jszip": "^2.4.0",
@@ -35,6 +33,6 @@
     "proj4": "^2.1.4"
   },
   "browser": {
-    "./lib/binaryajax.js": "./lib/binaryajax-browser.js"
+    "./lib/binaryajax.js": "./lib/binaryajax-fetch.js"
   }
 }
