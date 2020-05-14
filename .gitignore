@@ -4,3 +4,4 @@ node_modules
 jam
 components
 .DS_Store
+package-lock.json
