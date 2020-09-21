@@ -12800,7 +12800,7 @@ function defaultDecoder(data) {
 }
 module.exports = createDecoder;
 var regex = /^(?:ASNI\s)?(\d+)$/m;
-function createDecoder(encoding) {
+function createDecoder(encoding, second) {
   if (!encoding) {
     return defaultDecoder;
   }
@@ -12808,8 +12808,10 @@ function createDecoder(encoding) {
     new TextDecoder(encoding.trim());
   } catch(e) {
     var match = regex.exec(encoding);
-    if (match) {
-      encoding = 'windows-' + match[1];
+    if (match && !second) {
+      return createDecoder('windows-' + match[1], true);
+    } else {
+      return defaultDecoder;
     }
   }
   return browserDecoder;
@@ -23174,7 +23176,15 @@ shp.getShapefile = function(base, whiteList) {
           binaryAjax(base + '.shp'),
           binaryAjax(base + '.prj')
         ]).then(function(args) {
-          return parseShp(args[0], args[1] ? proj4(args[1]) : false);
+          var prj = false;
+          try {
+            if (args[1]) {
+              prj = proj4(args[1]);
+            }
+          } catch (e) {
+            prj = false;
+          }
+          return parseShp(args[0], prj);
         }),
         Promise.all([
           binaryAjax(base + '.dbf'),
@@ -23196,11 +23206,15 @@ shp.parseShp = function(shp, prj) {
     prj = prj.toString();
   }
   if (typeof prj === 'string') {
-    prj = proj4(prj);
-    return parseShp(shp, prj);
-  } else {
-    return parseShp(shp);
+    try {
+      prj = proj4(prj);
+      console.log('there');
+    } catch (e) {
+      prj = false;
+    }
   }
+  return parseShp(shp);
+
 };
 shp.parseDbf = function(dbf, cpg) {
   dbf = toBuffer(dbf);
