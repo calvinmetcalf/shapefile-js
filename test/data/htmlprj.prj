@@ -1,0 +1,55 @@
+<!DOCTYPE html><html><head>
+<meta charset='utf-8'/>
+
+	 <title>Projected Shapefiles in Leaflet!</title>   <style>
+      html { height: 100% }
+      body { height: 100%; margin: 0; padding: 0;}
+      #map{ height: 100% }
+    </style>
+	 <link rel="stylesheet" href="leaflet.css" />
+<!--[if lte IE 8]>
+    <link rel="stylesheet" href="leaflet.ie.css" />
+<![endif]-->
+<link rel="stylesheet" href="gh-fork-ribbon.css" />
+<script src="leaflet.js"></script>
+	 </head><body><div class="github-fork-ribbon-wrapper right">
+		<div class="github-fork-ribbon">
+			<a href="https://github.com/calvinmetcalf/shapefile-js">Fork me on GitHub</a>
+		</div>
+	</div>  <div id="map"></div>
+<script src="catiline.js"> </script>
+      <script type="text/javascript">
+	 var m= L.map('map').setView([40.59935608796518,-73.56],8);
+var watercolor = L.tileLayer('http://{s}.tile.stamen.com/watercolor/{z}/{x}/{y}.jpg',{attribution:'Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>'})
+watercolor.addTo(m);
+      var geo = L.geoJson({features:[]},{onEachFeature:function popUp(f,l){
+    		var out = [];
+    		if (f.properties){
+        		for(var key in f.properties){
+            	out.push(key+": "+f.properties[key]);
+        }
+        l.bindPopup(out.join("<br />"));
+    }
+}}).addTo(m);
+var wfunc = function(base,cb){
+	importScripts('../dist/shp.js');
+	shp(base).then(cb);
+}
+var worker = cw({data:wfunc},2);
+		worker.data(cw.makeUrl('../files/nj_muni.zip')).then(function(data){
+		geo.addData(data);
+		},function(a){console.log(a)});
+	worker.data(cw.makeUrl('../files/maSP.zip')).then(function(data){
+		geo.addData(data);
+		},function(a){console.log(a)});
+</script><script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-40454900-1', 'calvinmetcalf.github.io');
+  ga('send', 'pageview');
+
+</script>
+</body></html>

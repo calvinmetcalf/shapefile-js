@@ -240,5 +240,27 @@ describe('Shp', function(){
         'Hněvošický háj'
       ]);
     });
+    it('should work for a stupid code page', function(){
+      return shp('http://localhost:3000/test/data/htmlcpg').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.map(function (feature) {
+          return feature.properties.field;
+        });
+      }).should.eventually.deep.equal([
+        '💩',
+        'Hněvošický háj'
+      ]);
+    });
+    it('should work for a stupid prj', function(){
+      return shp('http://localhost:3000/test/data/htmlprj').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.map(function (feature) {
+          return feature.properties.field;
+        });
+      }).should.eventually.deep.equal([
+        '💩',
+        'Hněvošický háj'
+      ]);
+    });
   });
 });

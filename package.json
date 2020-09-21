@@ -29,7 +29,7 @@
     "jszip": "^2.4.0",
     "lie": "^3.0.1",
     "lru-cache": "^2.7.0",
-    "parsedbf": "^1.0.0",
+    "parsedbf": "^1.1.0",
     "proj4": "^2.1.4"
   },
   "browser": {
