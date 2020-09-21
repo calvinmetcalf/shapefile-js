@@ -23208,7 +23208,6 @@ shp.parseShp = function(shp, prj) {
   if (typeof prj === 'string') {
     try {
       prj = proj4(prj);
-      console.log('there');
     } catch (e) {
       prj = false;
     }
