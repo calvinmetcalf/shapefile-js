@@ -317,6 +317,8 @@ ParseShp.prototype.getRows = function() {
     offset += current.len;
     if (current.type) {
       out.push(this.parseFunc(current.data));
+    } else {
+      out.push(null);
     }
   }
   return out;
