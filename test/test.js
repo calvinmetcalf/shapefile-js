@@ -262,5 +262,13 @@ describe('Shp', function(){
         'Hněvošický háj'
       ]);
     });
+    it('should work for a null geom', function(){
+      return shp('http://localhost:3000/test/data/LGA_2013_AUST').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        item.features[4].geometry.coordinates.length.should.equal(21);
+        item.features[4].properties.LGA_NAME13.should.equal('Kangaroo Island (DC)');
+        return item.features.length
+      }).should.eventually.equal(13);
+    });
   });
 });
