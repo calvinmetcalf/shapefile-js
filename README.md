@@ -21,7 +21,7 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 For use with [browserify](http://browserify.org/), [webpack](https://webpack.github.io/):
 
     npm install shpjs --save
-    
+
 Or include directly in your webpage from:
 
     https://unpkg.com/shpjs@latest/dist/shp.js
@@ -48,9 +48,7 @@ or you can call it on a .zip file which contains the shapefile
 or if you got the zip some other way (like the [File API](https://developer.mozilla.org/en-US/docs/Web/API/File)) then with the arrayBuffer you can call
 
 ```javascript
-shp(buffer).then(function(geojson){});
-//or
-shp.parseZip(buffer)->returns zip
+const geojson = await shp(buffer);
 ```
 If there is only one shp in the zipefile it returns geojson, if there are multiple then it will be an array.  All of the geojson objects have an extra key `fileName` the value of which is the
 name of the shapefile minus the extension (I.E. the part of the name that's the same for all of them)
