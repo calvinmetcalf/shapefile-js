@@ -102,6 +102,18 @@ describe('Shp', function () {
       return pandr.then(function (a) { return a.features; }).should.eventually.have.length(361);
     });
   });
+  describe('trains zipped with query params', function () {
+    const pandr = shp('http://localhost:3000/test/data/train_stations.zip?foo=bar');
+    it('should have the right keys', function () {
+      return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type', function () {
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features', function () {
+      return pandr.then(function (a) { return a.features; }).should.eventually.have.length(361);
+    });
+  });
   describe('z', function () {
     it('should work with multipoint z', function () {
       return shp('http://localhost:3000/test/data/export_multipointz').then(function (resp) {
@@ -253,6 +265,17 @@ describe('Shp', function () {
     });
     it('should work for a stupid prj', function () {
       return shp('http://localhost:3000/test/data/htmlprj').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.map(function (feature) {
+          return feature.properties.field;
+        });
+      }).should.eventually.deep.equal([
+        '💩',
+        'Hněvošický háj'
+      ]);
+    });
+    it('should work for a stupid prj and query params', function () {
+      return shp('http://localhost:3000/test/data/htmlprj?blah=baz').then(function (item) {
         item.should.contain.keys('type', 'features');
         return item.features.map(function (feature) {
           return feature.properties.field;
