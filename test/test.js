@@ -262,6 +262,8 @@ describe('Shp', function(){
         'Hněvošický háj'
       ]);
     });
+  })
+  describe('misc stuff', function (){
     it('should work for a null geom', function(){
       return shp('http://localhost:3000/test/data/LGA_2013_AUST').then(function (item) {
         item.should.contain.keys('type', 'features');
@@ -269,6 +271,12 @@ describe('Shp', function(){
         item.features[4].properties.LGA_NAME13.should.equal('Kangaroo Island (DC)');
         return item.features.length
       }).should.eventually.equal(13);
+    });
+    it('should work for with this shapfile', function(){
+      return shp('http://localhost:3000/test/data/T8Th4_6n.zip').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.length
+      }).should.eventually.equal(3);
     });
   });
 });
