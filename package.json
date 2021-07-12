@@ -22,11 +22,10 @@
     "browserify": "^13.0.0",
     "chai": "^3.3.0",
     "chai-as-promised": "^5.1.0",
-    "mocha": "^7.1.2",
-    "testling": "^1.6.1"
+    "mocha": "^7.1.2"
   },
   "dependencies": {
-    "jszip": "^2.4.0",
+    "jszip": "^3.5.0",
     "lie": "^3.0.1",
     "lru-cache": "^2.7.0",
     "parsedbf": "^1.1.0",
