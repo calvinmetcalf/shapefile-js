@@ -18,7 +18,7 @@
   "readmeFilename": "README.md",
   "devDependencies": {
     "babel-minify": "^0.5.1",
-    "browserify": "^13.0.0",
+    "browserify": "^17.0.0",
     "chai": "^3.3.0",
     "chai-as-promised": "^5.1.0",
     "eslint": "^7.30.0",
