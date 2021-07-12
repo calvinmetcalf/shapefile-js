@@ -301,5 +301,8 @@ describe('Shp', function () {
         return item.features.length;
       }).should.eventually.equal(3);
     });
+    it('file too long', function(){
+     return shp('http://localhost:3000/test/data/ipra_dresden_polygon');
+   });
   });
 });
