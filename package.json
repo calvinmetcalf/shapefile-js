@@ -9,7 +9,6 @@
   },
   "scripts": {
     "test": "mocha ./test/test.js",
-    "hint": "jshint ./lib/*.js",
     "build-test": "browserify ./test/test.js > ./test/bundle.js",
     "build": "browserify . -s shp > ./dist/shp.js",
     "min": "browserify . -s shp | minify > ./dist/shp.min.js"
