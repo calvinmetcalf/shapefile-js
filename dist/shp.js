@@ -3729,11 +3729,15 @@ function ParseShp (buffer, trans) {
     return new ParseShp(buffer, trans);
   }
   this.buffer = buffer;
+  this.headers = this.parseHeader();
+  if (this.headers.length < this.buffer.byteLength) {
+    this.buffer = this.buffer.slice(0, this.headers.length);
+  }
   this.shpFuncs(trans);
   this.rows = this.getRows();
 }
 ParseShp.prototype.shpFuncs = function (tran) {
-  let num = this.getShpCode();
+  let num = this.headers.shpCode;
   if (num > 20) {
     num -= 20;
   }
@@ -3749,7 +3753,7 @@ ParseShp.prototype.getShpCode = function () {
 ParseShp.prototype.parseHeader = function () {
   const view = this.buffer.slice(0, 100);
   return {
-    length: view.readInt32BE(6 << 2),
+    length: view.readInt32BE(6 << 2) << 1,
     version: view.readInt32LE(7 << 2),
     shpCode: view.readInt32LE(8 << 2),
     bbox: [
@@ -3767,6 +3771,9 @@ ParseShp.prototype.getRows = function () {
   let current;
   while (offset < len) {
     current = this.getRow(offset);
+    if (!current) {
+      break;
+    }
     offset += 8;
     offset += current.len;
     if (current.type) {
