@@ -1,108 +1,108 @@
-var shp = require('../');
-var chai = require('chai');
+const shp = require('../');
+const chai = require('chai');
 chai.should();
-var chaiAsPromised = require("chai-as-promised");
+const chaiAsPromised = require('chai-as-promised');
 
 chai.use(chaiAsPromised);
 
-describe('Shp', function(){
-  describe('park and rides not zipped', function(){
-  		var pandr =  shp('http://localhost:3000/files/pandr');
-    it('should have the right keys', function(){
-    	return pandr.should.eventually.contain.keys('type', 'features');
-    });
-    it('should be the right type',function(){
-    	return pandr.should.eventually.have.property('type', 'FeatureCollection');
-    });
-    it('should have the right number of features',function(){
-    	return pandr.then(function(a){return a.features;}).should.eventually.have.length(80);
-    });
-  });
-  describe('park and rides zipped', function(){
-  		var pandr =  shp('http://localhost:3000/files/pandr.zip');
-    it('should have the right keys', function(){
-    	return pandr.should.eventually.contain.keys('type', 'features');
-    });
-    it('should be the right type',function(){
-    	return pandr.should.eventually.have.property('type', 'FeatureCollection');
-    });
-    it('should have the right number of features',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.have.length(80);
-    });
-  });
-  describe('senate unzipped', function(){
-  		var pandr =  shp('http://localhost:3000/test/data/senate');
-    it('should have the right keys', function(){
-    	return pandr.should.eventually.contain.keys('type', 'features');
-    });
-    it('should be the right type',function(){
-    	return pandr.should.eventually.have.property('type', 'FeatureCollection');
-    });
-    it('should have the right number of features',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
-    });
-  });
-  describe('mixed case zipped', function(){
-  		var pandr =  shp('http://localhost:3000/test/data/mixedcase.zip');
-    it('should have the right keys', function(){
-    	return pandr.should.eventually.contain.keys('type', 'features');
-    });
-    it('should be the right type',function(){
-    	return pandr.should.eventually.have.property('type', 'FeatureCollection');
-    });
-    it('should have the right number of features',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
-    });
-  });
-  describe('senate zipped', function(){
-      var pandr =  shp('http://localhost:3000/test/data/senate.zip');
-    it('should have the right keys', function(){
+describe('Shp', function () {
+  describe('park and rides not zipped', function () {
+    const pandr = shp('http://localhost:3000/files/pandr');
+    it('should have the right keys', function () {
       return pandr.should.eventually.contain.keys('type', 'features');
     });
-    it('should be the right type',function(){
+    it('should be the right type', function () {
       return pandr.should.eventually.have.property('type', 'FeatureCollection');
     });
-    it('should have the right number of features',function(){
-      return pandr.then(function(a){return a.features}).should.eventually.have.length(40);
+    it('should have the right number of features', function () {
+      return pandr.then(function (a) { return a.features; }).should.eventually.have.length(80);
     });
   });
-  describe('county unzipped', function(){
-  		var pandr =  shp('http://localhost:3000/test/data/counties');
-    it('should have the right keys', function(){
-    	return pandr.should.eventually.contain.keys('type', 'features');
+  describe('park and rides zipped', function () {
+    const pandr = shp('http://localhost:3000/files/pandr.zip').catch(e => console.log('ERR', e));
+    it('should have the right keys', function () {
+      return pandr.should.eventually.contain.keys('type', 'features');
     });
-    it('should be the right type',function(){
-    	return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    it('should be the right type', function () {
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
     });
-    it('should have the right number of features',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.have.length(14);
-    });
-  });
-  describe('county zipped', function(){
-  		var pandr =  shp('http://localhost:3000/test/data/counties.zip');
-    it('should have the right keys', function(){
-    	return pandr.should.eventually.contain.keys('type', 'features');
-    });
-    it('should be the right type',function(){
-    	return pandr.should.eventually.have.property('type', 'FeatureCollection');
-    });
-    it('should have the right number of features',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.have.length(14);
+    it('should have the right number of features', function () {
+      return pandr.then(function (a) { return a.features; }).should.eventually.have.length(80);
     });
   });
-  describe('trains zipped', function(){
-  		var pandr =  shp('http://localhost:3000/test/data/train_stations.zip');
-    it('should have the right keys', function(){
-    	return pandr.should.eventually.contain.keys('type', 'features');
+  describe('senate unzipped', function () {
+    const pandr = shp('http://localhost:3000/test/data/senate');
+    it('should have the right keys', function () {
+      return pandr.should.eventually.contain.keys('type', 'features');
     });
-    it('should be the right type',function(){
-    	return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    it('should be the right type', function () {
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
     });
-    it('should have the right number of features',function(){
-    	return pandr.then(function(a){return a.features}).should.eventually.have.length(361);
+    it('should have the right number of features', function () {
+      return pandr.then(function (a) { return a.features; }).should.eventually.have.length(40);
     });
   });
-  describe('z', function(){
+  describe('mixed case zipped', function () {
+    const pandr = shp('http://localhost:3000/test/data/mixedcase.zip');
+    it('should have the right keys', function () {
+      return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type', function () {
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features', function () {
+      return pandr.then(function (a) { return a.features; }).should.eventually.have.length(40);
+    });
+  });
+  describe('senate zipped', function () {
+    const pandr = shp('http://localhost:3000/test/data/senate.zip');
+    it('should have the right keys', function () {
+      return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type', function () {
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features', function () {
+      return pandr.then(function (a) { return a.features; }).should.eventually.have.length(40);
+    });
+  });
+  describe('county unzipped', function () {
+    const pandr = shp('http://localhost:3000/test/data/counties');
+    it('should have the right keys', function () {
+      return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type', function () {
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features', function () {
+      return pandr.then(function (a) { return a.features; }).should.eventually.have.length(14);
+    });
+  });
+  describe('county zipped', function () {
+    const pandr = shp('http://localhost:3000/test/data/counties.zip');
+    it('should have the right keys', function () {
+      return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type', function () {
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features', function () {
+      return pandr.then(function (a) { return a.features; }).should.eventually.have.length(14);
+    });
+  });
+  describe('trains zipped', function () {
+    const pandr = shp('http://localhost:3000/test/data/train_stations.zip');
+    it('should have the right keys', function () {
+      return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type', function () {
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features', function () {
+      return pandr.then(function (a) { return a.features; }).should.eventually.have.length(361);
+    });
+  });
+  describe('z', function () {
     it('should work with multipoint z', function () {
       return shp('http://localhost:3000/test/data/export_multipointz').then(function (resp) {
         return resp.features[0].geometry.coordinates;
@@ -165,38 +165,38 @@ describe('Shp', function(){
       ]);
     });
   });
-  describe('empty attributes table', function(){
-      var pandr =  shp('http://localhost:3000/files/empty-shp.zip');
-    it('should have the right keys', function(){
+  describe('empty attributes table', function () {
+    const pandr = shp('http://localhost:3000/files/empty-shp.zip');
+    it('should have the right keys', function () {
       return pandr.should.eventually.contain.keys('type', 'features');
     });
-    it('should be the right type',function(){
+    it('should be the right type', function () {
       return pandr.should.eventually.have.property('type', 'FeatureCollection');
     });
-    it('should have the right number of features',function(){
-      return pandr.then(function(a){return a.features}).should.eventually.have.length(2);
+    it('should have the right number of features', function () {
+      return pandr.then(function (a) { return a.features; }).should.eventually.have.length(2);
     });
   });
-  describe('errors', function(){
-    it('bad file should be rejected', function(){
+  describe('errors', function () {
+    it('bad file should be rejected', function () {
       return shp('http://localhost:3000/test/data/bad').should.be.rejected;
     });
-    it('imaginary file file should be rejected', function(done){
+    it('imaginary file file should be rejected', function (done) {
       shp('http://localhost:3000/test/data/notthere').then(function () {
         done(true);
       }, function () {
         done();
       });
     });
-    it('bad zip be rejected', function(){
+    it('bad zip be rejected', function () {
       return shp('http://localhost:3000/test/data/badzip.zip').should.be.rejected;
     });
-    it('no shp in zip', function(){
+    it('no shp in zip', function () {
       return shp('http://localhost:3000/test/data/noshp.zip').should.be.rejected;
     });
   });
   describe('encoding', function () {
-    it('should work for utf.zip', function(){
+    it('should work for utf.zip', function () {
       return shp('http://localhost:3000/test/data/utf.zip').then(function (item) {
         item.should.contain.keys('type', 'features');
         return item.features.map(function (feature) {
@@ -207,7 +207,7 @@ describe('Shp', function(){
         'Hněvošický háj'
       ]);
     });
-    it('should work for utf', function(){
+    it('should work for utf', function () {
       return shp('http://localhost:3000/test/data/utf').then(function (item) {
         item.should.contain.keys('type', 'features');
         return item.features.map(function (feature) {
@@ -218,7 +218,7 @@ describe('Shp', function(){
         'Hněvošický háj'
       ]);
     });
-    it('should work for codepage.zip', function(){
+    it('should work for codepage.zip', function () {
       return shp('http://localhost:3000/test/data/codepage.zip').then(function (item) {
         item.should.contain.keys('type', 'features');
         return item.features.map(function (feature) {
@@ -229,7 +229,7 @@ describe('Shp', function(){
         'Hněvošický háj'
       ]);
     });
-    it('should work for codepage', function(){
+    it('should work for codepage', function () {
       return shp('http://localhost:3000/test/data/codepage').then(function (item) {
         item.should.contain.keys('type', 'features');
         return item.features.map(function (feature) {
@@ -240,7 +240,7 @@ describe('Shp', function(){
         'Hněvošický háj'
       ]);
     });
-    it('should work for a stupid code page', function(){
+    it('should work for a stupid code page', function () {
       return shp('http://localhost:3000/test/data/htmlcpg').then(function (item) {
         item.should.contain.keys('type', 'features');
         return item.features.map(function (feature) {
@@ -251,7 +251,7 @@ describe('Shp', function(){
         'Hněvošický háj'
       ]);
     });
-    it('should work for a stupid prj', function(){
+    it('should work for a stupid prj', function () {
       return shp('http://localhost:3000/test/data/htmlprj').then(function (item) {
         item.should.contain.keys('type', 'features');
         return item.features.map(function (feature) {
@@ -262,20 +262,20 @@ describe('Shp', function(){
         'Hněvošický háj'
       ]);
     });
-  })
-  describe('misc stuff', function (){
-    it('should work for a null geom', function(){
+  });
+  describe('misc stuff', function () {
+    it('should work for a null geom', function () {
       return shp('http://localhost:3000/test/data/LGA_2013_AUST').then(function (item) {
         item.should.contain.keys('type', 'features');
         item.features[4].geometry.coordinates.length.should.equal(21);
         item.features[4].properties.LGA_NAME13.should.equal('Kangaroo Island (DC)');
-        return item.features.length
+        return item.features.length;
       }).should.eventually.equal(13);
     });
-    it('should work for with this shapfile', function(){
+    it('should work for with this shapfile', function () {
       return shp('http://localhost:3000/test/data/T8Th4_6n.zip').then(function (item) {
         item.should.contain.keys('type', 'features');
-        return item.features.length
+        return item.features.length;
       }).should.eventually.equal(3);
     });
   });

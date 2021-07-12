@@ -22,7 +22,9 @@
     "browserify": "^13.0.0",
     "chai": "^3.3.0",
     "chai-as-promised": "^5.1.0",
-    "mocha": "^7.1.2"
+    "eslint": "^7.30.0",
+    "mocha": "^7.1.2",
+    "semistandard": "^16.0.1"
   },
   "dependencies": {
     "jszip": "^3.5.0",
