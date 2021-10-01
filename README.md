@@ -101,22 +101,6 @@ worker.data(reader.result,[reader.result]).then(function(data){
 });
 ```
 
-## Done
-
-- Binary Ajax
-- parsing the shp
-- parse the dbf
-- join em
-- zip
-- file api
-- Some Projections
-- More Projections
-
-## to do
-
-- check for geometry validity.
-- Tests
-
 
 ## LICENSE
 Main library MIT license, original version was less permissive but there is 0 code shared. Included libraries are under their respective lisenses which are:
