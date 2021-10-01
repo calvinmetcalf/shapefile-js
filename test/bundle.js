@@ -3493,7 +3493,8 @@ module.exports = async function binaryAjax (_url, type) {
     const parsed = await resp.arrayBuffer();
     return Buffer.from(parsed);
   } catch (e) {
-    if (isOptionalTxt) {
+    console.log('ERROR', e, type);
+    if (isOptionalTxt || type === 'dbf') {
       return false;
     }
     throw e;
@@ -3564,17 +3565,20 @@ function shp (base, whiteList) {
     return resp;
   });
 }
-shp.combine = function (arr) {
+shp.combine = function ([shp, dbf]) {
   const out = {};
   out.type = 'FeatureCollection';
   out.features = [];
   let i = 0;
-  const len = arr[0].length;
+  const len = shp.length;
+  if (!dbf) {
+    dbf = [];
+  }
   while (i < len) {
     out.features.push({
       type: 'Feature',
-      geometry: arr[0][i],
-      properties: arr[1][i]
+      geometry: shp[i],
+      properties: dbf[i] || {}
     });
     i++;
   }
@@ -3653,6 +3657,9 @@ const handleDbf = async (base) => {
     binaryAjax(base, 'dbf'),
     binaryAjax(base, 'cpg')
   ]);
+  if (!dbf) {
+    return;
+  }
   return parseDbf(dbf, cpg);
 };
 const checkSuffix = (base, suffix) => {
@@ -21135,16 +21142,11 @@ describe('Shp', function () {
     });
   });
   describe('county zipped', function () {
-    const pandr = shp('http://localhost:3000/test/data/counties.zip');
-    it('should have the right keys', function () {
-      return pandr.should.eventually.contain.keys('type', 'features');
-    });
-    it('should be the right type', function () {
-      return pandr.should.eventually.have.property('type', 'FeatureCollection');
-    });
-    it('should have the right number of features', function () {
-      return pandr.then(function (a) { return a.features; }).should.eventually.have.length(14);
-    });
+    return shp('http://localhost:3000/test/data/counties.zip').then(thing => {
+      thing.should.contain.keys('type', 'features');
+      thing.should.have.property('type', 'FeatureCollection');
+      return thing.features;
+    }).should.eventually.have.length(14);
   });
   describe('trains zipped', function () {
     const pandr = shp('http://localhost:3000/test/data/train_stations.zip');
@@ -21357,9 +21359,23 @@ describe('Shp', function () {
         return item.features.length;
       }).should.eventually.equal(3);
     });
-    it('file too long', function(){
-     return shp('http://localhost:3000/test/data/ipra_dresden_polygon');
-   });
+    it('file too long', function () {
+      return shp('http://localhost:3000/test/data/ipra_dresden_polygon');
+    });
+    it('should handle missing dbf', function () {
+      return shp('http://localhost:3000/test/data/no-dbf').then(thing => {
+        thing.should.contain.keys('type', 'features');
+        thing.should.have.property('type', 'FeatureCollection');
+        return thing.features;
+      }).should.eventually.have.length(14);
+    });
+    it('should handle missing dbf in a zip', function () {
+      return shp('http://localhost:3000/test/data/no-dbf.zip').then(thing => {
+        thing.should.contain.keys('type', 'features');
+        thing.should.have.property('type', 'FeatureCollection');
+        return thing.features;
+      }).should.eventually.have.length(14);
+    });
   });
 });
 

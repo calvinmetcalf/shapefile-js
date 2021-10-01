@@ -79,16 +79,11 @@ describe('Shp', function () {
     });
   });
   describe('county zipped', function () {
-    const pandr = shp('http://localhost:3000/test/data/counties.zip');
-    it('should have the right keys', function () {
-      return pandr.should.eventually.contain.keys('type', 'features');
-    });
-    it('should be the right type', function () {
-      return pandr.should.eventually.have.property('type', 'FeatureCollection');
-    });
-    it('should have the right number of features', function () {
-      return pandr.then(function (a) { return a.features; }).should.eventually.have.length(14);
-    });
+    return shp('http://localhost:3000/test/data/counties.zip').then(thing => {
+      thing.should.contain.keys('type', 'features');
+      thing.should.have.property('type', 'FeatureCollection');
+      return thing.features;
+    }).should.eventually.have.length(14);
   });
   describe('trains zipped', function () {
     const pandr = shp('http://localhost:3000/test/data/train_stations.zip');
@@ -301,8 +296,22 @@ describe('Shp', function () {
         return item.features.length;
       }).should.eventually.equal(3);
     });
-    it('file too long', function(){
-     return shp('http://localhost:3000/test/data/ipra_dresden_polygon');
-   });
+    it('file too long', function () {
+      return shp('http://localhost:3000/test/data/ipra_dresden_polygon');
+    });
+    it('should handle missing dbf', function () {
+      return shp('http://localhost:3000/test/data/no-dbf').then(thing => {
+        thing.should.contain.keys('type', 'features');
+        thing.should.have.property('type', 'FeatureCollection');
+        return thing.features;
+      }).should.eventually.have.length(14);
+    });
+    it('should handle missing dbf in a zip', function () {
+      return shp('http://localhost:3000/test/data/no-dbf.zip').then(thing => {
+        thing.should.contain.keys('type', 'features');
+        thing.should.have.property('type', 'FeatureCollection');
+        return thing.features;
+      }).should.eventually.have.length(14);
+    });
   });
 });
