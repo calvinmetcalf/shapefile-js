@@ -21359,6 +21359,12 @@ describe('Shp', function () {
         return item.features.length;
       }).should.eventually.equal(3);
     });
+    it('should work for with this shapfile with a query param', function () {
+      return shp('http://localhost:3000/test/data/T8Th4_6n.zip?foo=bar').then(function (item) {
+        item.should.contain.keys('type', 'features');
+        return item.features.length;
+      }).should.eventually.equal(3);
+    });
     it('file too long', function () {
       return shp('http://localhost:3000/test/data/ipra_dresden_polygon');
     });

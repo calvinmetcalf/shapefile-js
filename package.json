@@ -11,7 +11,8 @@
     "test": "mocha ./test/test.js",
     "build-test": "browserify ./test/test.js > ./test/bundle.js",
     "build": "browserify . -s shp > ./dist/shp.js",
-    "min": "browserify . -s shp | minify > ./dist/shp.min.js"
+    "min": "browserify . -s shp | minify > ./dist/shp.min.js",
+    "serve":"node test/server.js"
   },
   "author": "Calvin Metcalf",
   "license": "MIT",
@@ -22,7 +23,9 @@
     "chai": "^3.3.0",
     "chai-as-promised": "^5.1.0",
     "eslint": "^7.30.0",
+    "express": "^4.17.2",
     "mocha": "^7.1.2",
+    "morgan": "^1.10.0",
     "semistandard": "^16.0.1"
   },
   "dependencies": {
