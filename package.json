@@ -1,5 +1,5 @@
 {
-  "name": "shape2json",
+  "name": "shpjs",
   "version": "4.0.2",
   "description": "A binary shapefile loader, for javascript. Not many caveats",
   "main": "lib/index.js",
