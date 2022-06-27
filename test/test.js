@@ -320,4 +320,12 @@ describe('Shp', function () {
       }).should.eventually.have.length(14);
     });
   });
+  describe('extensions meta', function () {
+    it('should have correct extensions meta', function () {
+      return shp('http://localhost:3000/test/data/multiple.zip').then(thing => {
+        thing[0].extensions.should.have.members(['.dbf', '.prj', '.shp', '.shx', '.cst']);
+        thing[1].extensions.should.have.members(['.dbf', '.prj', '.sbn', '.sbx', '.shp', '.shp.xml', '.shx']);
+      });
+    });
+  });
 });
