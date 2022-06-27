@@ -51,7 +51,7 @@ or if you got the zip some other way (like the [File API](https://developer.mozi
 const geojson = await shp(buffer);
 ```
 If there is only one shp in the zipefile it returns geojson, if there are multiple then it will be an array.  All of the geojson objects have an extra key `fileName` the value of which is the
-name of the shapefile minus the extension (I.E. the part of the name that's the same for all of them)
+name of the shapefile minus the extension (I.E. the part of the name that's the same for all of them), as well as an extra key `extensions` the value of which is an array of all the shapefile file available extensions (I.E. the part of the name that's NOT the same for all of them)
 
 You could also load the arraybuffers seperately:
 
