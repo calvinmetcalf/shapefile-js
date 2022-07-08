@@ -1,6 +1,6 @@
 const shp = require('../');
 const chai = require('chai');
-chai.should();
+const should = chai.should();
 const chaiAsPromised = require('chai-as-promised');
 
 chai.use(chaiAsPromised);
@@ -318,6 +318,14 @@ describe('Shp', function () {
         thing.should.have.property('type', 'FeatureCollection');
         return thing.features;
       }).should.eventually.have.length(14);
+    });
+    it('should work with a line that has zero points', function () {
+      return shp('http://localhost:3000/test/data/zero-len-line.zip').then(thing => {
+        thing.should.contain.keys('type', 'features');
+        thing.should.have.property('type', 'FeatureCollection');
+        should.equal(thing.features[1].geometry, null);
+        return thing.features;
+      }).should.eventually.have.length(3);
     });
   });
 });
