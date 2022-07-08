@@ -1,6 +1,6 @@
 {
   "name": "shpjs",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "description": "A binary shapefile loader, for javascript. Not many caveats",
   "main": "lib/index.js",
   "repository": {
@@ -12,7 +12,7 @@
     "build-test": "browserify ./test/test.js > ./test/bundle.js",
     "build": "browserify . -s shp > ./dist/shp.js",
     "min": "browserify . -s shp | minify > ./dist/shp.min.js",
-    "serve":"node test/server.js"
+    "serve": "node test/server.js"
   },
   "author": "Calvin Metcalf",
   "license": "MIT",
