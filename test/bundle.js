@@ -103,15 +103,19 @@ function toBuffer (b) {
   if (Buffer.isBuffer(b)) {
     return b;
   }
-  if (b instanceof global.ArrayBuffer) {
+  if (isArrayBuffer(b)) {
     return Buffer.from(b);
   }
-  if (b.buffer instanceof global.ArrayBuffer) {
+  if (isArrayBuffer(b.buffer)) {
     if (b.BYTES_PER_ELEMENT === 1) {
       return Buffer.from(b);
     }
     return Buffer.from(b.buffer);
   }
+}
+
+function isArrayBuffer (subject) {
+  return subject instanceof global.ArrayBuffer || Object.prototype.toString.call(subject) === '[object ArrayBuffer]';
 }
 
 function shp (base, whiteList) {
