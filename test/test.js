@@ -1,9 +1,10 @@
-const shp = require('../');
-const chai = require('chai');
-const should = chai.should();
-const chaiAsPromised = require('chai-as-promised');
 
-chai.use(chaiAsPromised);
+import shp from '../lib/index.js';
+import { should as shouldRaw, use } from 'chai';
+
+import { chaiAsPromised } from 'chai-promised';
+const should = shouldRaw();
+use(chaiAsPromised);
 
 describe('Shp', function () {
   describe('park and rides not zipped', function () {
@@ -190,8 +191,10 @@ describe('Shp', function () {
     });
     it('imaginary file file should be rejected', function (done) {
       shp('http://localhost:3000/test/data/notthere').then(function () {
+        console.log("top")
         done(true);
       }, function () {
+        console.log('bottom')
         done();
       });
     });

@@ -3,35 +3,38 @@
   "version": "4.0.4",
   "description": "A binary shapefile loader, for javascript. Not many caveats",
   "main": "lib/index.js",
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git://github.com/calvinmetcalf/shapefile-js.git"
   },
   "scripts": {
     "test": "mocha ./test/test.js",
-    "build-test": "browserify ./test/test.js > ./test/bundle.js",
-    "build": "browserify . -s shp > ./dist/shp.js",
-    "min": "browserify . -s shp | minify > ./dist/shp.min.js",
-    "serve": "node test/server.js"
+    "build-test": "rollup -c -i ./test/test.js -o ./test/bundle.js -f iife",
+    "build": "rollup -c",
+    "serve": "node test/server.js",
+    "build-min": "rollup -c -o dist/shp.min.js -p terser"
   },
   "author": "Calvin Metcalf",
   "license": "MIT",
   "readmeFilename": "README.md",
   "devDependencies": {
-    "babel-minify": "^0.5.1",
-    "browserify": "^17.0.0",
-    "chai": "^3.3.0",
-    "chai-as-promised": "^5.1.0",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-replace": "^5.0.5",
+    "@rollup/plugin-terser": "^0.4.4",
+    "chai": "^5.1.0",
+    "chai-promised": "^1.0.2",
     "eslint": "^8.24.0",
     "express": "^4.17.2",
     "mocha": "^7.1.2",
     "morgan": "^1.10.0",
+    "rollup": "^4.13.0",
+    "rollup-plugin-node-polyfills": "^0.2.1",
     "semistandard": "^16.0.1"
   },
   "dependencies": {
-    "jszip": "^3.5.0",
-    "lie": "^3.0.1",
-    "lru-cache": "^7.0.0",
+    "jszip": "^3.10.1",
     "parsedbf": "^1.1.0",
     "proj4": "^2.1.4"
   },
