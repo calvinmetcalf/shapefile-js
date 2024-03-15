@@ -327,5 +327,12 @@ describe('Shp', function () {
         return thing.features;
       }).should.eventually.have.length(3);
     });
+    it('should handle .mshp files', function () {
+      return shp('http://localhost:3000/test/data/qgis.zip').then(thing => {
+        thing.should.contain.keys('type', 'features');
+        thing.should.have.property('type', 'FeatureCollection');
+        return thing.features;
+      }).should.eventually.have.length(2);
+    });
   });
 });
