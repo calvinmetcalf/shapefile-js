@@ -191,10 +191,8 @@ describe('Shp', function () {
     });
     it('imaginary file file should be rejected', function (done) {
       shp('http://localhost:3000/test/data/notthere').then(function () {
-        console.log("top")
         done(true);
       }, function () {
-        console.log('bottom')
         done();
       });
     });
@@ -335,6 +333,13 @@ describe('Shp', function () {
         thing.should.contain.keys('type', 'features');
         thing.should.have.property('type', 'FeatureCollection');
         return thing.features;
+      }).should.eventually.have.length(2);
+    });
+    it('should handle weirdly ordered rings', function () {
+      return shp('http://localhost:3000/test/data/SHP_Exclude.zip').then(thing => {
+        thing.should.contain.keys('type', 'features');
+        thing.should.have.property('type', 'FeatureCollection');
+        return thing.features[0].geometry.coordinates;
       }).should.eventually.have.length(2);
     });
   });
