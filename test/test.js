@@ -30,6 +30,18 @@ describe('Shp', function () {
       return pandr.then(function (a) { return a.features; }).should.eventually.have.length(80);
     });
   });
+  describe('shenzhen4547 zipped', function () {
+    const pandr = shp('http://localhost:3000/files/shenzhen4547.zip').catch(e => console.log('ERR', e));
+    it('should have the right keys', function () {
+      return pandr.should.eventually.contain.keys('type', 'features');
+    });
+    it('should be the right type', function () {
+      return pandr.should.eventually.have.property('type', 'FeatureCollection');
+    });
+    it('should have the right number of features', function () {
+      return pandr.then(function (a) { console.log(a.features); return a.features; }).should.eventually.have.length(1);
+    });
+  });
   describe('senate unzipped', function () {
     const pandr = shp('http://localhost:3000/test/data/senate');
     it('should have the right keys', function () {
