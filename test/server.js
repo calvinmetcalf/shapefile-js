@@ -3,8 +3,6 @@ import express from 'express';
 import morgan from 'morgan';
 import path from 'path';
 const app = express();
-console.log('import.meta', import.meta)
-console.log('dir', path.join(import.meta.dirname, '..'))
 app.use(morgan('dev'));
 app.use('/', express.static(path.join(import.meta.dirname, '..')));
 app.listen(3000, () => {
