@@ -18,11 +18,11 @@ Redoing all of this in modern JS. Promises, Typed Arrays, other hipster things, 
 
 ## Usage
 
-For use with [browserify](http://browserify.org/), [webpack](https://webpack.github.io/):
+Fore use in rollup, node and where ever ESM modules are used we have a lovely package you can install via npm or yarn or whatever.
 
     npm install shpjs --save
 
-Or include directly in your webpage from:
+If you need a stand alone file to include in your webpage the old fation when then you can grab the built version that's either included in the repo or you can use unpkg.
 
     https://unpkg.com/shpjs@latest/dist/shp.js
 
@@ -31,18 +31,16 @@ Or include directly in your webpage from:
 Has a function `shp` which accepts a string which is the path the she shapefile minus the extension and returns a promise which resolves into geojson.
 
 ```javascript
+	import shp from 'shpjs';
 	//for the shapefiles in the folder called 'files' with the name pandr.shp
-	shp("files/pandr").then(function(geojson){
-		//do something with your geojson
-	});
+	const geojson = await shp("files/pandr");
 ```
 or you can call it on a .zip file which contains the shapefile
 
 ```javascript
 	//for the shapefiles in the files folder called pandr.shp
-	shp("files/pandr.zip").then(function(geojson){
-		//see bellow for whats here this internally call shp.parseZip()
-	});
+	const geojson = await shp("files/pandr.zip");
+	//see bellow for whats here this internally call shp.parseZip()
 ```
 
 or if you got the zip some other way (like the [File API](https://developer.mozilla.org/en-US/docs/Web/API/File)) then with the arrayBuffer you can call
@@ -53,54 +51,18 @@ const geojson = await shp(buffer);
 If there is only one shp in the zipefile it returns geojson, if there are multiple then it will be an array.  All of the geojson objects have an extra key `fileName` the value of which is the
 name of the shapefile minus the extension (I.E. the part of the name that's the same for all of them)
 
-You could also load the arraybuffers seperately:
+
+## Advanced API
+There are also a few internal methods that are exposed for if you have to do some more complicated stuff.  These are named exports in the ESM version or properties on the main `shp` function in the bundled version.
+
+- `parseShape`: takes a buffer containing the contents of a `.shp` file and optionally a `.prj` STRING and returns geometries.
+- `parseDbf`: just a shortcut to [parseDBF](https://github.com/calvinmetcalf/parsedbf) takes the same arguments, though will do some type coertion that the stand alone library won't.
+- `combine`: takes the results of the two aformentioned functions and combines them into a geojson document.
 
 ```javascript
-shp.combine([shp.parseShp(shpBuffer, /*optional prj str*/),shp.parseDbf(dbfBuffer)]);
+import {combine, parseShp, parseDbf} from shpjs;
+combine([parseShp(shpBuffer, /*optional prj str*/),parseDbf(dbfBuffer)]);
 ```
-
-## Stick it in a worker
-
-I used my library [catiline](http://catilinejs.com/) to parallelize the demos to do so I changed
-
-```html
-<script src='dist/shp.js'> </script>
-<script>
-	shp('files/shapeFile.zip').then(function(data){
-		//do stuff with data
-	});
-</script>
-```
-
-to
-
-```html
-<script src='website/catiline.js'> </script>
-<script>
-	var worker = cw(function(base,cb){
-		importScripts('dist/shp.js');
-		shp(base).then(cb);
-	});
-	//worker can be called multiple times
-	worker.data(cw.makeUrl('files/shapeFile.zip')).then(function(data){
-		//do stuff with data
-	});
-</script>
-```
-
-to send the worker a buffer from the file api you'd do (I'm omitting where you include the catiline script)
-
-```javascript
-var worker = cw(function(data){
-	importScripts('../dist/shp.js');
-	return shp.parseZip(data);
-});
-
-worker.data(reader.result,[reader.result]).then(function(data){
-	//do stuff with data
-});
-```
-
 
 ## LICENSE
 Main library MIT license, original version was less permissive but there is 0 code shared. Included libraries are under their respective lisenses which are:
