@@ -22,7 +22,7 @@ Fore use in rollup, node and where ever ESM modules are used we have a lovely pa
 
     npm install shpjs --save
 
-If you need a stand alone file to include in your webpage the old fation when then you can grab the built version that's either included in the repo or you can use unpkg.
+If you need a stand alone file to include in your webpage the old fasion when then you can grab the built version that's either included in the repo or you can use unpkg.
 
     https://unpkg.com/shpjs@latest/dist/shp.js
 
