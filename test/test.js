@@ -411,5 +411,12 @@ describe('Shp', function () {
         return thing.features[0].geometry.coordinates;
       }).should.eventually.have.length(2);
     });
+    it('should handle bad polygons with holes', function () {
+      return shp('http://localhost:3000/test/data/bad_winding_polygon.zip').then(thing => {
+        thing.should.contain.keys('type', 'features');
+        thing.should.have.property('type', 'FeatureCollection');
+        return thing.features[0].geometry.coordinates;
+      }).should.eventually.have.length(2);
+    });
   });
 });
