@@ -2,7 +2,6 @@
 import shp from '../lib/index.js';
 import { should as shouldRaw, use } from 'chai';
 import { ParseShp } from '../lib/parseShp.js';
-import badWinding from './data/bad-winding.json'  with { type: 'json' };
 import chaiAsPromised from 'chai-as-promised';
 const should = shouldRaw();
 use(chaiAsPromised);
@@ -406,10 +405,15 @@ describe('Shp', function () {
       }).should.eventually.have.length(2);
     });
     it('should handle freestanding holes that also have holes', function () {
-      const polyFuncs = ParseShp.prototype.polyFuncs;
-      const out = polyFuncs(badWinding);
-      out.type.should.equal('Polygon')
-      out.coordinates.should.have.length(2);
+      return fetch('http://localhost:3000/test/data/bad-winding.json').then((resp) => {
+        resp.ok.should.equal(true);
+        return resp.json();
+      }).then(badWinding => {
+        const polyFuncs = ParseShp.prototype.polyFuncs;
+        const out = polyFuncs(badWinding);
+        out.type.should.equal('Polygon')
+        return out.coordinates.should.have.length(2);
+      })
     });
     it('should handle nested multi polygon shapes', function () {
       return shp('http://localhost:3000/test/data/layer-cake.zip').then(thing => {
