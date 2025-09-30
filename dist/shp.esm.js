@@ -7479,9 +7479,7 @@ function handleRings(rings, reversed = false) {
       inners.push(proccessed);
     }
   }
-
   const orphens = [];
-
   for (const inner of inners) {
     let candidate;
     for (const outer of outers) {
@@ -7517,15 +7515,12 @@ function handleRings(rings, reversed = false) {
       return out;
     }
   }
-
   const out = [];
   for (const outer of outers) {
     out.push([outer.ring].concat(outer.children));
   }
-
   return out;
 }
-
 ParseShp.prototype.parsePoint = function (data) {
   return {
     type: 'Point',
