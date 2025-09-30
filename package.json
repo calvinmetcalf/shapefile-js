@@ -33,8 +33,8 @@
     "semistandard": "^16.0.1"
   },
   "dependencies": {
-    "but-unzip": "^0.1.4",
+    "but-unzip": "^0.1.7",
     "parsedbf": "^2.0.0",
-    "proj4": "^2.1.4"
+    "proj4": "^2.19.10"
   }
 }
