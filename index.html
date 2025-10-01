@@ -49,6 +49,7 @@
 	<script src="dist/shp.js"> </script>
 	<script>
 		var m = L.map('map').setView([34.74161249883172, 18.6328125], 2);
+		L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m)
 		var geo = L.geoJson({ features: [] }, {
 			onEachFeature: function popUp(f, l) {
 				var out = [];
